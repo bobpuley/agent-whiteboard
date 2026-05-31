@@ -58,7 +58,7 @@ Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline nee
 ## D. Agent Behavior
 
 **D1 — Agents can generate valid rendering specs**
-> ⚠️ ASSUMPTION: partially mitigated by server-side validation (see `04` §3), but hallucination risk is not fully eliminated.
+> 🔧 KNOWN GAP: v1 validation is partial (keyword-prefix only). Full server-side Mermaid parse is planned in Sprint 6 (`04` §8). Until Sprint 6 ships, syntactically invalid Mermaid that passes the keyword check reaches the browser and is displayed as an inline render error.
 
 We assume LLMs reliably produce well-formed Mermaid, valid Vega-Lite JSON, and correctly structured step arrays.
 - Risk: LLMs hallucinate syntax. Invalid payloads will cause silent render failures or broken diagrams unless the server validates and returns structured errors.
@@ -85,5 +85,6 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 - A **second, separate stdio channel server** is required to bridge browser user events → Claude Code session.
 - During the research preview, launching requires `--dangerously-load-development-channels server:agent-whiteboard-events`.
 - Full production use requires packaging as a plugin on the Anthropic-approved allowlist or an org `allowedChannelPlugins` entry.
-- Risk: research preview — the `--channels` flag contract may change before GA.
+- Risk: research preview — the `--channels` flag contract may change before GA. Exact flag syntax (`--dangerously-load-development-channels server:agent-whiteboard-events`) should be verified at Sprint 8 time.
+- **Sprint 8 trigger:** proceed when `--dangerously-load-development-channels` is no longer required (Channels API reaches GA), or when the research preview has been stable across two consecutive Claude Code releases.
 - See `04` §2 for updated Phase 2 architecture.

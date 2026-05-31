@@ -26,13 +26,11 @@ The MCP server exposes tools to the agent.
 |----|------|--------|-------|
 | V1 | Diagrams | Mermaid | MVP |
 | V2 | Export — text | Returns Mermaid source spec | MVP |
-| V3 | SVG / HTML | Inline SVG; HTML+CSS for simple animations | Phase 2 |
-| V4 | Data charts | Vega-Lite JSON | Phase 2 |
-| V5 | Math | LaTeX / KaTeX | Phase 2 |
+| V3 | SVG / HTML; Data charts; Math | Inline SVG; HTML+CSS; Vega-Lite JSON; LaTeX / KaTeX | Phase 2 |
 | V3b | Diagrams | D2 | Post-Phase-2 (requires server-side render process) |
-| V7 | Step-through frames | Ordered frame arrays; agent-driven transitions via `step()` | Phase 2 |
-| V8 | Export — binary | PNG / SVG / PDF download | Phase 2 |
-| V9 | Visual history | Navigable snapshots (timeline or thumbnails) | Phase 2 |
+| V4 | Export — binary | PNG / SVG / PDF download | Phase 2 |
+| V5 | Step-through frames | Ordered frame arrays; agent-driven transitions via `step()` | Phase 2 |
+| V6 | Visual history | Navigable snapshots (timeline or thumbnails) | Phase 2 |
 
 ---
 
@@ -70,6 +68,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | F3a | Validation is a hard gate: invalid payloads are rejected and returned as `{ ok: false, error: "..." }` to the agent; nothing is pushed to the browser and canvas state is unchanged | MVP |
 | F4 | REST endpoints (`POST /render`, `POST /clear`, `GET /export`) are a fallback for agents that do not support MCP/WebSocket (e.g. `curl` testing). Primary path is MCP → WebSocket `/stream`. | MVP |
 | F5 | Session management with cross-session persistence (`session_id`, history across restarts) | Phase 2 |
+| F6 | HTML/SVG payloads must be sanitized with DOMPurify in the browser before render; sanitization is silent (cleaned output rendered, no error state). No server-side hard gate for HTML/SVG — the `type` field is validated but the payload is passed through. | Phase 2 |
 
 ### Rendering & Visualization
 
@@ -104,7 +103,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | NF2 | Communication localhost-only by default (port `3000`); binding address and port configurable via env vars; no telemetry; sandboxed rendering |
 | NF3 | Cross-platform: macOS, Linux, Windows |
 | NF4 | `<200ms` render for diagrams under 500 nodes; debounce on stream |
-| NF5 | Plugin/extension system for new renderer types | Phase 2 |
+| NF5 | Plugin/extension system for new renderer types | Post-Phase-2 |
 
 ---
 
@@ -118,11 +117,11 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 - Step-through frames / `step()` tool: Phase 2
 - SVG/HTML, Vega-Lite, KaTeX renderers: Phase 2
 - D2 renderer: post-Phase-2 (requires server-side render process)
-- Concurrent browser connections / multi-tab state sync: Phase 2 (second tab starts blank in v1)
+- Concurrent browser connections / multi-tab state sync: post-Phase-2 (second tab starts blank in v1)
 - WebSocket reconnection state replay: Phase 2 — on disconnect the browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry in v1.
 - Free-form canvas / whiteboard drawing: deferred (nice-to-have)
 - Agent error-recovery behavior: out of scope — the server returns `{ ok: false, error: "..." }` and the agent decides what to do with it
-- Multi-user support: not planned
-- Remote/cloud deployment: not planned (local-only)
+- Multi-user support: Phase 3 (deferred; requires auth, session isolation, and remote deployment groundwork)
+- Remote/cloud deployment: Phase 3 (deferred; local-only through Phase 2)
 - Non-developer users: not in scope
 - Non-Claude Code agent runtimes: Phase 2
