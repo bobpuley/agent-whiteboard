@@ -1,4 +1,4 @@
-Read CLAUDE.md and all existing project documents in the root (00 → 04).
+Read CLAUDE.md and all existing project documents in the root (00 → 05).
 Check if docs/raw/ contains any unprocessed files.
 
 If raw files exist and 01_input-ideas.md is empty: tell the user to run /synthesize first.

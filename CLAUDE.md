@@ -21,7 +21,8 @@ Phase: discovery and requirements definition. No code yet.
 | docs/01_input-ideas.md           | Raw collected information                      | empty   |
 | docs/02_assumptions-and-risks.md | What we're betting on, where we could be wrong | empty   |
 | docs/03_requirements.md          | Clear, coherent, complete requirements         | empty   |
-| docs/04_architecture-and-plan.md | Tech decisions + dev plan with tasks and DoD   | empty   |
+| docs/04_architecture.md          | Tech decisions, system design, API contracts   | empty   |
+| docs/05_dev-plan.md              | Sprint plan, tasks, DoD                        | empty   |
 
 ## Interaction model
 Claude drives. The user responds.
