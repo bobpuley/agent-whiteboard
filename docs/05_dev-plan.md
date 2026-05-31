@@ -158,6 +158,16 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ---
 
+### Sprint 9 — Bug fix: slideshow stops after slide 1 → slide 2
+
+- [ ] **Investigate `server/slideshow.ts` — `startSlideshow()`:** identify why the timer fires once (advancing slide 1 → slide 2) and then halts instead of continuing through the full playlist.
+- [ ] **Fix the timer loop:** ensure the interval (or recursive timeout) advances through every tick in the expanded playlist and clears itself only after the last tick.
+- [ ] **Tests:** add or update a test asserting that a 3-slide playlist broadcasts all 3 slides in order before stopping.
+
+**DoD:** `node manualtests/showcase.js` displays all slides in the playlist, each held for `delay_ms` before advancing, without any manual interaction; the timer stops naturally after the last slide.
+
+---
+
 ### Sprint 10 — Bidirectionality (deferred — after 5–8)
 
 Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 time — research preview flag). Defer until Sprints 5–8 are shipped and the Channels API is closer to GA.

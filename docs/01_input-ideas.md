@@ -238,3 +238,7 @@ Decision: not applicable. Marimo is a Python notebook runtime — incompatible w
 **B2 — Slideshow step-frames does not auto-advance through frames**
 - Observed: running `node manualtests/showcase.js --type step-frames` shows frame 0 of the step-frames sequence and allows manual Prev/Next navigation, but does not automatically advance through the frames.
 - Expected: the slideshow timer should advance through each frame of the step-frames sequence at `delay_ms` intervals — treating each frame as a separate animation step, not requiring manual navigation.
+
+**B3 — Slideshow stops after slide 1 → slide 2**
+- Observed: running the slideshow causes the canvas to advance from slide 1 to slide 2, then the server-side timer stops — remaining slides are never displayed.
+- Expected: the timer should advance through all slides in the playlist at `delay_ms` intervals, stopping only after the last slide.
