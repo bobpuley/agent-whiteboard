@@ -40,7 +40,7 @@ The MCP server exposes tools to the agent.
 |-------|-----------|------|
 | Agent → Server | MCP (primary) | Agent calls tools; server executes render commands |
 | Server → Browser | WebSocket (`/stream`) | Incremental, real-time updates pushed to the SPA |
-| Agent → Server (alt) | REST `POST /render`, `POST /clear`, `GET /export` | Low-level fallback; also usable via `curl` for debugging |
+| Agent → Server (alt) | REST `POST /render`, `POST /clear`, `GET /export`, `POST /step` | Low-level fallback; also usable via `curl` for debugging. `POST /step` added in Phase 2 alongside the `step()` MCP tool. |
 | Browser → Server | WebSocket back-channel | Reserved for Phase 2 bidirectionality (user events) |
 
 File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.

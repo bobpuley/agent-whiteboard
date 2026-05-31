@@ -105,7 +105,7 @@ On success:
 |----------|-----------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------|
 | `render` | `{ "ok": true }`                                                                                                                        | `{ "ok": false, "error": "..." }` |
 | `clear`  | `{ "ok": true }`                                                                                                                        | — (always succeeds)               |
-| `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | `{ "ok": false, "error": "..." }` |
+| `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | — (always succeeds) |
 | `step`   | `{ "ok": true, "current_frame": N, "total_frames": M }` (Phase 2)                                                                      | `{ "ok": false, "error": "..." }` |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
@@ -113,6 +113,8 @@ On success:
 ### REST fallback response shapes
 
 The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) return the same JSON shapes as the MCP tool responses above. `GET /export` returns the JSON body `{ "ok": true, "data": "<mermaid source>" }` (not raw text).
+
+`POST /step` is added in Phase 2 alongside the `step()` MCP tool (Sprint 7). Body: `{ "direction": "next" | "prev" }`. Returns the same shape as the MCP `step()` response.
 
 ---
 
@@ -360,7 +362,8 @@ Priority order: SVG/HTML first (trivial), then KaTeX, then Vega-Lite. D2 deferre
 - [ ] **Browser:** add step caption overlay (shows `frame.label` if present) in the renderer
 - [ ] **Browser:** add prev/next nav buttons visible only when a step-frames sequence is active
 - [ ] **MCP schema:** expose `step-frames` type in `render()` and register `step(direction)` tool
-- [ ] DoD: agent loads a 3-frame Mermaid step sequence; calls `step("next")` twice; browser advances correctly; `export()` returns the full frames JSON
+- [ ] **REST fallback:** add `POST /step` endpoint with body `{ "direction": "next" | "prev" }`; returns same JSON as MCP `step()` response
+- [ ] DoD: agent loads a 3-frame Mermaid step sequence; calls `step("next")` twice; browser advances correctly; `export()` returns the full frames JSON; `curl -X POST /step -d '{"direction":"next"}'` also advances the sequence
 
 ### Sprint 8 — Bidirectionality (deferred — after 5–7)
 

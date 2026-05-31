@@ -1,3 +1,5 @@
+Implement the dev plan recursively
+
 Read in order:
 1. docs/03_requirements.md
 2. docs/04_architecture-and-plan.md
