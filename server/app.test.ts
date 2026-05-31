@@ -595,6 +595,81 @@ describe("POST /slideshow — step-frames slide", () => {
   });
 });
 
+// ── Sprint 9 B2 — step-frames auto-advance ────────────────────────────────────
+
+describe("POST /slideshow — step-frames auto-advance (B2)", () => {
+  it("auto-advances through all frames at delay_ms intervals", async () => {
+    vi.useFakeTimers();
+    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides, delay_ms: 1000 }),
+    });
+
+    // t=0: frame 0. Two ticks advance to frame 2 (last).
+    vi.advanceTimersByTime(1000); // frame 1
+    vi.advanceTimersByTime(1000); // frame 2
+
+    // Session is at frame 2 — step next is capped at last frame.
+    const res = await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+    expect(await res.json()).toEqual({ ok: true, current_frame: 2, total_frames: 3 });
+    vi.useRealTimers();
+  });
+
+  it("session stays in step-frames state after full auto-advance", async () => {
+    vi.useFakeTimers();
+    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides, delay_ms: 1000 }),
+    });
+
+    vi.advanceTimersByTime(2000); // advance past all 3 frames
+
+    // export() returns the full frames JSON (not a single frame payload).
+    const exportRes = await app.request("/export");
+    expect(await exportRes.json()).toEqual({ ok: true, data: THREE_FRAME_SEQUENCE });
+
+    // /step is functional — session is in step-frames state.
+    const stepRes = await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "prev" }),
+    });
+    expect((await stepRes.json<{ ok: boolean }>()).ok).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it("mixed playlist: step-frames expands so next plain slide follows after all frames", async () => {
+    vi.useFakeTimers();
+    const slides = [
+      { type: "step-frames", payload: THREE_FRAME_SEQUENCE },
+      { type: "svg", payload: "<svg><circle r='5'/></svg>" },
+    ];
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides, delay_ms: 1000 }),
+    });
+
+    // 3 frames (ticks 0-2) + 1 svg slide (tick 3) = 4 ticks total.
+    // After 3 intervals the svg slide is shown.
+    vi.advanceTimersByTime(3000);
+
+    const exportRes = await app.request("/export");
+    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe(
+      "<svg><circle r='5'/></svg>"
+    );
+    vi.useRealTimers();
+  });
+});
+
 describe("POST /slideshow/stop", () => {
   it("returns { ok: true } even when no slideshow is running", async () => {
     const res = await app.request("/slideshow/stop", { method: "POST" });

@@ -27,6 +27,16 @@ export function setStepFrames(frames: StepFrame[], frameType: string, rawPayload
 }
 
 /**
+ * Seek to a specific frame index in the loaded step-frames sequence.
+ * Used by the slideshow expander to advance the cursor to an arbitrary frame
+ * without resetting the full sequence. No-op if no step-frames sequence is loaded.
+ */
+export function seekStepFrame(index: number): void {
+  if (canvas.type !== "step-frames") return;
+  canvas = { ...canvas, currentFrame: index };
+}
+
+/**
  * Advance or rewind the step cursor.
  * Returns the new cursor state, or null if no step-frames sequence is loaded.
  */
