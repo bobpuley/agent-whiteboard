@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Manual showcase — exercises every renderer via a server-side slideshow.
-// Usage: node manualtests/showcase.js [-p <port>] [-d <delay_ms>] [-h]
+// Usage: node manualtests/showcase.js [-p <port>] [-d <delay_ms>] [-t <type,...>] [-h]
 
 import { parseArgs } from "node:util";
 
@@ -8,9 +8,10 @@ import { parseArgs } from "node:util";
 
 const { values } = parseArgs({
   options: {
-    port:  { type: "string",  short: "p", default: "3000" },
-    delay: { type: "string",  short: "d", default: "5000" },
-    help:  { type: "boolean", short: "h", default: false  },
+    port:  { type: "string",  short: "p", default: "3000"      },
+    delay: { type: "string",  short: "d", default: "5000"      },
+    type:  { type: "string",  short: "t", default: ""          },
+    help:  { type: "boolean", short: "h", default: false       },
   },
   strict: true,
 });
@@ -22,10 +23,17 @@ Usage: node manualtests/showcase.js [OPTIONS]
 Options:
   -p, --port <port>     Server port (default: 3000)
   -d, --delay <ms>      Delay between slides in ms (default: 5000)
+  -t, --type <types>    Comma-separated types to include
+                        (mermaid, svg, html, katex, vega-lite, step-frames)
+                        Omit to show all slides.
   -h, --help            Show this help
 `);
   process.exit(0);
 }
+
+const TYPE_FILTER = values.type
+  ? new Set(values.type.split(",").map((t) => t.trim()).filter(Boolean))
+  : null;
 
 const PORT     = values.port;
 const DELAY_MS = parseInt(values.delay, 10);
@@ -211,13 +219,26 @@ e^{i\pi} + 1 = 0`,
   },
 ];
 
+// ── Apply type filter ─────────────────────────────────────────────────────────
+
+const activeSlides = TYPE_FILTER ? slides.filter((s) => TYPE_FILTER.has(s.type)) : slides;
+
+if (activeSlides.length === 0) {
+  console.error(`✗ No slides match type filter: ${[...TYPE_FILTER].join(", ")}`);
+  console.error(`  Available types: ${[...new Set(slides.map((s) => s.type))].join(", ")}`);
+  process.exit(1);
+}
+
 // ── Run slideshow ─────────────────────────────────────────────────────────────
 
-const totalMs = slides.length * DELAY_MS;
+const totalMs = activeSlides.length * DELAY_MS;
 
-console.log(`▶  Starting ${slides.length}-slide tour (${totalMs / 1000}s total)…`);
+if (TYPE_FILTER) {
+  console.log(`   Filter: ${[...TYPE_FILTER].join(", ")} (${activeSlides.length} of ${slides.length} slides)`);
+}
+console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total)…`);
 
-const result = await post("/slideshow", { slides, delay_ms: DELAY_MS });
+const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS });
 if (!result.ok) {
   console.error("✗ slideshow failed:", result.error);
   process.exit(1);
