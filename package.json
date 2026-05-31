@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names \"server,client,browser\" \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:open\"",
     "dev:server": "tsx watch server/index.ts",
-    "dev:client": "wait-on http://localhost:3000/mcp && vite --config client/vite.config.ts",
+    "dev:client": "vite --config client/vite.config.ts",
     "dev:open": "wait-on http://localhost:5173 && node -e \"import('open').then(m => m.default('http://localhost:5173'))\"",
     "build": "tsc -p tsconfig.json && vite build --config client/vite.config.ts",
     "test": "vitest run"

@@ -15,7 +15,6 @@ const app = createApp();
 
 // ── MCP (SSE) ────────────────────────────────────────────────────────────────
 
-const mcpServer = createMcpServer();
 const mcpTransports = new Map<string, SSEServerTransport>();
 
 app.get("/mcp", async (c) => {
@@ -29,6 +28,9 @@ app.get("/mcp", async (c) => {
   mcpTransports.set(sessionId, transport);
   transport.onclose = () => mcpTransports.delete(sessionId);
 
+  // Each connection needs its own McpServer instance — the SDK only allows
+  // one transport per instance and throws if connect() is called again.
+  const mcpServer = createMcpServer();
   await mcpServer.connect(transport);
 
   return new Promise<never>(() => {
