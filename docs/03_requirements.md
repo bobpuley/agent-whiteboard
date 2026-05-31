@@ -13,7 +13,7 @@ The MCP server exposes tools to the agent.
 |------|-----------|-------------|-------|
 | `render` | `render(type, payload)` | Push content to the canvas. `type` selects the renderer (e.g. `"mermaid"`). Always replaces the current canvas state in v1. `options` parameter deferred to Phase 2 (theme, action variants). | MVP |
 | `clear` | `clear()` | Reset the current session canvas. | MVP |
-| `export` | `export()` | Return the current canvas source spec as text (Mermaid source). Returns empty string if canvas is empty or cleared. Binary export is Phase 2. | MVP |
+| `export` | `export()` | Return the current canvas source spec. Response: `{ "ok": true, "data": "<mermaid source>" }` — `data` is an empty string if canvas is empty or cleared. Binary export is Phase 2. | MVP |
 | `step` | `step(direction)` | Advance (`"next"`) or rewind (`"prev"`) a step-through sequence. | Phase 2 |
 
 ---
@@ -89,6 +89,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 |----|-------------|-------|
 | U1 | Zero-config startup: one command launches server, opens browser, starts listening | MVP |
 | U2 | CLI-friendly invocation: `curl -X POST …` or thin wrapper script | MVP |
+| U2a | WebSocket disconnect: browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry. | MVP |
 | U3 | Terminal ASCII fallback if no browser available | Phase 2 |
 | U4 | Click-to-expand, tooltip, highlight nodes/edges; events sent back to agent | Phase 2 |
 | U5 | Structured input widgets (quiz, sliders, drag-to-order); events returned to agent | Phase 2 |
