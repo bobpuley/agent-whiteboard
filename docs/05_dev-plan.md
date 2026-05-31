@@ -147,6 +147,17 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ---
 
+### Sprint 9 — Bug fix: slideshow step-frames does not auto-advance ✅
+
+- [x] **`server/slideshow.ts` — `startSlideshow()`:** before starting the timer, expand any `step-frames` slides into individual frame entries via `expandSlides()`. A `FrameTick` carries `frames`, `frameType`, `rawPayload`, `frameIndex`, and optional `title`. `broadcastTick()` calls `setStepFrames()` on frame 0 and `seekStepFrame(index)` on subsequent frames.
+- [x] **`server/session.ts` — `seekStepFrame(index)`:** new function to seek the cursor to an arbitrary frame without resetting the sequence. Used by the slideshow expander.
+- [x] **Tests:** 3 new tests in `describe("POST /slideshow — step-frames auto-advance (B2)")`: timer advances through all 3 frames, session stays in step-frames state after full advance, mixed playlist correctly interleaves frame ticks and plain slides.
+- [x] **Showcase:** `node manualtests/showcase.js --type step-frames` auto-advances through all 3 frames without manual input (verified manually).
+
+**DoD:** `node manualtests/showcase.js --type step-frames` shows all 3 frames in sequence, each displayed for `delay_ms` before advancing, with no manual Prev/Next interaction required; session step-frames state is correct after the slideshow ends.
+
+---
+
 ### Sprint 10 — Bidirectionality (deferred — after 5–8)
 
 Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 time — research preview flag). Defer until Sprints 5–8 are shipped and the Channels API is closer to GA.
