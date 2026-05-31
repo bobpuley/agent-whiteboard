@@ -263,4 +263,163 @@ console.log(`   ✓ slideshow started — slides advance every ${DELAY_MS / 1000
 await new Promise((r) => setTimeout(r, totalMs));
 
 await post("/slideshow/stop", {});
+console.log("   ✓ server slideshow done");
+
+// ── Section 7 — Client-managed slideshow ──────────────────────────────────────
+//
+// The agent renders each slide individually via POST /render, choosing the
+// type and delay per slide.  Demonstrates:
+//   • mixed content types in a single sequence
+//   • non-constant intervals (each slide has its own delay_ms)
+//   • step-frames driven by the client: the agent calls POST /step for each
+//     frame at its own pace instead of delegating to the server timer
+//
+// Slide definitions carry an optional `delay_ms` (overrides DELAY_MS) and,
+// for step-frames only, an optional `frame_delay_ms` (per-frame pause).
+
+const clientSlides = [
+  // 7a — quick annotation: short pause, just enough to read
+  {
+    type: "html",
+    title: "7a — HTML (2 s)",
+    delay_ms: 2000,
+    payload: `<div style="font-family:system-ui,sans-serif;padding:32px 40px;max-width:520px">
+  <h2 style="margin:0 0 8px;color:#1a1a2e">Client-managed slideshow</h2>
+  <p style="color:#555;margin:0 0 20px">Each slide is rendered individually by the agent.<br>
+  Delays vary: 2 s → 6 s → 3 s per frame.</p>
+  <code style="background:#f3f3f3;padding:6px 10px;border-radius:4px;font-size:13px">
+    POST /render  ×3  +  POST /step  ×2
+  </code>
+</div>`,
+  },
+
+  // 7b — data chart: give it more time to read
+  {
+    type: "vega-lite",
+    title: "7b — Vega-Lite (6 s)",
+    delay_ms: 6000,
+    payload: JSON.stringify({
+      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      width: 380,
+      height: 220,
+      title: { text: "Deployment pipeline — stage durations (s)", fontSize: 13 },
+      data: {
+        values: [
+          { stage: "Install",  s: 12 },
+          { stage: "Typecheck", s: 8  },
+          { stage: "Test",     s: 34 },
+          { stage: "Build",    s: 21 },
+          { stage: "Publish",  s: 6  },
+        ],
+      },
+      mark: { type: "bar", cornerRadiusEnd: 3 },
+      encoding: {
+        x: { field: "stage", type: "ordinal",      axis: { labelAngle: 0 }, sort: null },
+        y: { field: "s",     type: "quantitative", title: "Duration (s)" },
+        color: {
+          field: "s", type: "quantitative",
+          scale: { scheme: "blues" }, legend: null,
+        },
+        tooltip: [{ field: "stage", title: "Stage" }, { field: "s", title: "s" }],
+      },
+    }),
+  },
+
+  // 7c — step-frames: client calls POST /step for each frame (3 s between frames)
+  // The server just stores the sequence; the agent decides when to advance.
+  {
+    type: "step-frames",
+    title: "7c — Step-Frames, client-driven (3 s/frame)",
+    frame_delay_ms: 3000,
+    payload: JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        {
+          label: "Phase 1 — Install & Typecheck",
+          payload: `graph LR
+  A([Push]) --> B[Install deps]
+  B --> C[Typecheck]
+  style A fill:#4caf50,color:#fff
+  style B fill:#2196f3,color:#fff
+  style C fill:#2196f3,color:#fff`,
+        },
+        {
+          label: "Phase 2 — Test & Build",
+          payload: `graph LR
+  A([Push]) --> B[Install deps]
+  B --> C[Typecheck]
+  C --> D[Run tests]
+  D --> E[Build]
+  style A fill:#4caf50,color:#fff
+  style B fill:#9e9e9e,color:#fff
+  style C fill:#9e9e9e,color:#fff
+  style D fill:#2196f3,color:#fff
+  style E fill:#2196f3,color:#fff`,
+        },
+        {
+          label: "Phase 3 — Publish",
+          payload: `graph LR
+  A([Push]) --> B[Install deps]
+  B --> C[Typecheck]
+  C --> D[Run tests]
+  D --> E[Build]
+  E --> F([Publish])
+  style A fill:#4caf50,color:#fff
+  style B fill:#9e9e9e,color:#fff
+  style C fill:#9e9e9e,color:#fff
+  style D fill:#9e9e9e,color:#fff
+  style E fill:#9e9e9e,color:#fff
+  style F fill:#4caf50,color:#fff`,
+        },
+      ],
+    }),
+  },
+];
+
+async function runClientSlideshow(slideList) {
+  for (const slide of slideList) {
+    const { type, payload, title, delay_ms = DELAY_MS, frame_delay_ms } = slide;
+    process.stdout.write(`\n▶  ${title}\n`);
+
+    const renderRes = await post("/render", { type, payload, options: { title } });
+    if (!renderRes.ok) {
+      console.error(`   ✗ render failed: ${renderRes.error}`);
+      process.exit(1);
+    }
+    console.log("   ✓ rendered");
+
+    if (type === "step-frames") {
+      // Frame 0 is already on screen; advance the remaining frames via POST /step.
+      const spec = JSON.parse(payload);
+      const frameCount = spec.frames.length;
+      const pause = frame_delay_ms ?? delay_ms;
+      for (let i = 1; i < frameCount; i++) {
+        await new Promise((r) => setTimeout(r, pause));
+        const stepRes = await post("/step", { direction: "next" });
+        if (!stepRes.ok) {
+          console.error(`   ✗ step failed: ${stepRes.error}`);
+          process.exit(1);
+        }
+        const label = spec.frames[i].label ? ` — ${spec.frames[i].label}` : "";
+        console.log(`   → frame ${i + 1}/${frameCount}${label}`);
+      }
+      // Linger on the last frame.
+      await new Promise((r) => setTimeout(r, pause));
+    } else {
+      await new Promise((r) => setTimeout(r, delay_ms));
+    }
+  }
+}
+
+const totalClientMs = clientSlides.reduce((acc, s) => {
+  if (s.type === "step-frames") {
+    const frames = JSON.parse(s.payload).frames.length;
+    return acc + frames * (s.frame_delay_ms ?? DELAY_MS);
+  }
+  return acc + (s.delay_ms ?? DELAY_MS);
+}, 0);
+
+console.log(`\n── Section 7: client-managed slideshow (${totalClientMs / 1000}s total) ──`);
+await runClientSlideshow(clientSlides);
+
 console.log("\n✅  Showcase complete.\n");
