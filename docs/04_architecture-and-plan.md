@@ -7,18 +7,18 @@
 
 ## 1. Stack Decisions
 
-| Layer | Choice | Rationale |
-|-------|--------|-----------|
-| Backend runtime | Node.js ≥ 18 (LTS) | Better concurrency for multi-user WebSocket at scale; single runtime with browser; easier binary packaging in future. Node 18 is the minimum for Hono and `@modelcontextprotocol/sdk`. |
-| Backend framework | Hono | First-class TypeScript, ~15 kB bundle, minimal overhead; Express ruled out — heavier, bolted-on types |
-| MCP server | Node.js MCP SDK (`@modelcontextprotocol/sdk`) | Official SDK, Node-native. Pin to exact version at `npm init` (Sprint 0); treat upgrades as deliberate decisions. |
-| MCP transport | SSE (HTTP + Server-Sent Events) | Server has its own lifecycle (also drives browser); SSE avoids a second process. stdio ruled out — requires Claude Code to spawn the server, but server must already be running for the browser. |
-| Frontend framework | Svelte | Minimal bundle, reactive by default, no virtual DOM overhead; replaceable at low cost given thin v1 UX |
-| Rendering libraries | Mermaid.js ^11 (npm, bundled by Vite) | Only v1 renderer. Pinned to ^11 (latest stable major; breaking changes between v8/v9/v10/v11 make floating version risky). Loaded as npm package and bundled by Vite — no CDN dependency, works offline. D2, Vega-Lite, KaTeX, D3 deferred to Phase 2. |
-| Transport (server→browser) | WebSocket | Real-time incremental updates |
-| Packaging (v1) | `npm run dev` — dev-only, no distribution concern yet | No remote repo yet; packaging deferred |
-| Dev server | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies `/render`, `/stream`, `/mcp` to Node. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2 |
-| Browser auto-open | `open` npm package | Cross-platform (macOS/Linux/Windows) with a single API call; no platform-specific logic |
+| Layer                      | Choice                                                                                                                                                                                                                                                                                                       | Rationale                                                                                                                                                                                                                                              |
+|----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Backend runtime            | Node.js ≥ 18 (LTS)                                                                                                                                                                                                                                                                                           | Better concurrency for multi-user WebSocket at scale; single runtime with browser; easier binary packaging in future. Node 18 is the minimum for Hono and `@modelcontextprotocol/sdk`.                                                                 |
+| Backend framework          | Hono                                                                                                                                                                                                                                                                                                         | First-class TypeScript, ~15 kB bundle, minimal overhead; Express ruled out — heavier, bolted-on types                                                                                                                                                  |
+| MCP server                 | Node.js MCP SDK (`@modelcontextprotocol/sdk`)                                                                                                                                                                                                                                                                | Official SDK, Node-native. Pin to exact version at `npm init` (Sprint 0); treat upgrades as deliberate decisions.                                                                                                                                      |
+| MCP transport              | SSE (HTTP + Server-Sent Events)                                                                                                                                                                                                                                                                              | Server has its own lifecycle (also drives browser); SSE avoids a second process. stdio ruled out — requires Claude Code to spawn the server, but server must already be running for the browser.                                                       |
+| Frontend framework         | Svelte                                                                                                                                                                                                                                                                                                       | Minimal bundle, reactive by default, no virtual DOM overhead; replaceable at low cost given thin v1 UX                                                                                                                                                 |
+| Rendering libraries        | Mermaid.js ^11 (npm, bundled by Vite)                                                                                                                                                                                                                                                                        | Only v1 renderer. Pinned to ^11 (latest stable major; breaking changes between v8/v9/v10/v11 make floating version risky). Loaded as npm package and bundled by Vite — no CDN dependency, works offline. D2, Vega-Lite, KaTeX, D3 deferred to Phase 2. |
+| Transport (server→browser) | WebSocket                                                                                                                                                                                                                                                                                                    | Real-time incremental updates                                                                                                                                                                                                                          |
+| Packaging (v1)             | `npm run dev` — dev-only, no distribution concern yet                                                                                                                                                                                                                                                        | No remote repo yet; packaging deferred                                                                                                                                                                                                                 |
+| Dev server                 | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies `/render`, `/stream`, `/mcp` to Node. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2                                                                                                                                                  |
+| Browser auto-open          | `open` npm package                                                                                                                                                                                                                                                                                           | Cross-platform (macOS/Linux/Windows) with a single API call; no platform-specific logic                                                                                                                                                                |
 
 ---
 
@@ -64,20 +64,20 @@
 
 ## 3. MCP Tool Implementations
 
-| Tool | Server-side action |
-|------|--------------------|
+| Tool                    | Server-side action                                                                                                                          |
+|-------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
 | `render(type, payload)` | Validates Mermaid payload; pushes render command to browser via WebSocket (action always `"replace"` in v1); stores as current canvas state |
-| `clear()` | Resets in-memory canvas state; sends clear command to browser |
-| `export()` | Returns current Mermaid source as text; returns empty string if canvas is empty or was cleared; no binary in v1 |
-| `step(direction)` | Phase 2 — not implemented in v1 |
+| `clear()`               | Resets in-memory canvas state; sends clear command to browser                                                                               |
+| `export()`              | Returns current Mermaid source as text; returns empty string if canvas is empty or was cleared; no binary in v1                             |
+| `step(direction)`       | Phase 2 — not implemented in v1                                                                                                             |
 
 ### Validation — two layers
 
 **Layer 1 — MCP tool definition** (agent-facing, in `mcp.ts`)
 The tool's JSON Schema and description are read by the agent when it loads the MCP server. Rich schemas and inline examples are the primary defence against hallucinated payloads.
 
-| Type | Schema hint exposed to agent |
-|------|------------------------------|
+| Type      | Schema hint exposed to agent                                                                                                                         |
+|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `mermaid` | `string` — must begin with a valid diagram keyword (`graph`, `flowchart`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `gantt`, `pie`, `mindmap`) |
 
 Phase 2 types (not exposed in v1): `d2`, `vega-lite`, `katex`, `svg`, `html`, `step-frames`.
@@ -99,10 +99,10 @@ On success:
 
 ### MCP tool response shapes
 
-| Tool | Success | Failure |
-|------|---------|---------|
-| `render` | `{ "ok": true }` | `{ "ok": false, "error": "..." }` |
-| `clear` | `{ "ok": true }` | — (always succeeds) |
+| Tool     | Success                                                                        | Failure                           |
+|----------|--------------------------------------------------------------------------------|-----------------------------------|
+| `render` | `{ "ok": true }`                                                               | `{ "ok": false, "error": "..." }` |
+| `clear`  | `{ "ok": true }`                                                               | — (always succeeds)               |
 | `export` | `{ "ok": true, "data": "<mermaid source>" }` — empty string if canvas is blank | `{ "ok": false, "error": "..." }` |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
@@ -244,31 +244,33 @@ The Svelte/Vite client has its own `tsconfig.json` generated by `create svelte` 
 
 ## 8. Dev Plan — MVP Tasks
 
-### Sprint 0 — Scaffold
-- [ ] Init Node.js project (`package.json`, TypeScript config)
-- [ ] Init Svelte project inside `client/` with Vite
-- [ ] Configure Vite proxy: `/render`, `/mcp` → `localhost:3000` (HTTP); `/stream` → `localhost:3000` with `ws: true` (WebSocket)
-- [ ] Add `concurrently` + `wait-on` to root `package.json`; `npm run dev` starts Node first, waits for `http://localhost:3000/mcp` to be reachable, then starts Vite. Once Vite is ready (`:5173`), the `open` package opens the browser. Browser is opened by the startup script (not the Node server) to avoid a race where the browser loads before Vite is serving. Assumption: Claude Code connects after the server is already running (typical real-world flow); `wait-on` covers the automated case.
-- [ ] Commit `.mcp.json` with SSE registration pointing to `http://localhost:3000/mcp`
+### Sprint 0 — Scaffold ✅
+- [x] Init Node.js project (`package.json`, TypeScript config)
+- [x] Init Svelte project inside `client/` with Vite
+- [x] Configure Vite proxy: `/render`, `/mcp` → `localhost:3000` (HTTP); `/stream` → `localhost:3000` with `ws: true` (WebSocket)
+- [x] Add `concurrently` + `wait-on` to root `package.json`; `npm run dev` starts Node first, waits for `http://localhost:3000/mcp` to be reachable, then starts Vite. Browser auto-open wired to startup script (Sprint 4).
+- [x] Commit `.mcp.json` with SSE registration pointing to `http://localhost:3000/mcp`
 - [ ] **Verify** that Claude Code auto-loads `.mcp.json` from the project root on open (see `04` §7); if not, document the manual step required
 
-### Sprint 1 — Transport layer
-- [ ] HTTP server with REST `POST /render`, `POST /clear`, `GET /export` endpoints
-- [ ] WebSocket server (`/stream`) — push JSON commands to connected browser
-- [ ] Svelte SPA connects to WebSocket and logs received commands
+> **Implementation note:** macOS 11 (Big Sur) is incompatible with esbuild ≥ 0.21 (requires macOS 12). Stack pinned to Vite 4 + Svelte 4 + `@sveltejs/vite-plugin-svelte` v2 + vitest 0.34 to stay within the esbuild 0.18 range. `ws` npm package used for WebSocket instead of `@hono/node-server/ws` (not exported at the installed version). Revisit on macOS 12+ or when upgrading Node infra.
 
-### Sprint 2 — MCP server
-- [ ] Add `@modelcontextprotocol/sdk` to server
-- [ ] Implement `render`, `clear`, `export` tool handlers (SSE transport)
-- [ ] Wire MCP handlers to in-memory session + WebSocket push
+### Sprint 1 — Transport layer ✅
+- [x] HTTP server with REST `POST /render`, `POST /clear`, `GET /export` endpoints
+- [x] WebSocket server (`/stream`) — push JSON commands to connected browser
+- [x] Svelte SPA connects to WebSocket and dispatches render commands
 
-### Sprint 3 — Renderer
-- [ ] Mermaid renderer (Mermaid.js)
+### Sprint 2 — MCP server ✅
+- [x] Add `@modelcontextprotocol/sdk` to server
+- [x] Implement `render`, `clear`, `export` tool handlers (SSE transport)
+- [x] Wire MCP handlers to in-memory session + WebSocket push
+
+### Sprint 3 — Renderer ✅
+- [x] Mermaid renderer (Mermaid.js) — renders diagrams; displays inline error on parse failure
 
 ### Sprint 4 — UX baseline
 - [ ] Auto-open browser: startup script opens `:5173` after Vite is ready (via `open` npm package; not the Node server — see Sprint 0)
 - [ ] Zoom/pan for diagram renderer
-- [ ] `export()` returns current source spec as text
+- [x] `export()` returns current canvas source spec as JSON `{ ok: true, data: "..." }` (MCP + REST)
 
 ### Testing strategy — v1
 
