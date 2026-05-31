@@ -68,7 +68,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | F2 | Support rendering types: Mermaid, SVG, HTML, KaTeX, Vega-Lite. D2 deferred (requires server-side render process). | MVP |
 | F3 | Full-spec replace: agent always sends the complete updated spec; per-element mutation deferred to Phase 2 | MVP |
 | F3a | Validation is a hard gate: invalid payloads are rejected and returned as `{ ok: false, error: "..." }` to the agent; nothing is pushed to the browser and canvas state is unchanged | MVP |
-| F4 | REST endpoints (`POST /render`, `POST /clear`, `GET /export`) are a fallback for agents that do not support MCP/WebSocket (e.g. `curl` testing). Primary path is MCP → WebSocket `/stream`. | MVP |
+| F4 | REST endpoints (`POST /render`, `POST /clear`, `GET /export`, `POST /step`) are a fallback for agents that do not support MCP/WebSocket (e.g. `curl` testing). Primary path is MCP → WebSocket `/stream`. | MVP |
 | F5 | Session management with cross-session persistence (`session_id`, history across restarts) | Phase 2 |
 | F7 | Slideshow: `POST /slideshow` (and `slideshow()` MCP tool) accepts `{ slides: [{ type, payload, title? }], delay_ms }`, validates each slide, starts a server-side timer that auto-advances the canvas. A new call cancels any running slideshow; `POST /render` and `POST /clear` also cancel it. At most one active slideshow at a time. | Phase 2 |
 | F8 | Slideshow stop: `POST /slideshow/stop` (and `slideshow_stop()` MCP tool) cancels the running timer; last rendered slide remains on screen. No-op if no slideshow is running. | Phase 2 |
@@ -80,7 +80,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 |----|-------------|-------|
 | V1 | Render Mermaid diagrams with auto-refresh, zoom/pan | MVP |
 | V1a | If the browser renderer fails (e.g. Mermaid.js throws), display the error message inline on the canvas in place of the diagram | MVP |
-| V2 | Export: Mermaid source text via `export()` | MVP |
+| V2 | Export: source text via `export()` — verbatim last `render()` payload, all content types | MVP |
 | V2a | Title overlay: `options.title` in `render()` displays a label above the canvas for all renderer types; hidden when absent or after `clear()`; not included in `export()` output | MVP |
 | V3 | Support SVG/HTML, Vega-Lite, KaTeX renderers | MVP |
 | V3b | Support D2 renderer | Post-Phase-2 (requires server-side render process) |

@@ -14,7 +14,7 @@
 | MCP server                 | Node.js MCP SDK (`@modelcontextprotocol/sdk`)                                                                                                                                                                                                                                                                | Official SDK, Node-native. Pin to exact version at `npm init` (Sprint 0); treat upgrades as deliberate decisions.                                                                                                                                      |
 | MCP transport              | SSE (HTTP + Server-Sent Events)                                                                                                                                                                                                                                                                              | Server has its own lifecycle (also drives browser); SSE avoids a second process. stdio ruled out — requires Claude Code to spawn the server, but server must already be running for the browser.                                                       |
 | Frontend framework         | Svelte                                                                                                                                                                                                                                                                                                       | Minimal bundle, reactive by default, no virtual DOM overhead; replaceable at low cost given thin v1 UX                                                                                                                                                 |
-| Rendering libraries        | Mermaid.js ^11 (npm, bundled by Vite)                                                                                                                                                                                                                                                                        | Only v1 renderer. Pinned to ^11 (latest stable major; breaking changes between v8/v9/v10/v11 make floating version risky). Loaded as npm package and bundled by Vite — no CDN dependency, works offline. D2, Vega-Lite, KaTeX, D3 deferred to Phase 2. |
+| Rendering libraries        | Mermaid.js ^11, KaTeX, vega-lite + vega-embed, DOMPurify (all npm, bundled by Vite)                                                                                                                                                                                                                         | Mermaid pinned to ^11 (breaking changes between major versions make floating risky). KaTeX, Vega-Lite, SVG/HTML (DOMPurify) added in Sprint 5 ✅. D2 and D3 deferred (D2 requires server-side render process; D3 is post-Phase-2 nice-to-have). |
 | Transport (server→browser) | WebSocket                                                                                                                                                                                                                                                                                                    | Real-time incremental updates                                                                                                                                                                                                                          |
 | Packaging (v1)             | `npm run dev` — dev-only, no distribution concern yet                                                                                                                                                                                                                                                        | No remote repo yet; packaging deferred                                                                                                                                                                                                                 |
 | Dev server                 | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies `/render`, `/stream`, `/mcp` to Node. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2                                                                                                                                                  |
@@ -27,12 +27,12 @@
 ```
 [Claude Code agent]
     │
-    └── MCP tool calls (render / clear / export)
+    └── MCP tool calls (render / clear / export / step)
            │
            ▼
     [MCP + HTTP Server]  (Node.js, :3000)
     │  • MCP tool handlers
-    │  • REST POST /render, POST /clear, GET /export  (curl-friendly fallback)
+    │  • REST POST /render, POST /clear, GET /export, POST /step  (curl-friendly fallback)
     │  • WebSocket /stream  (push to browser)
     │  • Serves the Svelte SPA (static files in production)
     │  • In-memory session state (one canvas at a time)
@@ -46,7 +46,7 @@
            ▼
     [Browser SPA]  (Svelte)
     │  • Receives render commands via WebSocket
-    │  • Renders: Mermaid only (v1)
+    │  • Renders: Mermaid, SVG/HTML, KaTeX, Vega-Lite (v1); step-through frames
     │  • export() returns last render() payload as text (all types)
     │  • Auto-opens on server start
 ```
@@ -174,12 +174,11 @@ agent calls export()
 }
 ```
 
-`action` is always `"replace"` in v1 — hardcoded server-side, not part of the MCP tool signature.
-`action` is always `"replace"` in v1 — `append` and other action variants are Phase 2. `options.theme` is Phase 2; `options.title` is MVP (Sprint 8 ✅). Non-Mermaid types (`svg`, `html`, `katex`, `vega-lite`, `step-frames`) are all MVP (Sprints 5 & 7 ✅); `d2` is post-Phase-2.
+`action` is always `"replace"` in v1 — hardcoded server-side, not part of the MCP tool signature. `append` and other action variants are Phase 2. `options.theme` is Phase 2; `options.title` is MVP (Sprint 8 ✅). Non-Mermaid types (`svg`, `html`, `katex`, `vega-lite`, `step-frames`) are all MVP (Sprints 5 & 7 ✅); `d2` is post-Phase-2.
 
-### `options` parameter (Phase 2)
+### `options` parameter
 
-`render()` accepts an optional third argument `options`. In Phase 2 only `theme` is defined:
+`render()` accepts an optional third argument `options`. `options.title` is MVP (Sprint 8 ✅). In Phase 2, `theme` is added:
 
 ```json
 {
@@ -193,7 +192,7 @@ agent calls export()
 
 Additional `options` keys (action variants etc.) are deferred beyond Phase 2.
 
-### Step-frames protocol (Phase 2)
+### Step-frames protocol (MVP — Sprint 7 ✅)
 
 Step-through is a two-tool protocol:
 
@@ -203,7 +202,7 @@ Step-through is a two-tool protocol:
 
 `clear()` resets the step cursor along with the canvas.
 
-### Step-frames payload shape (Phase 2)
+### Step-frames payload shape (MVP — Sprint 7 ✅)
 
 ```json
 {
@@ -328,7 +327,7 @@ Test runner: **Vitest** (shares the Node/TypeScript stack; no separate config ne
 
 Full Mermaid render correctness and browser behaviour verified manually.
 
-Playwright e2e: deferred to after Sprint 8 (bidirectionality) — browser interaction tests are most valuable once the full interactive surface is stable. No dedicated sprint before then.
+Playwright e2e: deferred to after Sprint 10 (bidirectionality) — browser interaction tests are most valuable once the full interactive surface is stable. No dedicated sprint before then.
 
 ### Sprint 5 — Additional renderers ✅
 
@@ -424,7 +423,7 @@ See `02` E1 for architecture. High-level:
 ### Definition of Done — MVP
 - Agent can call `render(type="mermaid", payload)` and diagram appears in browser within 200ms
 - Agent can call `clear()` to reset the canvas
-- Agent can call `export()` to retrieve the current Mermaid source as text
+- Agent can call `export()` to retrieve the current canvas source as text (verbatim last `render()` payload, any type)
 - Server starts with `npm run dev`, browser opens automatically
 - Runs on macOS, Linux, Windows
 - Binding address and port are configurable via environment variables (default: `localhost:3000`)
