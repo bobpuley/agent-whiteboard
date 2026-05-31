@@ -17,7 +17,7 @@ Non-technical audiences are out of scope for v1; expansion is a future considera
 
 **A3 — Browser always available**
 The render surface is a browser tab. The system assumes a browser is running on the same machine.
-- Risk: headless / server environments have no display. Terminal fallback (UX-4) partially mitigates this but is lower fidelity.
+- Risk: headless / server environments have no display. Terminal fallback is deferred to Phase 2 — this risk is **unmitigated in v1**.
 
 **A4 — Session lifetime is short and in-memory**
 Sessions are scoped to a single focused explanation. History does not need to survive a server restart in v1.
@@ -68,5 +68,4 @@ The agent sends commands forward-only. It also prints the textual representation
 **E1 — WebSocket return channel is sufficient for user events**
 When bidirectionality is built, user interactions (clicks, steps, quiz answers) are sent back to the agent via WebSocket → MCP server.
 - Risk: the agent's MCP session must remain open and stateful long enough to receive async events — not all MCP runtimes handle long-lived sessions well.
-
-> ⚠️ ASSUMPTION: Target MCP runtimes support persistent/streaming sessions by Phase 2.
+- Open research item for Phase 2: verify whether Claude Code's SSE MCP session supports async server-push events. If not, fallback options include polling (agent calls a `get_events()` tool) or a separate callback mechanism outside MCP.
