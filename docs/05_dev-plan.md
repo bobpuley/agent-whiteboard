@@ -160,8 +160,8 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ### Sprint 9 — Bug fix: slideshow stops after slide 1 → slide 2 ✅
 
-- [x] **Investigate `server/slideshow.ts` — `startSlideshow()`:** the B2 refactor (tick-expansion) rewrote the timer loop; re-testing confirms the loop now advances through every tick in the playlist. No code change needed.
-- [x] **Fix the timer loop:** already correct post-B2. The `setInterval` callback increments `index` and calls `cancelSlideshow()` only after the last tick — confirmed by manual trace and automated test.
+- [x] **Investigate `server/slideshow.ts` — `startSlideshow()`:** root cause is in `manualtests/showcase.js`, not the server. `totalMs = activeSlides.length * DELAY_MS` counted slides, not ticks — after the B2 step-frames expansion, a single step-frames slide becomes N frame-ticks, so the showcase called `/slideshow/stop` too early (e.g. a step-frames slide with 3 frames got only 1 × DELAY_MS budget instead of 3).
+- [x] **Fix the timer loop:** server timer loop is correct. Fixed `showcase.js`: `countTicks()` sums frame counts for step-frames slides and 1 for plain slides; `totalMs = countTicks(activeSlides) * DELAY_MS`. Log line notes tick count when it differs from slide count.
 - [x] **Tests:** added `"advances through all 3 slides of a 3-slide playlist (B3)"` in `describe("POST /slideshow")` — verifies slide 0 at t=0, slide 1 after 1 interval, slide 2 after 2 intervals.
 
 **DoD:** `node manualtests/showcase.js` displays all slides in the playlist, each held for `delay_ms` before advancing, without any manual interaction; the timer stops naturally after the last slide.
