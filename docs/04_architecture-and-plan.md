@@ -52,7 +52,8 @@
 ```
 
 **Phase 2 additions** (not in v1):
-- WebSocket back-channel: browser → server → agent (bidirectionality) — requires research spike before implementation: verify whether Claude Code's SSE MCP session supports async server-push events; if not, evaluate polling (`get_events()`) or out-of-band callback (see `02` E1)
+- Full server-side Mermaid parse validation (run Mermaid.js in Node context at `render()` time; reject before browser push)
+- Bidirectionality (browser → agent): implemented via a **separate stdio channel server** (Channels API, Claude Code ≥ v2.1.80 research preview). The channel server bridges browser WebSocket/REST → `notifications/claude/channel` events in the Claude Code session. The existing SSE server is unchanged. Requires `--dangerously-load-development-channels` during preview. See `02` E1 for full rationale.
 - `step()` tool + step-through frame sequences
 - D2, Vega-Lite, KaTeX, SVG/HTML renderers
 - Multi-panel / named tabs
@@ -64,12 +65,12 @@
 
 ## 3. MCP Tool Implementations
 
-| Tool                    | Server-side action                                                                                                                          |
-|-------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| `render(type, payload)` | Validates Mermaid payload; pushes render command to browser via WebSocket (action always `"replace"` in v1); stores as current canvas state |
-| `clear()`               | Resets in-memory canvas state; sends clear command to browser                                                                               |
-| `export()`              | Returns current Mermaid source as text; returns empty string if canvas is empty or was cleared; no binary in v1                             |
-| `step(direction)`       | Phase 2 — not implemented in v1                                                                                                             |
+| Tool                              | Server-side action                                                                                                                                                                                                                  |
+|-----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options` is optional (Phase 2). For `step-frames`: loads all frames, displays frame 0, stores full payload. |
+| `clear()`                         | Resets in-memory canvas state and step cursor; sends clear command to browser                                                                                                                                                       |
+| `export()`                        | Returns the last submitted source payload verbatim as a string. For all types (mermaid, svg, katex, vega-lite, step-frames): returns whatever was passed to `render()`. Empty string if canvas is empty or cleared.                 |
+| `step(direction)`                 | Phase 2. Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded.    |
 
 ### Validation — two layers
 
@@ -99,11 +100,12 @@ On success:
 
 ### MCP tool response shapes
 
-| Tool     | Success                                                                        | Failure                           |
-|----------|--------------------------------------------------------------------------------|-----------------------------------|
-| `render` | `{ "ok": true }`                                                               | `{ "ok": false, "error": "..." }` |
-| `clear`  | `{ "ok": true }`                                                               | — (always succeeds)               |
-| `export` | `{ "ok": true, "data": "<mermaid source>" }` — empty string if canvas is blank | `{ "ok": false, "error": "..." }` |
+| Tool     | Success                                                                                                                                 | Failure                           |
+|----------|-----------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------|
+| `render` | `{ "ok": true }`                                                                                                                        | `{ "ok": false, "error": "..." }` |
+| `clear`  | `{ "ok": true }`                                                                                                                        | — (always succeeds)               |
+| `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | `{ "ok": false, "error": "..." }` |
+| `step`   | `{ "ok": true, "current_frame": N, "total_frames": M }` (Phase 2)                                                                      | `{ "ok": false, "error": "..." }` |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
 
@@ -166,6 +168,32 @@ agent calls export()
 
 `action` is always `"replace"` in v1 — hardcoded server-side, not part of the MCP tool signature.
 `append`, `step` actions, `options` (theme etc.), and all non-Mermaid types are Phase 2.
+
+### `options` parameter (Phase 2)
+
+`render()` accepts an optional third argument `options`. In Phase 2 only `theme` is defined:
+
+```json
+{
+  "theme": "dark"
+}
+```
+
+| Key     | Type                   | Default  | Description                              |
+|---------|------------------------|----------|------------------------------------------|
+| `theme` | `"dark" \| "light"`   | `"dark"` | Sets the canvas theme for this render call. Persists until next `render()` or explicit change. |
+
+Additional `options` keys (action variants etc.) are deferred beyond Phase 2.
+
+### Step-frames protocol (Phase 2)
+
+Step-through is a two-tool protocol:
+
+1. **Load:** `render(type="step-frames", payload=<JSON string>)` — validates, stores all frames, displays frame 0. Returns `{ ok: true }`.
+2. **Navigate:** `step(direction="next"|"prev")` — advances or rewinds the cursor. Returns `{ ok: true, current_frame: N, total_frames: M }`.
+3. **Export:** `export()` — returns the full original frames JSON string (not the current frame), so the agent can reconstruct or resume the sequence.
+
+`clear()` resets the step cursor along with the canvas.
 
 ### Step-frames payload shape (Phase 2)
 
@@ -293,6 +321,56 @@ Test runner: **Vitest** (shares the Node/TypeScript stack; no separate config ne
 Full Mermaid render correctness and browser behaviour verified manually.
 
 Phase 2: add Playwright e2e once the UX stabilises.
+
+### Sprint 5 — Additional renderers
+
+Priority order: SVG/HTML first (trivial), then KaTeX, then Vega-Lite. D2 deferred (requires a server-side render process).
+
+- [ ] **SVG/HTML renderer** (`type="svg"` and `type="html"`)
+  - Server: accept `svg` and `html` as valid types; no keyword validation (passthrough); sanitize with DOMPurify on the browser side
+  - Browser: new `Html.svelte` renderer — sets `innerHTML` on a sandboxed container after DOMPurify sanitization
+  - MCP schema: expose `svg` and `html` as accepted types with inline examples
+  - DoD: agent calls `render(type="svg", payload="<svg>...</svg>")` and SVG appears in browser; invalid HTML is displayed with an inline error
+- [ ] **KaTeX renderer** (`type="katex"`)
+  - Browser: new `Katex.svelte` renderer — npm install `katex`, render LaTeX string in display mode
+  - Server: accept `katex` type; no structural validation (KaTeX handles parse errors in-browser)
+  - DoD: agent calls `render(type="katex", payload="E = mc^2")` and rendered math appears
+- [ ] **Vega-Lite renderer** (`type="vega-lite"`)
+  - Browser: new `VegaLite.svelte` renderer — npm install `vega-lite` + `vega-embed`; parse payload as JSON and embed
+  - Server: accept `vega-lite` type; validate payload is parseable JSON before pushing
+  - DoD: agent calls `render(type="vega-lite", payload=<Vega-Lite JSON string>)` and chart appears
+- [ ] Update MCP tool schema to expose all new types
+- [ ] Update `export()` — already correct by design: returns verbatim last payload for all types
+
+### Sprint 6 — Full server-side Mermaid parse validation
+
+- [ ] Add Mermaid.js as a Node.js import in `server/` (already a bundled dep via client; add as a direct server dep or run in a Worker)
+- [ ] In `mcp.ts` / `session.ts`: after keyword-prefix check, attempt `mermaid.parse(payload)` — reject with structured error if it throws
+- [ ] DoD: `render(type="mermaid", payload="graph TD; A -->")` (valid keyword, invalid syntax) returns `{ ok: false, error: "..." }` and nothing is pushed to the browser
+
+### Sprint 7 — Step-through (`step()` tool + frame sequences)
+
+- [ ] **Server:** implement `step(direction)` MCP tool
+  - In-memory: extend `session.ts` to hold `frames[]` and `currentFrame` index alongside `canvasState`
+  - `render(type="step-frames", payload)`: parse JSON, validate structure, store frames, push frame 0 to browser
+  - `step(direction)`: advance/rewind cursor, push new frame to browser, return `{ ok: true, current_frame, total_frames }`
+  - `clear()`: reset frames + cursor
+  - `export()`: return original full frames JSON string
+- [ ] **Browser:** add step caption overlay (shows `frame.label` if present) in the renderer
+- [ ] **Browser:** add prev/next nav buttons visible only when a step-frames sequence is active
+- [ ] **MCP schema:** expose `step-frames` type in `render()` and register `step(direction)` tool
+- [ ] DoD: agent loads a 3-frame Mermaid step sequence; calls `step("next")` twice; browser advances correctly; `export()` returns the full frames JSON
+
+### Sprint 8 — Bidirectionality (deferred — after 5–7)
+
+Requires `--dangerously-load-development-channels` (research preview). Defer until Sprints 5–7 are shipped and the Channels API is closer to GA.
+
+See `02` E1 for architecture. High-level:
+- New stdio channel server (`server/channel.ts`) separate from the SSE server
+- Bridges browser WebSocket user events → `notifications/claude/channel` events
+- Adds a `reply` tool so Claude can send messages back through the channel
+
+---
 
 ### Definition of Done — MVP
 - Agent can call `render(type="mermaid", payload)` and diagram appears in browser within 200ms

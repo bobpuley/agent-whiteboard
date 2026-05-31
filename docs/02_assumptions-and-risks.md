@@ -22,7 +22,7 @@ The render surface is a browser tab. The system assumes a browser is running on 
 
 **A4 — Session lifetime is short and in-memory**
 Sessions are scoped to a single focused explanation. History does not need to survive a server restart in v1.
-- Cross-session persistence (save/resume, history across restarts) is deferred to v2.
+- Cross-session persistence (save/resume, history across restarts) is deferred to Phase 2.
 - Risk: users who want to revisit a previous diagram have no recourse in v1 beyond export.
 
 ---
@@ -30,7 +30,8 @@ Sessions are scoped to a single focused explanation. History does not need to su
 ## B. MCP as Primary Interface
 
 **B1 — MCP is stable enough to build on**
-> ⚠️ ASSUMPTION: not formally validated — accepted as a known risk with no mitigation in v1.
+~~> ⚠️ ASSUMPTION: not formally validated — accepted as a known risk with no mitigation in v1.~~
+> ✅ VALIDATED: MCP SSE transport confirmed working end-to-end in Sprint 0 (2026-05-31). `render()`, `clear()`, `export()` all exercised via Claude Code. Risk remains (MCP is still relatively new) but is no longer an unvalidated assumption.
 
 We are betting that the MCP protocol spec is stable and that tooling (SDKs, clients) is mature enough for production use.
 - Risk: MCP is relatively new; breaking changes in the spec or SDK could require rework.
@@ -61,7 +62,7 @@ Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline nee
 
 We assume LLMs reliably produce well-formed Mermaid, valid Vega-Lite JSON, and correctly structured step arrays.
 - Risk: LLMs hallucinate syntax. Invalid payloads will cause silent render failures or broken diagrams unless the server validates and returns structured errors.
-- **Decision (v1):** server validates keyword prefix only; browser displays inline render errors for anything that passes the prefix check but fails Mermaid.js parsing (see `03` V1a). Full server-side Mermaid parse deferred to Phase 2.
+- **Decision (v1):** server validates keyword prefix only; browser displays inline render errors for anything that passes the prefix check but fails Mermaid.js parsing (see `03` V1a). Full server-side Mermaid parse deferred to Phase 2 and added to the Phase 2 sprint plan in `04` §8.
 
 **D2 — The whiteboard is stateless from the agent's perspective**
 The agent sends commands forward-only. It also prints the textual representation (Mermaid source, JSON spec, etc.) in the terminal alongside the visual render — the terminal is the agent's own record of what it sent.
@@ -72,9 +73,17 @@ The agent sends commands forward-only. It also prints the textual representation
 
 ## E. Bidirectionality (Phase 2)
 
-**E1 — WebSocket return channel is sufficient for user events**
-> ⚠️ ASSUMPTION: unverified — Phase 2 research spike required before implementation.
+**E1 — Bidirectionality requires a Channel (stdio MCP server), not SSE push**
+> ✅ RESOLVED: research spike completed 2026-05-31 via Claude Code docs.
 
-When bidirectionality is built, user interactions (clicks, steps, quiz answers) are sent back to the agent via WebSocket → MCP server.
-- Risk: the agent's MCP session must remain open and stateful long enough to receive async events — not all MCP runtimes handle long-lived sessions well.
-- Open research item for Phase 2: verify whether Claude Code's SSE MCP session supports async server-push events. If not, fallback options include polling (agent calls a `get_events()` tool) or a separate callback mechanism outside MCP.
+Claude Code SSE MCP sessions do **not** support async server-push events. The correct mechanism is the **Channels API** (Claude Code ≥ v2.1.80, research preview).
+
+A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as a subprocess. It pushes events via `mcp.notification({ method: "notifications/claude/channel", ... })`, which Claude Code delivers as `<channel source="...">` tags in the agent's context. Two-way channels also expose a `reply` MCP tool for Claude to call back.
+
+**Architectural implication for Phase 2:**
+- The existing SSE server (port 3000, render/clear/export tools) is unchanged.
+- A **second, separate stdio channel server** is required to bridge browser user events → Claude Code session.
+- During the research preview, launching requires `--dangerously-load-development-channels server:agent-whiteboard-events`.
+- Full production use requires packaging as a plugin on the Anthropic-approved allowlist or an org `allowedChannelPlugins` entry.
+- Risk: research preview — the `--channels` flag contract may change before GA.
+- See `04` §2 for updated Phase 2 architecture.
