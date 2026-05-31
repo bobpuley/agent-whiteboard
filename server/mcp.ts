@@ -1,27 +1,12 @@
 // MCP tool definitions and handlers.
-// Tools: render, clear, export (step is Phase 2).
+// Tools: render, clear, export, step.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearCanvas, exportCanvas, setCanvas } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, setCanvas, setStepFrames, stepCursor } from "./session.js";
+import type { StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
-
-// Valid Mermaid diagram keywords (Layer 1 + Layer 2 validation).
-const MERMAID_KEYWORDS = [
-  "graph",
-  "flowchart",
-  "sequenceDiagram",
-  "classDiagram",
-  "erDiagram",
-  "gantt",
-  "pie",
-  "mindmap",
-];
-
-function isValidMermaid(payload: string): boolean {
-  const first = payload.trimStart().split(/\s/)[0];
-  return MERMAID_KEYWORDS.includes(first);
-}
+import { hasMermaidKeyword, parseMermaid } from "./validate.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -34,35 +19,137 @@ export function createMcpServer(): McpServer {
     "render",
     {
       description:
-        'Push content to the whiteboard canvas. In v1, type must be "mermaid". ' +
-        "The payload always replaces the current canvas state. " +
-        'Example: render({ type: "mermaid", payload: "graph TD; A --> B" })',
+        "Push content to the whiteboard canvas. The payload always replaces the current canvas state.\n" +
+        "Supported types:\n" +
+        '  • "mermaid"     — Mermaid diagram source. Must begin with a diagram keyword (graph, flowchart, sequenceDiagram, classDiagram, erDiagram, gantt, pie, mindmap). Example: render({ type: "mermaid", payload: "graph TD; A --> B" })\n' +
+        '  • "svg"         — Inline SVG markup. Example: render({ type: "svg", payload: "<svg>...</svg>" })\n' +
+        '  • "html"        — HTML/CSS fragment. Example: render({ type: "html", payload: "<h1>Hello</h1>" })\n' +
+        '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
+        '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{\"$schema\":\"...\",\"mark\":\"bar\",...}" })\n' +
+        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate.',
       inputSchema: {
-        type: z.enum(["mermaid"]).describe(
-          'Content type. Only "mermaid" is supported in v1.'
-        ),
+        type: z
+          .enum(["mermaid", "svg", "html", "katex", "vega-lite", "step-frames"])
+          .describe("Content type."),
         payload: z
           .string()
           .describe(
-            "The diagram source. For mermaid: must begin with a valid diagram keyword " +
-              "(graph, flowchart, sequenceDiagram, classDiagram, erDiagram, gantt, pie, mindmap)."
+            "The content source. For mermaid: must begin with a valid diagram keyword. " +
+              "For vega-lite and step-frames: must be valid JSON. For svg/html/katex: any string."
           ),
       },
     },
-    ({ type, payload }) => {
-      if (!isValidMermaid(payload)) {
+    async ({ type, payload }) => {
+      if (type === "mermaid") {
+        if (!hasMermaidKeyword(payload)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error:
+                    "invalid payload: mermaid source must begin with a diagram keyword " +
+                    "(e.g. 'graph TD', 'sequenceDiagram', 'classDiagram', ...)",
+                }),
+              },
+            ],
+          };
+        }
+        try {
+          await parseMermaid(payload);
+        } catch (err) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: `invalid mermaid syntax: ${err instanceof Error ? err.message : String(err)}`,
+                }),
+              },
+            ],
+          };
+        }
+      }
+
+      if (type === "vega-lite") {
+        try {
+          JSON.parse(payload);
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: "invalid payload: vega-lite payload must be valid JSON",
+                }),
+              },
+            ],
+          };
+        }
+      }
+
+      if (type === "step-frames") {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: "invalid payload: step-frames payload must be valid JSON",
+                }),
+              },
+            ],
+          };
+        }
+        const spec = parsed as { frame_type?: string; frames?: unknown[] };
+        if (
+          typeof spec.frame_type !== "string" ||
+          !Array.isArray(spec.frames) ||
+          spec.frames.length === 0
+        ) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'invalid payload: step-frames must have "frame_type" (string) and "frames" (non-empty array)',
+                }),
+              },
+            ],
+          };
+        }
+        const frames = spec.frames as StepFrame[];
+        if (frames.some((f) => typeof f.payload !== "string")) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'invalid payload: each frame must have a "payload" string',
+                }),
+              },
+            ],
+          };
+        }
+        setStepFrames(frames, spec.frame_type, payload);
+        broadcast({
+          action: "replace",
+          type: spec.frame_type,
+          payload: frames[0].payload,
+          frameLabel: frames[0].label,
+          stepFrames: true,
+        });
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error:
-                  "invalid payload: mermaid source must begin with a diagram keyword " +
-                  "(e.g. 'graph TD', 'sequenceDiagram', 'classDiagram', ...)",
-              }),
-            },
-          ],
+          content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
         };
       }
 
@@ -71,6 +158,61 @@ export function createMcpServer(): McpServer {
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      };
+    }
+  );
+
+  // step(direction) — advance or rewind the step cursor.
+  server.registerTool(
+    "step",
+    {
+      description:
+        'Advance ("next") or rewind ("prev") the step cursor for a loaded step-frames sequence. ' +
+        'Returns { "ok": true, "current_frame": N, "total_frames": M }. ' +
+        'Returns { "ok": false, "error": "..." } if no step-frames sequence is loaded.',
+      inputSchema: {
+        direction: z
+          .enum(["next", "prev"])
+          .describe('"next" to advance, "prev" to rewind.'),
+      },
+    },
+    ({ direction }) => {
+      const result = stepCursor(direction);
+      if (!result) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                ok: false,
+                error: "no step-frames sequence is loaded",
+              }),
+            },
+          ],
+        };
+      }
+      const state = getCanvas();
+      if (state.type === "step-frames") {
+        const frame = state.frames[result.currentFrame];
+        broadcast({
+          action: "replace",
+          type: state.frameType,
+          payload: frame.payload,
+          frameLabel: frame.label,
+          stepFrames: true,
+        });
+      }
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              ok: true,
+              current_frame: result.currentFrame,
+              total_frames: result.totalFrames,
+            }),
+          },
+        ],
       };
     }
   );
@@ -97,8 +239,9 @@ export function createMcpServer(): McpServer {
     {
       description:
         "Return the current canvas source spec. " +
-        'Response: { "ok": true, "data": "<mermaid source>" }. ' +
-        'data is an empty string if the canvas is empty or was cleared.',
+        'Response: { "ok": true, "data": "<source>" }. ' +
+        "For step-frames: returns the full original frames JSON string (not the current frame). " +
+        "data is an empty string if the canvas is empty or was cleared.",
       inputSchema: {},
     },
     () => {

@@ -1,7 +1,15 @@
 // In-memory canvas state — single canvas, no persistence in v1.
 
+export type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
+
+export interface StepFrame {
+  label?: string;
+  payload: string;
+}
+
 export type CanvasState =
-  | { type: "mermaid"; payload: string }
+  | { type: CanvasType; payload: string }
+  | { type: "step-frames"; frames: StepFrame[]; frameType: string; currentFrame: number; rawPayload: string }
   | { type: "empty" };
 
 let canvas: CanvasState = { type: "empty" };
@@ -10,8 +18,26 @@ export function getCanvas(): CanvasState {
   return canvas;
 }
 
-export function setCanvas(type: "mermaid", payload: string): void {
+export function setCanvas(type: CanvasType, payload: string): void {
   canvas = { type, payload };
+}
+
+export function setStepFrames(frames: StepFrame[], frameType: string, rawPayload: string): void {
+  canvas = { type: "step-frames", frames, frameType, currentFrame: 0, rawPayload };
+}
+
+/**
+ * Advance or rewind the step cursor.
+ * Returns the new cursor state, or null if no step-frames sequence is loaded.
+ */
+export function stepCursor(direction: "next" | "prev"): { currentFrame: number; totalFrames: number } | null {
+  if (canvas.type !== "step-frames") return null;
+  const total = canvas.frames.length;
+  const next = direction === "next"
+    ? Math.min(canvas.currentFrame + 1, total - 1)
+    : Math.max(canvas.currentFrame - 1, 0);
+  canvas = { ...canvas, currentFrame: next };
+  return { currentFrame: next, totalFrames: total };
 }
 
 export function clearCanvas(): void {
@@ -21,6 +47,7 @@ export function clearCanvas(): void {
 /** Returns the current source spec, or empty string if canvas is blank. */
 export function exportCanvas(): string {
   if (canvas.type === "empty") return "";
+  if (canvas.type === "step-frames") return canvas.rawPayload;
   return canvas.payload;
 }
 

@@ -1,7 +1,13 @@
 // WebSocket client — connects to /stream and dispatches render commands.
 
 export type RenderCommand =
-  | { action: "replace"; type: "mermaid"; payload: string }
+  | {
+      action: "replace";
+      type: string; // content type — one of: mermaid, svg, html, katex, vega-lite
+      payload: string;
+      frameLabel?: string; // present when this is a step-frames frame
+      stepFrames?: boolean; // true when this is part of a step-frames sequence
+    }
   | { action: "clear" };
 
 type CommandHandler = (cmd: RenderCommand) => void;

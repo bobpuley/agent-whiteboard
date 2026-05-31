@@ -325,45 +325,47 @@ Full Mermaid render correctness and browser behaviour verified manually.
 
 Playwright e2e: deferred to after Sprint 8 (bidirectionality) — browser interaction tests are most valuable once the full interactive surface is stable. No dedicated sprint before then.
 
-### Sprint 5 — Additional renderers
+### Sprint 5 — Additional renderers ✅
 
 Priority order: SVG/HTML first (trivial), then KaTeX, then Vega-Lite. D2 deferred (requires a server-side render process).
 
-- [ ] **SVG/HTML renderer** (`type="svg"` and `type="html"`)
+- [x] **SVG/HTML renderer** (`type="svg"` and `type="html"`)
   - Server: accept `svg` and `html` as valid types; no keyword validation (passthrough — any string is a valid HTML/SVG payload); only the `type` field is validated against the known-types list
   - Browser: new `Html.svelte` renderer — strips malicious markup with DOMPurify before setting `innerHTML`; sanitization is silent (no error state — the cleaned output is rendered)
   - MCP schema: expose `svg` and `html` as accepted types with inline examples
   - DoD: agent calls `render(type="svg", payload="<svg>...</svg>")` and SVG appears in browser; XSS vectors are stripped by DOMPurify before render
-- [ ] **KaTeX renderer** (`type="katex"`)
+- [x] **KaTeX renderer** (`type="katex"`)
   - Browser: new `Katex.svelte` renderer — npm install `katex`, render LaTeX string in display mode
   - Server: accept `katex` type; no structural validation (KaTeX handles parse errors in-browser)
   - DoD: agent calls `render(type="katex", payload="E = mc^2")` and rendered math appears
-- [ ] **Vega-Lite renderer** (`type="vega-lite"`)
+- [x] **Vega-Lite renderer** (`type="vega-lite"`)
   - Browser: new `VegaLite.svelte` renderer — npm install `vega-lite` + `vega-embed`; parse payload as JSON and embed
   - Server: accept `vega-lite` type; validate payload is parseable JSON before pushing
   - DoD: agent calls `render(type="vega-lite", payload=<Vega-Lite JSON string>)` and chart appears
-- [ ] Update MCP tool schema to expose all new types
-- [ ] Update `export()` — already correct by design: returns verbatim last payload for all types
+- [x] Update MCP tool schema to expose all new types
+- [x] Update `export()` — already correct by design: returns verbatim last payload for all types
 
-### Sprint 6 — Full server-side Mermaid parse validation
+### Sprint 6 — Full server-side Mermaid parse validation ✅
 
-- [ ] Add Mermaid.js as a Node.js import in `server/` (already a bundled dep via client; add as a direct server dep or run in a Worker)
-- [ ] In `mcp.ts` / `session.ts`: after keyword-prefix check, attempt `mermaid.parse(payload)` — reject with structured error if it throws
-- [ ] DoD: `render(type="mermaid", payload="graph TD; A -->")` (valid keyword, invalid syntax) returns `{ ok: false, error: "..." }` and nothing is pushed to the browser
+- [x] Add Mermaid.js as a Node.js import in `server/` via `server/validate.ts`
+- [x] In `app.ts` / `mcp.ts`: after keyword-prefix check, attempt `mermaid.parse(payload)` — reject with structured error if it throws
+- [x] DoD: `render(type="mermaid", payload="graph TD; A -->")` (valid keyword, invalid syntax) returns `{ ok: false, error: "..." }` and nothing is pushed to the browser
 
-### Sprint 7 — Step-through (`step()` tool + frame sequences)
+> **Implementation note:** Some diagram types (classDiagram, gantt, pie, mindmap) internally call DOMPurify during `mermaid.parse()`, which requires a DOM context unavailable in Node.js. Those errors are treated as "Node environment limitation — validation skipped"; the keyword-prefix check (Layer 1) remains the safety net for those types. Genuine parse errors (`Parse error on line N: ...`) are always rejected. Types where full Node.js parse works: graph/flowchart, sequenceDiagram, erDiagram.
 
-- [ ] **Server:** implement `step(direction)` MCP tool
-  - In-memory: extend `session.ts` to hold `frames[]` and `currentFrame` index alongside `canvasState`
+### Sprint 7 — Step-through (`step()` tool + frame sequences) ✅
+
+- [x] **Server:** implement `step(direction)` MCP tool
+  - In-memory: extended `session.ts` with `frames[]`, `currentFrame`, `frameType`, `rawPayload` alongside `canvasState`
   - `render(type="step-frames", payload)`: parse JSON, validate structure, store frames, push frame 0 to browser
   - `step(direction)`: advance/rewind cursor, push new frame to browser, return `{ ok: true, current_frame, total_frames }`
-  - `clear()`: reset frames + cursor
-  - `export()`: return original full frames JSON string
-- [ ] **Browser:** add step caption overlay (shows `frame.label` if present) in the renderer
-- [ ] **Browser:** add prev/next nav buttons visible only when a step-frames sequence is active
-- [ ] **MCP schema:** expose `step-frames` type in `render()` and register `step(direction)` tool
-- [ ] **REST fallback:** add `POST /step` endpoint with body `{ "direction": "next" | "prev" }`; returns same JSON as MCP `step()` response
-- [ ] DoD: agent loads a 3-frame Mermaid step sequence; calls `step("next")` twice; browser advances correctly; `export()` returns the full frames JSON; `curl -X POST /step -d '{"direction":"next"}'` also advances the sequence
+  - `clear()`: resets entire canvas including frames + cursor
+  - `export()`: returns original full frames JSON string
+- [x] **Browser:** step caption overlay (shows `frame.label` if present) in step-bar
+- [x] **Browser:** prev/next nav buttons visible only when a step-frames sequence is active; clicking calls `POST /step` REST fallback
+- [x] **MCP schema:** `step-frames` type exposed in `render()` with inline example; `step(direction)` tool registered
+- [x] **REST fallback:** `POST /step` endpoint with body `{ "direction": "next" | "prev" }`; returns same JSON as MCP `step()` response
+- [x] DoD: agent loads a 3-frame Mermaid step sequence; calls `step("next")` twice; browser advances correctly; `export()` returns the full frames JSON; `curl -X POST /step -d '{"direction":"next"}'` also advances the sequence
 
 ### Sprint 8 — Bidirectionality (deferred — after 5–7)
 
