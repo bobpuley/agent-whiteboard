@@ -7,6 +7,7 @@ import { clearCanvas, exportCanvas, getCanvas, setCanvas, setStepFrames, stepCur
 import type { StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid } from "./validate.js";
+import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -146,6 +147,7 @@ export function createMcpServer(): McpServer {
             ],
           };
         }
+        cancelSlideshow();
         setStepFrames(frames, spec.frame_type, payload, title);
         broadcast({
           action: "replace",
@@ -162,6 +164,7 @@ export function createMcpServer(): McpServer {
         };
       }
 
+      cancelSlideshow();
       setCanvas(type, payload, title);
       broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
 
@@ -237,8 +240,105 @@ export function createMcpServer(): McpServer {
       inputSchema: {},
     },
     () => {
+      cancelSlideshow();
       clearCanvas();
       broadcast({ action: "clear" });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      };
+    }
+  );
+
+  // slideshow(slides, delay_ms) — auto-advance a playlist on a server-side timer.
+  server.registerTool(
+    "slideshow",
+    {
+      description:
+        "Load a playlist of slides and auto-advance the canvas on a server-side timer.\n" +
+        'slides: array of { type, payload, title? } — same types as render().\n' +
+        'delay_ms: interval in milliseconds between slides.\n' +
+        "A new call cancels any running slideshow. Use slideshow_stop() to stop early.\n" +
+        'Example: slideshow({ slides: [{ type: "mermaid", payload: "graph TD; A-->B", title: "Slide 1" }], delay_ms: 3000 })',
+      inputSchema: {
+        slides: z
+          .array(
+            z.object({
+              type: z.enum(["mermaid", "svg", "html", "katex", "vega-lite"]).describe("Content type."),
+              payload: z.string().describe("Content source."),
+              title: z.string().optional().describe("Optional label above the canvas."),
+            })
+          )
+          .min(1)
+          .describe("Ordered list of slides."),
+        delay_ms: z
+          .number()
+          .positive()
+          .describe("Milliseconds between slide advances."),
+      },
+    },
+    async ({ slides, delay_ms }) => {
+      // Validate each slide payload.
+      for (let i = 0; i < slides.length; i++) {
+        const s = slides[i];
+        if (s.type === "mermaid") {
+          if (!hasMermaidKeyword(s.payload)) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: `slide[${i}]: invalid payload: mermaid source must begin with a diagram keyword`,
+                }),
+              }],
+            };
+          }
+          try {
+            await parseMermaid(s.payload);
+          } catch (err) {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: `slide[${i}]: invalid mermaid syntax: ${err instanceof Error ? err.message : String(err)}`,
+                }),
+              }],
+            };
+          }
+        } else if (s.type === "vega-lite") {
+          try {
+            JSON.parse(s.payload);
+          } catch {
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  ok: false,
+                  error: `slide[${i}]: invalid payload: vega-lite payload must be valid JSON`,
+                }),
+              }],
+            };
+          }
+        }
+      }
+      startSlideshow(slides, delay_ms);
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      };
+    }
+  );
+
+  // slideshow_stop() — cancel the running slideshow.
+  server.registerTool(
+    "slideshow_stop",
+    {
+      description:
+        "Cancel the running slideshow timer. The last rendered slide remains on screen. " +
+        "No-op if no slideshow is running.",
+      inputSchema: {},
+    },
+    () => {
+      cancelSlideshow();
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
       };

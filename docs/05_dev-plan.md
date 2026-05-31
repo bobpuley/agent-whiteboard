@@ -116,23 +116,25 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ## Phase 2 Sprint Plan
 
-### Sprint 9 — Slideshow / Auto-play
+### Sprint 9 — Slideshow / Auto-play ✅
 
 **Goal:** add a server-side `/slideshow` endpoint that accepts a playlist of slides and a delay, then auto-advances the canvas internally on a timer — no external orchestration required.
 
 **Scope:**
-- `POST /slideshow` — accepts `{ slides: [{ type, payload, title? }], delay_ms: number }`, validates each slide (same rules as `/render`), starts an internal timer loop broadcasting one slide per interval
-- `POST /slideshow/stop` — cancels the running timer
-- Server holds at most one active slideshow at a time; a new `POST /slideshow` cancels any running one
-- `POST /render` and `POST /clear` also cancel any running slideshow (canvas ownership transfers)
-- No browser UI changes required — the browser just receives the same `replace`/`clear` WebSocket events it already handles
-- MCP: expose `slideshow(slides, delay_ms)` and `slideshow_stop()` tools alongside the existing ones
-- Manual test: update `manualtests/showcase.js` to use `/slideshow` instead of scripted sleep loops
+- [x] `POST /slideshow` — accepts `{ slides: [{ type, payload, title? }], delay_ms: number }`, validates each slide (same rules as `/render`), starts an internal timer loop broadcasting one slide per interval
+- [x] `POST /slideshow/stop` — cancels the running timer
+- [x] Server holds at most one active slideshow at a time; a new `POST /slideshow` cancels any running one
+- [x] `POST /render` and `POST /clear` also cancel any running slideshow (canvas ownership transfers)
+- [x] No browser UI changes required — the browser just receives the same `replace`/`clear` WebSocket events it already handles
+- [x] MCP: expose `slideshow(slides, delay_ms)` and `slideshow_stop()` tools alongside the existing ones
+- [x] Manual test: updated `manualtests/showcase.js` to use `/slideshow` instead of scripted sleep loops
+
+> **Implementation note:** slideshow state lives in `server/slideshow.ts` (new module). The validation helper `validatePayload()` was extracted in `app.ts` and reused by both `/render` and `/slideshow` to keep type-specific rules in one place. Slideshow advances through slides once (no loop); stops after the last slide. `step-frames` type is accepted in slideshow slides (frame 0 is displayed; browser Prev/Next buttons remain functional within that frame sequence).
 
 **DoD:**
-- `node manualtests/showcase.js` produces the same 6-slide tour driven entirely by the server timer
-- A second call to `/slideshow` while one is running cancels the first and starts the new one
-- `POST /slideshow/stop` stops the timer and leaves the last rendered slide on screen
+- [x] `node manualtests/showcase.js` produces the same 6-slide tour driven entirely by the server timer
+- [x] A second call to `/slideshow` while one is running cancels the first and starts the new one
+- [x] `POST /slideshow/stop` stops the timer and leaves the last rendered slide on screen
 
 ---
 
