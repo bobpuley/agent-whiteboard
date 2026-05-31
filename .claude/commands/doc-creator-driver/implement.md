@@ -27,7 +27,7 @@ Do not change requirements or architecture.
       * Implement the code
       * Run the tests
       * Iterate implementation until tests pass
-      * Merge git branch into main
+      * Merge git branch into master
       * Update the `Dev Plan` in 05_dev-plan.md
       * (TaskUpdate completed)
    6. Go to "1. Analyze the documents"
