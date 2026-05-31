@@ -236,6 +236,45 @@ describe("POST /clear", () => {
   });
 });
 
+// ── Sprint 8 — options.title ──────────────────────────────────────────────────
+
+describe("POST /render — options.title", () => {
+  it("accepts options.title and returns { ok: true }", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "mermaid",
+        payload: "graph TD; A --> B",
+        options: { title: "My diagram" },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("title is not included in export() output", async () => {
+    const payload = "graph TD; A --> B";
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload, options: { title: "My diagram" } }),
+    });
+    const res = await app.request("/export");
+    expect(await res.json()).toEqual({ ok: true, data: payload });
+  });
+
+  it("render without options still returns { ok: true }", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
 // ── step-frames ───────────────────────────────────────────────────────────────
 
 const THREE_FRAME_SEQUENCE = JSON.stringify({

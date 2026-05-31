@@ -21,7 +21,7 @@ export function createApp(): Hono {
   const app = new Hono();
 
   app.post("/render", async (c) => {
-    const body = await c.req.json<{ type?: string; payload?: string }>();
+    const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string } }>();
 
     if (typeof body.payload !== "string") {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
@@ -39,6 +39,7 @@ export function createApp(): Hono {
 
     const type = body.type as CanvasType | "step-frames";
     const { payload } = body;
+    const title = body.options?.title;
 
     if (type === "mermaid") {
       if (!hasMermaidKeyword(payload)) {
@@ -94,14 +95,23 @@ export function createApp(): Hono {
           error: 'invalid payload: each frame must have a "payload" string',
         });
       }
-      setStepFrames(frames, spec.frame_type, payload);
-      broadcast({ action: "replace", type: spec.frame_type, payload: frames[0].payload, frameLabel: frames[0].label, stepFrames: true });
+      setStepFrames(frames, spec.frame_type, payload, title);
+      broadcast({
+        action: "replace",
+        type: spec.frame_type,
+        payload: frames[0].payload,
+        frameLabel: frames[0].label,
+        stepFrames: true,
+        currentFrame: 0,
+        totalFrames: frames.length,
+        ...(title !== undefined ? { title } : {}),
+      });
       return c.json({ ok: true });
     }
     // svg, html, katex: passthrough — no server-side content validation
 
-    setCanvas(type as CanvasType, payload);
-    broadcast({ action: "replace", type, payload });
+    setCanvas(type as CanvasType, payload, title);
+    broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
     return c.json({ ok: true });
   });
 
@@ -130,6 +140,9 @@ export function createApp(): Hono {
         payload: frame.payload,
         frameLabel: frame.label,
         stepFrames: true,
+        currentFrame: result.currentFrame,
+        totalFrames: result.totalFrames,
+        ...(state.title !== undefined ? { title: state.title } : {}),
       });
     }
     return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });

@@ -61,7 +61,7 @@ async function post(path, body) {
 
 async function render(type, payload, title) {
   process.stdout.write(`\n▶  ${title}\n`);
-  const result = await post("/render", { type, payload });
+  const result = await post("/render", { type, payload, options: { title } });
   if (!result.ok) {
     console.error("   ✗ render failed:", result.error);
     process.exit(1);

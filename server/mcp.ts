@@ -26,7 +26,8 @@ export function createMcpServer(): McpServer {
         '  • "html"        — HTML/CSS fragment. Example: render({ type: "html", payload: "<h1>Hello</h1>" })\n' +
         '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
         '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{\"$schema\":\"...\",\"mark\":\"bar\",...}" })\n' +
-        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate.',
+        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate.\n' +
+        'options (optional): { "title": "My diagram" } — displays a label above the canvas; omit to show no title. Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { title: "System flow" } })',
       inputSchema: {
         type: z
           .enum(["mermaid", "svg", "html", "katex", "vega-lite", "step-frames"])
@@ -37,9 +38,14 @@ export function createMcpServer(): McpServer {
             "The content source. For mermaid: must begin with a valid diagram keyword. " +
               "For vega-lite and step-frames: must be valid JSON. For svg/html/katex: any string."
           ),
+        options: z
+          .object({ title: z.string().optional() })
+          .optional()
+          .describe('Optional display options. title: label shown above the canvas (e.g. { "title": "My diagram" }).'),
       },
     },
-    async ({ type, payload }) => {
+    async ({ type, payload, options }) => {
+      const title = options?.title;
       if (type === "mermaid") {
         if (!hasMermaidKeyword(payload)) {
           return {
@@ -140,21 +146,24 @@ export function createMcpServer(): McpServer {
             ],
           };
         }
-        setStepFrames(frames, spec.frame_type, payload);
+        setStepFrames(frames, spec.frame_type, payload, title);
         broadcast({
           action: "replace",
           type: spec.frame_type,
           payload: frames[0].payload,
           frameLabel: frames[0].label,
           stepFrames: true,
+          currentFrame: 0,
+          totalFrames: frames.length,
+          ...(title !== undefined ? { title } : {}),
         });
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
         };
       }
 
-      setCanvas(type, payload);
-      broadcast({ action: "replace", type, payload });
+      setCanvas(type, payload, title);
+      broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
@@ -200,6 +209,9 @@ export function createMcpServer(): McpServer {
           payload: frame.payload,
           frameLabel: frame.label,
           stepFrames: true,
+          currentFrame: result.currentFrame,
+          totalFrames: result.totalFrames,
+          ...(state.title !== undefined ? { title: state.title } : {}),
         });
       }
       return {
