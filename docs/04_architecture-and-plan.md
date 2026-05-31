@@ -367,9 +367,25 @@ Priority order: SVG/HTML first (trivial), then KaTeX, then Vega-Lite. D2 deferre
 - [x] **REST fallback:** `POST /step` endpoint with body `{ "direction": "next" | "prev" }`; returns same JSON as MCP `step()` response
 - [x] DoD: agent loads a 3-frame Mermaid step sequence; calls `step("next")` twice; browser advances correctly; `export()` returns the full frames JSON; `curl -X POST /step -d '{"direction":"next"}'` also advances the sequence
 
-### Sprint 8 — Bidirectionality (deferred — after 5–7)
+### Sprint 8 — Title overlay
 
-Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 8 time — research preview flag). Defer until Sprints 5–7 are shipped and the Channels API is closer to GA.
+Add an optional `title` parameter to `render()` that displays a label above the canvas content, independent of the renderer type.
+
+- [ ] **API:** extend `render(type, payload, options?)` — `options.title` is an optional string; no other `options` keys in this sprint
+- [ ] **Server (`app.ts` / `mcp.ts`):** pass `title` (if present) in the WebSocket push: `{ action: "replace", type, payload, title?: string }`; store alongside canvas state in `session.ts`
+- [ ] **Browser (`App.svelte`):** render a `<header class="canvas-title">` above the renderer when `title` is set; hidden when absent or on `clear()`
+- [ ] **`export()`:** title is not part of the exported source spec — it is display metadata only
+- [ ] **MCP schema:** document `options.title` in the `render()` description with an inline example
+- [ ] **`manualtests/showcase.js`:** update all examples to pass a title via `options`
+- [ ] **Browser — step-through nav buttons:** `Prev` is disabled when `currentFrame === 0`; `Next` is disabled when `currentFrame === totalFrames - 1`. Requires the WebSocket push to carry `currentFrame` and `totalFrames` alongside the frame payload so the browser can track state without a separate query.
+- [ ] **Browser — page chrome:** add a subtle, elegant border around the canvas area to frame the content visually; keep it minimal (thin, neutral colour, slight rounding — no heavy shadows or gradients).
+- [ ] DoD: `render({ type: "mermaid", payload: "...", options: { title: "My diagram" } })` shows the title above the diagram; `render()` without `options` shows no title; `clear()` removes title; on a loaded step-through sequence, `Prev` is greyed out on frame 1 and `Next` is greyed out on the last frame; canvas area has a clean border
+
+---
+
+### Sprint 9 — Bidirectionality (deferred — after 5–8)
+
+Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 9 time — research preview flag). Defer until Sprints 5–8 are shipped and the Channels API is closer to GA.
 
 **Trigger to proceed:** `--dangerously-load-development-channels` is no longer required (Channels API reaches GA in Claude Code), or the research preview has been stable across two consecutive Claude Code releases.
 
