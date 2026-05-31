@@ -58,11 +58,11 @@ Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline nee
 ## D. Agent Behavior
 
 **D1 — Agents can generate valid rendering specs**
-> 🔧 KNOWN GAP: v1 validation is partial (keyword-prefix only). Full server-side Mermaid parse is planned in Sprint 6 (`04` §8). Until Sprint 6 ships, syntactically invalid Mermaid that passes the keyword check reaches the browser and is displayed as an inline render error.
+> ✅ RESOLVED (Sprint 6, 2026-05-31): Full server-side Mermaid parse validation implemented. After passing the keyword-prefix check, `mermaid.parse()` is called server-side; syntactically invalid payloads are rejected with `{ ok: false, error: "..." }` before reaching the browser. Note: some diagram types (classDiagram, gantt, pie, mindmap) require a DOM context unavailable in Node.js — for those, `mermaid.parse()` is skipped and the keyword-prefix check remains the safety net. Genuine parse errors (`Parse error on line N: ...`) are always rejected.
 
 We assume LLMs reliably produce well-formed Mermaid, valid Vega-Lite JSON, and correctly structured step arrays.
 - Risk: LLMs hallucinate syntax. Invalid payloads will cause silent render failures or broken diagrams unless the server validates and returns structured errors.
-- **Decision (v1):** server validates keyword prefix only; browser displays inline render errors for anything that passes the prefix check but fails Mermaid.js parsing (see `03` V1a). Full server-side Mermaid parse deferred to Phase 2 and added to the Phase 2 sprint plan in `04` §8.
+- **Decision (v1):** validation is a hard gate — invalid payloads are rejected server-side and returned as `{ ok: false, error: "..." }` to the agent; nothing is pushed to the browser. See `03` F3a.
 
 **D2 — The whiteboard is stateless from the agent's perspective**
 The agent sends commands forward-only. It also prints the textual representation (Mermaid source, JSON spec, etc.) in the terminal alongside the visual render — the terminal is the agent's own record of what it sent.
