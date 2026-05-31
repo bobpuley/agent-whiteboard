@@ -383,9 +383,29 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ---
 
-### Sprint 9 — Bidirectionality (deferred — after 5–8)
+### Sprint 9 — Slideshow / Auto-play
 
-Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 9 time — research preview flag). Defer until Sprints 5–8 are shipped and the Channels API is closer to GA.
+**Goal:** add a server-side `/slideshow` endpoint that accepts a playlist of slides and a delay, then auto-advances the canvas internally on a timer — no external orchestration required.
+
+**Scope:**
+- `POST /slideshow` — accepts `{ slides: [{ type, payload, title? }], delay_ms: number }`, validates each slide (same rules as `/render`), starts an internal timer loop broadcasting one slide per interval
+- `POST /slideshow/stop` — cancels the running timer
+- Server holds at most one active slideshow at a time; a new `POST /slideshow` cancels any running one
+- `POST /render` and `POST /clear` also cancel any running slideshow (canvas ownership transfers)
+- No browser UI changes required — the browser just receives the same `replace`/`clear` WebSocket events it already handles
+- MCP: expose `slideshow(slides, delay_ms)` and `slideshow_stop()` tools alongside the existing ones
+- Manual test: update `manualtests/showcase.js` to use `/slideshow` instead of scripted sleep loops
+
+**DoD:**
+- `node manualtests/showcase.js` produces the same 6-slide tour driven entirely by the server timer
+- A second call to `/slideshow` while one is running cancels the first and starts the new one
+- `POST /slideshow/stop` stops the timer and leaves the last rendered slide on screen
+
+---
+
+### Sprint 10 — Bidirectionality (deferred — after 5–8)
+
+Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 time — research preview flag). Defer until Sprints 5–8 are shipped and the Channels API is closer to GA.
 
 **Trigger to proceed:** `--dangerously-load-development-channels` is no longer required (Channels API reaches GA in Claude Code), or the research preview has been stable across two consecutive Claude Code releases.
 
