@@ -507,6 +507,33 @@ describe("POST /slideshow", () => {
     vi.useRealTimers();
   });
 
+  it("advances through all 3 slides of a 3-slide playlist (B3)", async () => {
+    vi.useFakeTimers();
+    const slides3 = [
+      { type: "svg",  payload: "<svg><circle r='1'/></svg>" },
+      { type: "html", payload: "<p>slide 2</p>" },
+      { type: "katex", payload: "x^2" },
+    ];
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: slides3, delay_ms: 1000 }),
+    });
+
+    // t=0: slide 0 shown immediately.
+    expect((await (await app.request("/export")).json<{ ok: boolean; data: string }>()).data).toBe(slides3[0].payload);
+
+    // t=1s: slide 1.
+    vi.advanceTimersByTime(1000);
+    expect((await (await app.request("/export")).json<{ ok: boolean; data: string }>()).data).toBe(slides3[1].payload);
+
+    // t=2s: slide 2 (last).
+    vi.advanceTimersByTime(1000);
+    expect((await (await app.request("/export")).json<{ ok: boolean; data: string }>()).data).toBe(slides3[2].payload);
+
+    vi.useRealTimers();
+  });
+
   it("a second /slideshow call cancels the first", async () => {
     vi.useFakeTimers();
     const slides2 = [{ type: "katex", payload: "x^2" }];
