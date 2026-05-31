@@ -2,7 +2,7 @@
 // Phase 2 feature (Sprint 9).
 
 import { broadcast } from "./ws.js";
-import { setCanvas, setStepFrames } from "./session.js";
+import { setCanvas, setStepFrames, seekStepFrame } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 
 export interface Slide {
@@ -11,7 +11,70 @@ export interface Slide {
   title?: string;
 }
 
-let activeTimer: ReturnType<typeof setInterval> | null = null;
+// ── Internal tick representation ───────────────────────────────────────────────
+
+// A "tick" is one timer unit: either a plain slide or a single frame within a
+// step-frames sequence.  step-frames slides are expanded into N ticks (one per
+// frame) before the timer starts, so the timer loop is uniform.
+
+type SlideTick = { kind: "slide"; slide: Slide };
+type FrameTick = {
+  kind: "frame";
+  frames: StepFrame[];
+  frameType: string;
+  rawPayload: string;
+  frameIndex: number;
+  title?: string;
+};
+type Tick = SlideTick | FrameTick;
+
+function expandSlides(slides: Slide[]): Tick[] {
+  const ticks: Tick[] = [];
+  for (const slide of slides) {
+    if (slide.type === "step-frames") {
+      const spec = JSON.parse(slide.payload) as { frame_type: string; frames: StepFrame[] };
+      for (let i = 0; i < spec.frames.length; i++) {
+        ticks.push({
+          kind: "frame",
+          frames: spec.frames,
+          frameType: spec.frame_type,
+          rawPayload: slide.payload,
+          frameIndex: i,
+          title: slide.title,
+        });
+      }
+    } else {
+      ticks.push({ kind: "slide", slide });
+    }
+  }
+  return ticks;
+}
+
+function broadcastTick(tick: Tick): void {
+  if (tick.kind === "slide") {
+    broadcastSlide(tick.slide);
+    return;
+  }
+
+  const { frames, frameType, rawPayload, frameIndex, title } = tick;
+  if (frameIndex === 0) {
+    // First frame: initialise full step-frames session state.
+    setStepFrames(frames, frameType, rawPayload, title);
+  } else {
+    // Subsequent frames: seek cursor without resetting the sequence.
+    seekStepFrame(frameIndex);
+  }
+  broadcast({
+    action: "replace",
+    type: frameType,
+    payload: frames[frameIndex].payload,
+    frameLabel: frames[frameIndex].label,
+    stepFrames: true,
+    currentFrame: frameIndex,
+    totalFrames: frames.length,
+    ...(title !== undefined ? { title } : {}),
+  });
+}
 
 function broadcastSlide(slide: Slide): void {
   if (slide.type === "step-frames") {
@@ -40,30 +103,34 @@ function broadcastSlide(slide: Slide): void {
   }
 }
 
+let activeTimer: ReturnType<typeof setInterval> | null = null;
+
 /**
  * Start a slideshow.
- * Broadcasts the first slide immediately, then advances on the timer.
- * Stops after the last slide (no loop).
- * Cancels any previously running slideshow.
+ * step-frames slides are expanded into per-frame ticks so each frame advances
+ * automatically at delay_ms intervals — no manual navigation required.
+ * Stops after the last tick (no loop). Cancels any previously running slideshow.
  */
 export function startSlideshow(slides: Slide[], delay_ms: number): void {
   cancelSlideshow();
 
-  broadcastSlide(slides[0]);
+  const ticks = expandSlides(slides);
 
-  if (slides.length === 1) return; // single slide — no timer needed
+  broadcastTick(ticks[0]);
+
+  if (ticks.length === 1) return; // single tick — no timer needed
 
   let index = 1;
   activeTimer = setInterval(() => {
-    broadcastSlide(slides[index]);
+    broadcastTick(ticks[index]);
     index++;
-    if (index >= slides.length) {
+    if (index >= ticks.length) {
       cancelSlideshow();
     }
   }, delay_ms);
 }
 
-/** Cancel any running slideshow timer. Last rendered slide stays on screen. */
+/** Cancel any running slideshow timer. Last rendered tick stays on screen. */
 export function cancelSlideshow(): void {
   if (activeTimer !== null) {
     clearInterval(activeTimer);
