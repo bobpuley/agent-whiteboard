@@ -5,8 +5,11 @@ export type RenderCommand =
       action: "replace";
       type: string; // content type — one of: mermaid, svg, html, katex, vega-lite
       payload: string;
-      frameLabel?: string; // present when this is a step-frames frame
-      stepFrames?: boolean; // true when this is part of a step-frames sequence
+      title?: string;        // optional label shown above the canvas
+      frameLabel?: string;   // present when this is a step-frames frame
+      stepFrames?: boolean;  // true when this is part of a step-frames sequence
+      currentFrame?: number; // step-frames cursor position (0-indexed)
+      totalFrames?: number;  // total frames in the loaded sequence
     }
   | { action: "clear" };
 

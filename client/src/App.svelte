@@ -11,7 +11,15 @@
 
   type CanvasState =
     | { type: "empty" }
-    | { type: CanvasType; payload: string; stepFrames?: boolean; frameLabel?: string };
+    | {
+        type: CanvasType;
+        payload: string;
+        title?: string;
+        stepFrames?: boolean;
+        frameLabel?: string;
+        currentFrame?: number;
+        totalFrames?: number;
+      };
 
   let canvas: CanvasState = { type: "empty" };
   let disconnected = false;
@@ -23,8 +31,11 @@
       canvas = {
         type: cmd.type as CanvasType,
         payload: cmd.payload,
+        title: cmd.title,
         stepFrames: cmd.stepFrames,
         frameLabel: cmd.frameLabel,
+        currentFrame: cmd.currentFrame,
+        totalFrames: cmd.totalFrames,
       };
     }
   }
@@ -63,27 +74,43 @@
     </div>
   {/if}
 
-  <div class="canvas">
-    {#if canvas.type === "empty"}
-      <p class="placeholder">Waiting for content…</p>
-    {:else if canvas.type === "mermaid"}
-      <MermaidRenderer source={canvas.payload} />
-    {:else if canvas.type === "svg" || canvas.type === "html"}
-      <HtmlRenderer source={canvas.payload} type={canvas.type} />
-    {:else if canvas.type === "katex"}
-      <KatexRenderer source={canvas.payload} />
-    {:else if canvas.type === "vega-lite"}
-      <VegaLiteRenderer source={canvas.payload} />
+  <div class="canvas-frame">
+    {#if canvas.type !== "empty" && canvas.title}
+      <header class="canvas-title">{canvas.title}</header>
     {/if}
+
+    <div class="canvas">
+      {#if canvas.type === "empty"}
+        <p class="placeholder">Waiting for content…</p>
+      {:else if canvas.type === "mermaid"}
+        <MermaidRenderer source={canvas.payload} />
+      {:else if canvas.type === "svg" || canvas.type === "html"}
+        <HtmlRenderer source={canvas.payload} type={canvas.type} />
+      {:else if canvas.type === "katex"}
+        <KatexRenderer source={canvas.payload} />
+      {:else if canvas.type === "vega-lite"}
+        <VegaLiteRenderer source={canvas.payload} />
+      {/if}
+    </div>
   </div>
 
   {#if canvas.type !== "empty" && canvas.stepFrames}
     <div class="step-bar">
-      <button class="step-btn" on:click={() => stepNav("prev")} aria-label="Previous frame">&#8592; Prev</button>
+      <button
+        class="step-btn"
+        on:click={() => stepNav("prev")}
+        aria-label="Previous frame"
+        disabled={canvas.currentFrame === 0}
+      >&#8592; Prev</button>
       {#if canvas.frameLabel}
         <span class="step-label">{canvas.frameLabel}</span>
       {/if}
-      <button class="step-btn" on:click={() => stepNav("next")} aria-label="Next frame">Next &#8594;</button>
+      <button
+        class="step-btn"
+        on:click={() => stepNav("next")}
+        aria-label="Next frame"
+        disabled={canvas.totalFrames !== undefined && canvas.currentFrame === canvas.totalFrames - 1}
+      >Next &#8594;</button>
     </div>
   {/if}
 </main>
@@ -99,6 +126,8 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
   }
 
   .banner {
@@ -107,12 +136,34 @@
     padding: 10px 16px;
     font-size: 14px;
     text-align: center;
+    margin-bottom: 12px;
+    border-radius: 4px;
   }
 
   .banner code {
     background: rgba(255, 255, 255, 0.2);
     padding: 2px 6px;
     border-radius: 3px;
+  }
+
+  .canvas-frame {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #d8d8d8;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .canvas-title {
+    padding: 10px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 1px solid #e8e8e8;
+    background: #fafafa;
+    user-select: none;
   }
 
   .canvas {
@@ -149,8 +200,14 @@
     font-size: 14px;
   }
 
-  .step-btn:hover {
+  .step-btn:hover:not(:disabled) {
     background: #f0f0f0;
+  }
+
+  .step-btn:disabled {
+    color: #bbb;
+    border-color: #e0e0e0;
+    cursor: default;
   }
 
   .step-label {
