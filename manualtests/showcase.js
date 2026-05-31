@@ -1,18 +1,16 @@
 #!/usr/bin/env node
-// Manual showcase — exercises every renderer and the step-through feature.
-// Usage: node manualtests/showcase.js [-p <port>] [--controlled | --normal] [-h]
+// Manual showcase — exercises every renderer via a server-side slideshow.
+// Usage: node manualtests/showcase.js [-p <port>] [-d <delay_ms>] [-h]
 
 import { parseArgs } from "node:util";
-import { createInterface } from "node:readline";
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
 const { values } = parseArgs({
   options: {
-    port:       { type: "string",  short: "p", default: "3000" },
-    controlled: { type: "boolean",             default: false   },
-    normal:     { type: "boolean",             default: false   },
-    help:       { type: "boolean", short: "h", default: false   },
+    port:  { type: "string",  short: "p", default: "3000" },
+    delay: { type: "string",  short: "d", default: "5000" },
+    help:  { type: "boolean", short: "h", default: false  },
   },
   strict: true,
 });
@@ -22,33 +20,18 @@ if (values.help) {
 Usage: node manualtests/showcase.js [OPTIONS]
 
 Options:
-  -p, --port <port>   Server port (default: 3000)
-  --controlled        Pause and wait for Enter after each step
-  --normal            Wait 5 seconds after each step (default)
-  -h, --help          Show this help
+  -p, --port <port>     Server port (default: 3000)
+  -d, --delay <ms>      Delay between slides in ms (default: 5000)
+  -h, --help            Show this help
 `);
   process.exit(0);
 }
 
-const PORT   = values.port;
-const MODE   = values.controlled ? "controlled" : "normal";
-const BASE   = `http://localhost:${PORT}`;
-const DELAY  = 5000; // ms for normal mode
+const PORT     = values.port;
+const DELAY_MS = parseInt(values.delay, 10);
+const BASE     = `http://localhost:${PORT}`;
 
-console.log(`\n🎬  Showcase — server: ${BASE}  mode: ${MODE}\n`);
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function pause(label) {
-  if (MODE === "controlled") {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    await new Promise((resolve) => rl.question(`  ↵  ${label} — press Enter to continue… `, () => { rl.close(); resolve(); }));
-  } else {
-    process.stdout.write(`  ⏳  ${label} — waiting ${DELAY / 1000}s…`);
-    await new Promise((r) => setTimeout(r, DELAY));
-    process.stdout.write(" done\n");
-  }
-}
+console.log(`\n🎬  Showcase — server: ${BASE}  delay: ${DELAY_MS}ms\n`);
 
 async function post(path, body) {
   const res = await fetch(`${BASE}${path}`, {
@@ -59,31 +42,14 @@ async function post(path, body) {
   return res.json();
 }
 
-async function render(type, payload, title) {
-  process.stdout.write(`\n▶  ${title}\n`);
-  const result = await post("/render", { type, payload, options: { title } });
-  if (!result.ok) {
-    console.error("   ✗ render failed:", result.error);
-    process.exit(1);
-  }
-  console.log("   ✓ ok");
-}
+// ── Slide definitions ─────────────────────────────────────────────────────────
 
-async function step(direction) {
-  const result = await post("/step", { direction });
-  if (!result.ok) {
-    console.error("   ✗ step failed:", result.error);
-    process.exit(1);
-  }
-  return result;
-}
-
-// ── Showcase steps ────────────────────────────────────────────────────────────
-
-// 1. Mermaid — load-balanced architecture
-await render(
-  "mermaid",
-  `graph TD
+const slides = [
+  // 1. Mermaid — load-balanced architecture
+  {
+    type: "mermaid",
+    title: "1 / 6 — Mermaid",
+    payload: `graph TD
   Client -->|HTTP| LB[Load Balancer]
   LB --> A[App Server A]
   LB --> B[App Server B]
@@ -92,14 +58,13 @@ await render(
   A --> DB[(Primary DB)]
   B --> DB
   DB -->|replicate| R[(Replica)]`,
-  "1 / 6 — Mermaid"
-);
-await pause("mermaid rendered");
+  },
 
-// 2. SVG — concentric circles geometry
-await render(
-  "svg",
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  // 2. SVG — concentric circles geometry
+  {
+    type: "svg",
+    title: "2 / 6 — SVG",
+    payload: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
   <defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="50%">
       <stop offset="0%"   stop-color="#1a1a2e"/>
@@ -124,14 +89,13 @@ await render(
   <circle cx="299" cy="299" r="5" fill="#a8dadc"/>
   <circle cx="101" cy="299" r="5" fill="#a8dadc"/>
 </svg>`,
-  "2 / 6 — SVG"
-);
-await pause("SVG rendered");
+  },
 
-// 3. HTML — capability card (inline styles; DOMPurify strips <style> blocks)
-await render(
-  "html",
-  `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+  // 3. HTML — capability card (inline styles; DOMPurify strips <style> blocks)
+  {
+    type: "html",
+    title: "3 / 6 — HTML",
+    payload: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
   <h1 style="margin:0 0 4px;font-size:28px;color:#1a1a2e">HTML Renderer</h1>
   <p style="margin:0 0 24px;color:#666;font-size:14px">Sanitized via DOMPurify — inline styles only</p>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -153,60 +117,59 @@ await render(
     </div>
   </div>
 </div>`,
-  "3 / 6 — HTML"
-);
-await pause("HTML rendered");
+  },
 
-// 4. KaTeX — Bayes + Maxwell + Euler
-await render(
-  "katex",
-  String.raw`P(A \mid B) = \frac{P(B \mid A)\, P(A)}{P(B)} \qquad \text{(Bayes' Theorem)}\\[18pt]
+  // 4. KaTeX — Bayes + Maxwell + Euler
+  {
+    type: "katex",
+    title: "4 / 6 — KaTeX",
+    payload: String.raw`P(A \mid B) = \frac{P(B \mid A)\, P(A)}{P(B)} \qquad \text{(Bayes' Theorem)}\\[18pt]
 \nabla \cdot \mathbf{E} = \frac{\rho}{\varepsilon_0} \qquad
 \nabla \times \mathbf{B} = \mu_0 \mathbf{J} + \mu_0\varepsilon_0\frac{\partial \mathbf{E}}{\partial t} \\[18pt]
 e^{i\pi} + 1 = 0`,
-  "4 / 6 — KaTeX"
-);
-await pause("KaTeX rendered");
+  },
 
-// 5. Vega-Lite — request latency by percentile
-await render(
-  "vega-lite",
-  JSON.stringify({
-    $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-    width: 420,
-    height: 260,
-    title: { text: "Request latency by tier", fontSize: 14 },
-    data: {
-      values: [
-        { tier: "p50",  ms: 12  },
-        { tier: "p75",  ms: 28  },
-        { tier: "p90",  ms: 67  },
-        { tier: "p95",  ms: 110 },
-        { tier: "p99",  ms: 340 },
-        { tier: "p999", ms: 820 },
-      ],
-    },
-    mark: { type: "bar", cornerRadiusEnd: 3 },
-    encoding: {
-      x: { field: "tier", type: "ordinal", axis: { labelAngle: 0 }, sort: null },
-      y: { field: "ms",   type: "quantitative", title: "Latency (ms)" },
-      color: { field: "ms", type: "quantitative", scale: { scheme: "orangered" }, legend: null },
-      tooltip: [{ field: "tier", title: "Percentile" }, { field: "ms", title: "ms" }],
-    },
-  }),
-  "5 / 6 — Vega-Lite"
-);
-await pause("Vega-Lite rendered");
+  // 5. Vega-Lite — request latency by percentile
+  {
+    type: "vega-lite",
+    title: "5 / 6 — Vega-Lite",
+    payload: JSON.stringify({
+      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      width: 420,
+      height: 260,
+      title: { text: "Request latency by tier", fontSize: 14 },
+      data: {
+        values: [
+          { tier: "p50",  ms: 12  },
+          { tier: "p75",  ms: 28  },
+          { tier: "p90",  ms: 67  },
+          { tier: "p95",  ms: 110 },
+          { tier: "p99",  ms: 340 },
+          { tier: "p999", ms: 820 },
+        ],
+      },
+      mark: { type: "bar", cornerRadiusEnd: 3 },
+      encoding: {
+        x: { field: "tier", type: "ordinal", axis: { labelAngle: 0 }, sort: null },
+        y: { field: "ms",   type: "quantitative", title: "Latency (ms)" },
+        color: { field: "ms", type: "quantitative", scale: { scheme: "orangered" }, legend: null },
+        tooltip: [{ field: "tier", title: "Percentile" }, { field: "ms", title: "ms" }],
+      },
+    }),
+  },
 
-// 6. Step-frames — cache miss / DB fetch / cache store sequence (3 frames)
-await render(
-  "step-frames",
-  JSON.stringify({
-    frame_type: "mermaid",
-    frames: [
-      {
-        label: "Step 1 — Cache Miss",
-        payload: `sequenceDiagram
+  // 6. Step-frames — cache miss / DB fetch / cache store sequence (frame 1 of 3)
+  // Note: the slideshow shows frame 0 of the step-frames sequence;
+  // use step() / Prev+Next buttons in the browser to navigate within the sequence.
+  {
+    type: "step-frames",
+    title: "6 / 6 — Step-Frames (use Prev/Next)",
+    payload: JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        {
+          label: "Step 1 — Cache Miss",
+          payload: `sequenceDiagram
   participant C as Client
   participant S as Server
   participant Cache as Redis
@@ -214,10 +177,10 @@ await render(
   C->>S: GET /user/42
   S->>Cache: GET user:42
   Cache-->>S: (nil)`,
-      },
-      {
-        label: "Step 2 — DB Fetch",
-        payload: `sequenceDiagram
+        },
+        {
+          label: "Step 2 — DB Fetch",
+          payload: `sequenceDiagram
   participant C as Client
   participant S as Server
   participant Cache as Redis
@@ -227,10 +190,10 @@ await render(
   Cache-->>S: (nil)
   S->>DB: SELECT * FROM users WHERE id=42
   DB-->>S: {id:42, name:...}`,
-      },
-      {
-        label: "Step 3 — Cache Store & Response",
-        payload: `sequenceDiagram
+        },
+        {
+          label: "Step 3 — Cache Store & Response",
+          payload: `sequenceDiagram
   participant C as Client
   participant S as Server
   participant Cache as Redis
@@ -242,17 +205,27 @@ await render(
   DB-->>S: {id:42, name:...}
   S->>Cache: SET user:42 EX 300
   S-->>C: 200 OK {id:42,...}`,
-      },
-    ],
-  }),
-  "6 / 6 — Step-Frames (use Prev/Next)"
-);
-await pause("frame 1/3");
+        },
+      ],
+    }),
+  },
+];
 
-for (let i = 2; i <= 3; i++) {
-  const { current_frame, total_frames } = await step("next");
-  console.log(`   ✓ frame ${current_frame + 1}/${total_frames}`);
-  await pause(`frame ${current_frame + 1}/${total_frames}`);
+// ── Run slideshow ─────────────────────────────────────────────────────────────
+
+const totalMs = slides.length * DELAY_MS;
+
+console.log(`▶  Starting ${slides.length}-slide tour (${totalMs / 1000}s total)…`);
+
+const result = await post("/slideshow", { slides, delay_ms: DELAY_MS });
+if (!result.ok) {
+  console.error("✗ slideshow failed:", result.error);
+  process.exit(1);
 }
+console.log(`   ✓ slideshow started — slides advance every ${DELAY_MS / 1000}s`);
 
+// Wait for all slides to be shown, then stop.
+await new Promise((r) => setTimeout(r, totalMs));
+
+await post("/slideshow/stop", {});
 console.log("\n✅  Showcase complete.\n");

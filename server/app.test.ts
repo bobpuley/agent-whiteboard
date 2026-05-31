@@ -1,11 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { resetCanvas } from "./session.js";
+import { cancelSlideshow } from "./slideshow.js";
 
 // Use a fresh app instance per suite; session state is reset between each test.
 const app = createApp();
 
 afterEach(() => {
+  cancelSlideshow();
   resetCanvas();
 });
 
@@ -427,5 +429,157 @@ describe("POST /step", () => {
     });
     const body = await res.json<{ ok: boolean }>();
     expect(body.ok).toBe(false);
+  });
+});
+
+// ── Sprint 9 — POST /slideshow / POST /slideshow/stop ─────────────────────────
+
+const VALID_SLIDES = [
+  { type: "svg", payload: "<svg><circle r='5'/></svg>", title: "Slide 1" },
+  { type: "html", payload: "<h1>Hello</h1>", title: "Slide 2" },
+];
+
+describe("POST /slideshow", () => {
+  it("accepts a valid slides array and returns { ok: true }", async () => {
+    vi.useFakeTimers();
+    const res = await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    vi.useRealTimers();
+  });
+
+  it("rejects an empty slides array", async () => {
+    const res = await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: [], delay_ms: 1000 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/non-empty/);
+  });
+
+  it("rejects a missing delay_ms", async () => {
+    const res = await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: VALID_SLIDES }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean }>();
+    expect(body.ok).toBe(false);
+  });
+
+  it("rejects a slide with invalid mermaid keyword", async () => {
+    const res = await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slides: [{ type: "mermaid", payload: "not a diagram" }],
+        delay_ms: 1000,
+      }),
+    });
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/slide\[0\]/);
+  });
+
+  it("broadcasts first slide immediately and advances on timer", async () => {
+    vi.useFakeTimers();
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+    });
+    // First slide rendered — canvas should hold slide 0 payload.
+    const exportRes1 = await app.request("/export");
+    expect((await exportRes1.json<{ ok: boolean; data: string }>()).data).toBe(VALID_SLIDES[0].payload);
+
+    // Advance timer by one interval — second slide should now be shown.
+    vi.advanceTimersByTime(1000);
+    const exportRes2 = await app.request("/export");
+    expect((await exportRes2.json<{ ok: boolean; data: string }>()).data).toBe(VALID_SLIDES[1].payload);
+    vi.useRealTimers();
+  });
+
+  it("a second /slideshow call cancels the first", async () => {
+    vi.useFakeTimers();
+    const slides2 = [{ type: "katex", payload: "x^2" }];
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 500 }),
+    });
+    // Second call replaces the first.
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: slides2, delay_ms: 500 }),
+    });
+    // Canvas should reflect the new slideshow's first slide.
+    const exportRes = await app.request("/export");
+    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe(slides2[0].payload);
+    vi.useRealTimers();
+  });
+
+  it("POST /render cancels the running slideshow", async () => {
+    vi.useFakeTimers();
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+    });
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "katex", payload: "E=mc^2" }),
+    });
+    // Timer fires — but slideshow was cancelled, so canvas stays at katex payload.
+    vi.advanceTimersByTime(1000);
+    const exportRes = await app.request("/export");
+    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe("E=mc^2");
+    vi.useRealTimers();
+  });
+
+  it("POST /clear cancels the running slideshow", async () => {
+    vi.useFakeTimers();
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+    });
+    await app.request("/clear", { method: "POST" });
+    vi.advanceTimersByTime(1000);
+    const exportRes = await app.request("/export");
+    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe("");
+    vi.useRealTimers();
+  });
+});
+
+describe("POST /slideshow/stop", () => {
+  it("returns { ok: true } even when no slideshow is running", async () => {
+    const res = await app.request("/slideshow/stop", { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("stops the timer and leaves the last rendered slide on screen", async () => {
+    vi.useFakeTimers();
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+    });
+    await app.request("/slideshow/stop", { method: "POST" });
+    // Timer fires — slideshow is stopped so canvas stays at slide 0.
+    vi.advanceTimersByTime(1000);
+    const exportRes = await app.request("/export");
+    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe(VALID_SLIDES[0].payload);
+    vi.useRealTimers();
   });
 });
