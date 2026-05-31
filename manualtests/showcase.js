@@ -231,12 +231,26 @@ if (activeSlides.length === 0) {
 
 // ── Run slideshow ─────────────────────────────────────────────────────────────
 
-const totalMs = activeSlides.length * DELAY_MS;
+// Count the actual number of timer ticks the server will fire.
+// step-frames slides expand into one tick per frame (server-side B2 behaviour);
+// plain slides are one tick each.
+function countTicks(slideList) {
+  return slideList.reduce((acc, s) => {
+    if (s.type === "step-frames") {
+      return acc + JSON.parse(s.payload).frames.length;
+    }
+    return acc + 1;
+  }, 0);
+}
+
+const totalTicks = countTicks(activeSlides);
+const totalMs = totalTicks * DELAY_MS;
 
 if (TYPE_FILTER) {
   console.log(`   Filter: ${[...TYPE_FILTER].join(", ")} (${activeSlides.length} of ${slides.length} slides)`);
 }
-console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total)…`);
+const tickNote = totalTicks !== activeSlides.length ? ` (${totalTicks} ticks after step-frames expansion)` : "";
+console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total${tickNote})…`);
 
 const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS });
 if (!result.ok) {
