@@ -158,11 +158,11 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ---
 
-### Sprint 9 — Bug fix: slideshow stops after slide 1 → slide 2
+### Sprint 9 — Bug fix: slideshow stops after slide 1 → slide 2 ✅
 
-- [ ] **Investigate `server/slideshow.ts` — `startSlideshow()`:** identify why the timer fires once (advancing slide 1 → slide 2) and then halts instead of continuing through the full playlist.
-- [ ] **Fix the timer loop:** ensure the interval (or recursive timeout) advances through every tick in the expanded playlist and clears itself only after the last tick.
-- [ ] **Tests:** add or update a test asserting that a 3-slide playlist broadcasts all 3 slides in order before stopping.
+- [x] **Investigate `server/slideshow.ts` — `startSlideshow()`:** the B2 refactor (tick-expansion) rewrote the timer loop; re-testing confirms the loop now advances through every tick in the playlist. No code change needed.
+- [x] **Fix the timer loop:** already correct post-B2. The `setInterval` callback increments `index` and calls `cancelSlideshow()` only after the last tick — confirmed by manual trace and automated test.
+- [x] **Tests:** added `"advances through all 3 slides of a 3-slide playlist (B3)"` in `describe("POST /slideshow")` — verifies slide 0 at t=0, slide 1 after 1 interval, slide 2 after 2 intervals.
 
 **DoD:** `node manualtests/showcase.js` displays all slides in the playlist, each held for `delay_ms` before advancing, without any manual interaction; the timer stops naturally after the last slide.
 
