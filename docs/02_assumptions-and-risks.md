@@ -18,6 +18,7 @@ Non-technical audiences are out of scope for v1; expansion is a future considera
 **A3 — Browser always available**
 The render surface is a browser tab. The system assumes a browser is running on the same machine.
 - Risk: headless / server environments have no display. Terminal fallback is deferred to Phase 2 — this risk is **unmitigated in v1**.
+- **Decision:** risk explicitly accepted for v1. Target audience (developers on local machines) makes headless use an edge case.
 
 **A4 — Session lifetime is short and in-memory**
 Sessions are scoped to a single focused explanation. History does not need to survive a server restart in v1.
@@ -29,8 +30,11 @@ Sessions are scoped to a single focused explanation. History does not need to su
 ## B. MCP as Primary Interface
 
 **B1 — MCP is stable enough to build on**
+> ⚠️ ASSUMPTION: not formally validated — accepted as a known risk with no mitigation in v1.
+
 We are betting that the MCP protocol spec is stable and that tooling (SDKs, clients) is mature enough for production use.
 - Risk: MCP is relatively new; breaking changes in the spec or SDK could require rework.
+- **Decision:** risk accepted. Pin to exact version at Sprint 0 (`npm init`); treat upgrades as deliberate decisions. See `04` §1.
 
 **B2 — v1 targets Claude Code only**
 Claude Code is the sole agent runtime for v1. It supports MCP natively. Multi-agent / multi-runtime support is a future concern.
@@ -53,8 +57,11 @@ Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline nee
 ## D. Agent Behavior
 
 **D1 — Agents can generate valid rendering specs**
+> ⚠️ ASSUMPTION: partially mitigated by server-side validation (see `04` §3), but hallucination risk is not fully eliminated.
+
 We assume LLMs reliably produce well-formed Mermaid, valid Vega-Lite JSON, and correctly structured step arrays.
 - Risk: LLMs hallucinate syntax. Invalid payloads will cause silent render failures or broken diagrams unless the server validates and returns structured errors.
+- **Decision (v1):** server validates keyword prefix only; browser displays inline render errors for anything that passes the prefix check but fails Mermaid.js parsing (see `03` V1a). Full server-side Mermaid parse deferred to Phase 2.
 
 **D2 — The whiteboard is stateless from the agent's perspective**
 The agent sends commands forward-only. It also prints the textual representation (Mermaid source, JSON spec, etc.) in the terminal alongside the visual render — the terminal is the agent's own record of what it sent.
@@ -66,6 +73,8 @@ The agent sends commands forward-only. It also prints the textual representation
 ## E. Bidirectionality (Phase 2)
 
 **E1 — WebSocket return channel is sufficient for user events**
+> ⚠️ ASSUMPTION: unverified — Phase 2 research spike required before implementation.
+
 When bidirectionality is built, user interactions (clicks, steps, quiz answers) are sent back to the agent via WebSocket → MCP server.
 - Risk: the agent's MCP session must remain open and stateful long enough to receive async events — not all MCP runtimes handle long-lived sessions well.
 - Open research item for Phase 2: verify whether Claude Code's SSE MCP session supports async server-push events. If not, fallback options include polling (agent calls a `get_events()` tool) or a separate callback mechanism outside MCP.

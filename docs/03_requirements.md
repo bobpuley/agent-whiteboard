@@ -98,7 +98,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
 | ID | Requirement |
 |----|-------------|
-| NF1 | Single binary or minimal-dependency script (Python or Node); no heavy install |
+| NF1 | Single binary or minimal-dependency script (Node.js); no heavy install |
 | NF2 | Communication localhost-only by default (port `3000`); binding address and port configurable via env vars; no telemetry; sandboxed rendering |
 | NF3 | Cross-platform: macOS, Linux, Windows |
 | NF4 | `<200ms` render for diagrams under 500 nodes; debounce on stream |
