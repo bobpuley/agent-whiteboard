@@ -46,8 +46,8 @@ Claude Code is the sole agent runtime for v1. It supports MCP natively. Multi-ag
 ## C. Rendering
 
 **C1 — Declarative specs are sufficient**
-The agent generates structured payloads (Mermaid source, Vega-Lite JSON, step-frame arrays). The renderer handles visualization. The agent never writes raw HTML or JS for rendering.
-- Risk: some teaching scenarios may require custom visual logic that doesn't fit any declarative format — forcing either a new renderer type or an escape hatch (raw HTML/SVG).
+The agent generates structured payloads (Mermaid source, Vega-Lite JSON, step-frame arrays, raw SVG/HTML). The renderer handles visualization. The agent does not write executable JS for rendering; raw HTML/SVG is explicitly supported via `type="html"` and `type="svg"` (Sprint 5 ✅) and sanitized by DOMPurify in the browser.
+- Risk: some teaching scenarios may require custom visual logic that doesn't fit any declarative format — forcing either a new renderer type or relying on the html/svg escape hatch.
 
 **C2 — Client-side rendering is fast enough**
 Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline needed.
