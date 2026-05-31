@@ -47,17 +47,22 @@
     [Browser SPA]  (Svelte)
     │  • Receives render commands via WebSocket
     │  • Renders: Mermaid only (v1)
-    │  • export() returns Mermaid source as text
+    │  • export() returns last render() payload as text (all types)
     │  • Auto-opens on server start
 ```
 
+**Shipped in MVP (not Phase 2):**
+- Full server-side Mermaid parse validation — Sprint 6 ✅
+- `step()` tool + step-through frame sequences — Sprint 7 ✅
+- SVG/HTML, Vega-Lite, KaTeX renderers — Sprint 5 ✅ (D2 is post-Phase-2 — requires server-side render process)
+- `options.title` overlay — Sprint 8 ✅
+
 **Phase 2 additions** (not in v1):
-- Full server-side Mermaid parse validation (run Mermaid.js in Node context at `render()` time; reject before browser push)
-- Bidirectionality (browser → agent): implemented via a **separate stdio channel server** (Channels API, Claude Code ≥ v2.1.80 research preview). The channel server bridges browser WebSocket/REST → `notifications/claude/channel` events in the Claude Code session. The existing SSE server is unchanged. Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 8 — research preview flag, may change before GA). See `02` E1 for full rationale.
-- `step()` tool + step-through frame sequences
-- SVG/HTML, Vega-Lite, KaTeX renderers (D2 is post-Phase-2 — requires server-side render process)
+- Bidirectionality (browser → agent): implemented via a **separate stdio channel server** (Channels API, Claude Code ≥ v2.1.80 research preview). The channel server bridges browser WebSocket/REST → `notifications/claude/channel` events in the Claude Code session. The existing SSE server is unchanged. Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 — research preview flag, may change before GA). See `02` E1 for full rationale.
+- Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9
 - Multi-panel / named tabs
 - Binary export (PNG/SVG/PDF)
+- `options.theme` and action-variant options for `render()`
 - Multi-user session management *(Phase 3)*
 - Remote deployment / auth *(Phase 3)*
 
@@ -67,10 +72,10 @@
 
 | Tool                              | Server-side action                                                                                                                                                                                                                  |
 |-----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options` is optional (Phase 2). For `step-frames`: loads all frames, displays frame 0, stores full payload. |
+| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options.title` (optional string, MVP) displays a label above the canvas. `options.theme` and action variants are Phase 2. For `step-frames`: loads all frames, displays frame 0, stores full payload. |
 | `clear()`                         | Resets in-memory canvas state and step cursor; sends clear command to browser                                                                                                                                                       |
 | `export()`                        | Returns the last submitted source payload verbatim as a string. For all types (mermaid, svg, katex, vega-lite, step-frames): returns whatever was passed to `render()`. Empty string if canvas is empty or cleared.                 |
-| `step(direction)`                 | Phase 2. Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded.    |
+| `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
 
 ### Validation — two layers
 
@@ -81,7 +86,7 @@ The tool's JSON Schema and description are read by the agent when it loads the M
 |-----------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `mermaid` | `string` — must begin with a valid diagram keyword (`graph`, `flowchart`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `gantt`, `pie`, `mindmap`) |
 
-Phase 2 types (not exposed in v1): `vega-lite`, `katex`, `svg`, `html`, `step-frames`.
+Additional types exposed in v1 (Sprint 5 ✅): `vega-lite`, `katex`, `svg`, `html`. Step-frames exposed in v1 (Sprint 7 ✅): `step-frames`.
 Post-Phase-2 (deferred): `d2` — requires a server-side render process, not client-side.
 
 **Layer 2 — Server-side validation** (safety net, in `session.ts` or `mcp.ts`)
@@ -106,15 +111,15 @@ On success:
 | `render` | `{ "ok": true }`                                                                                                                        | `{ "ok": false, "error": "..." }` |
 | `clear`  | `{ "ok": true }`                                                                                                                        | — (always succeeds)               |
 | `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | — (always succeeds) |
-| `step`   | `{ "ok": true, "current_frame": N, "total_frames": M }` (Phase 2)                                                                      | `{ "ok": false, "error": "..." }` |
+| `step`   | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                                 | `{ "ok": false, "error": "..." }` |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
 
 ### REST fallback response shapes
 
-The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) return the same JSON shapes as the MCP tool responses above. `GET /export` returns the JSON body `{ "ok": true, "data": "<mermaid source>" }` (not raw text).
+The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) return the same JSON shapes as the MCP tool responses above. `GET /export` returns the JSON body `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload for any type (not raw text).
 
-`POST /step` is added in Phase 2 alongside the `step()` MCP tool (Sprint 7). Body: `{ "direction": "next" | "prev" }`. Returns the same shape as the MCP `step()` response.
+`POST /step` was added in Sprint 7 (MVP ✅). Body: `{ "direction": "next" | "prev" }`. Returns the same shape as the MCP `step()` response.
 
 ---
 
@@ -153,7 +158,7 @@ agent calls export()
   → if canvas is empty (never rendered, or cleared):
       MCP tool returns { ok: true, data: "" }
   → otherwise:
-      MCP tool returns { ok: true, data: "<mermaid source>" }
+      MCP tool returns { ok: true, data: "<source>" }  (verbatim last render() payload, any type)
   (no WebSocket push — export is a read-only query; browser state is unchanged)
 ```
 
@@ -170,7 +175,7 @@ agent calls export()
 ```
 
 `action` is always `"replace"` in v1 — hardcoded server-side, not part of the MCP tool signature.
-`append`, `step` actions, `options` (theme etc.), and all non-Mermaid types are Phase 2.
+`action` is always `"replace"` in v1 — `append` and other action variants are Phase 2. `options.theme` is Phase 2; `options.title` is MVP (Sprint 8 ✅). Non-Mermaid types (`svg`, `html`, `katex`, `vega-lite`, `step-frames`) are all MVP (Sprints 5 & 7 ✅); `d2` is post-Phase-2.
 
 ### `options` parameter (Phase 2)
 

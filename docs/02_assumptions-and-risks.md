@@ -85,6 +85,6 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 - A **second, separate stdio channel server** is required to bridge browser user events → Claude Code session.
 - During the research preview, launching requires `--dangerously-load-development-channels server:agent-whiteboard-events`.
 - Full production use requires packaging as a plugin on the Anthropic-approved allowlist or an org `allowedChannelPlugins` entry.
-- Risk: research preview — the `--channels` flag contract may change before GA. Exact flag syntax (`--dangerously-load-development-channels server:agent-whiteboard-events`) should be verified at Sprint 8 time.
-- **Sprint 8 trigger:** proceed when `--dangerously-load-development-channels` is no longer required (Channels API reaches GA), or when the research preview has been stable across two consecutive Claude Code releases.
+- Risk: research preview — the `--channels` flag contract may change before GA. Exact flag syntax (`--dangerously-load-development-channels server:agent-whiteboard-events`) should be verified at Sprint 10 time.
+- **Sprint 10 trigger:** proceed when `--dangerously-load-development-channels` is no longer required (Channels API reaches GA), or when the research preview has been stable across two consecutive Claude Code releases.
 - See `04` §2 for updated Phase 2 architecture.

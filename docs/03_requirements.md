@@ -27,7 +27,7 @@ The MCP server exposes tools to the agent.
 | ID | Type | Format | Phase |
 |----|------|--------|-------|
 | V1 | Diagrams | Mermaid | MVP |
-| V2 | Export — text | Returns Mermaid source spec | MVP |
+| V2 | Export — text | Returns verbatim last `render()` payload as text (all content types) | MVP |
 | V3 | SVG / HTML; Data charts; Math | Inline SVG; HTML+CSS; Vega-Lite JSON; LaTeX / KaTeX | MVP |
 | V3b | Diagrams | D2 | Post-Phase-2 (requires server-side render process) |
 | V4 | Export — binary | PNG / SVG / PDF download | Phase 2 |
@@ -64,7 +64,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
 | ID | Requirement | Phase |
 |----|-------------|-------|
-| F1 | Accept content via MCP tool calls (primary) and REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) | MVP |
+| F1 | Accept content via MCP tool calls (primary) and REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`, `POST /step`) | MVP |
 | F2 | Support rendering types: Mermaid, SVG, HTML, KaTeX, Vega-Lite. D2 deferred (requires server-side render process). | MVP |
 | F3 | Full-spec replace: agent always sends the complete updated spec; per-element mutation deferred to Phase 2 | MVP |
 | F3a | Validation is a hard gate: invalid payloads are rejected and returned as `{ ok: false, error: "..." }` to the agent; nothing is pushed to the browser and canvas state is unchanged | MVP |
@@ -119,8 +119,6 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 - Bidirectionality (user events → agent): Phase 2
 - Cross-session persistence / history across restarts: Phase 2
 - Binary export (PNG/SVG/PDF): Phase 2
-- Step-through frames / `step()` tool: **MVP** (implemented Sprint 7)
-- SVG/HTML, Vega-Lite, KaTeX renderers: **MVP** (implemented Sprint 5)
 - D2 renderer: post-Phase-2 (requires server-side render process)
 - Concurrent browser connections / multi-tab state sync: post-Phase-2 (second tab starts blank in v1)
 - WebSocket reconnection state replay: Phase 2 — on disconnect the browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry in v1.
