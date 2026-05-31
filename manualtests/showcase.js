@@ -84,11 +84,11 @@ async function step(direction) {
 await render(
   "mermaid",
   `flowchart TD
-    A[🧑 User] -->|asks question| B[Claude Agent]
-    B -->|calls render()| C[MCP Server]
+    A[User] -->|asks question| B[Claude Agent]
+    B -->|calls render| C[MCP Server]
     C -->|WebSocket push| D[Browser]
     D -->|renders| E[Whiteboard]
-    B -->|calls export()| C
+    B -->|calls export| C
     C -->|returns source| B`,
   "Mermaid — system architecture flowchart"
 );
