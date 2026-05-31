@@ -234,3 +234,7 @@ Decision: not applicable. Marimo is a Python notebook runtime — incompatible w
 **B1 — Slideshow step-frames slide renders nothing (Sprint 9)**
 - Observed: running the showcase with `--type step-frames` (or any slideshow containing a `step-frames` slide) shows nothing in the browser — no diagram, no error.
 - Expected: frame 0 of the step-frames sequence should appear, identical to calling `render(type="step-frames", …)` directly.
+
+**B2 — Slideshow step-frames does not auto-advance through frames**
+- Observed: running `node manualtests/showcase.js --type step-frames` shows frame 0 of the step-frames sequence and allows manual Prev/Next navigation, but does not automatically advance through the frames.
+- Expected: the slideshow timer should advance through each frame of the step-frames sequence at `delay_ms` intervals — treating each frame as a separate animation step, not requiring manual navigation.
