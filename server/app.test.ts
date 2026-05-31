@@ -561,6 +561,40 @@ describe("POST /slideshow", () => {
   });
 });
 
+describe("POST /slideshow — step-frames slide", () => {
+  it("leaves session in step-frames state so /step works afterward", async () => {
+    vi.useFakeTimers();
+    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides, delay_ms: 1000 }),
+    });
+    // export() returns the raw frames JSON (not a single frame payload).
+    const exportRes = await app.request("/export");
+    expect(await exportRes.json()).toEqual({ ok: true, data: THREE_FRAME_SEQUENCE });
+    vi.useRealTimers();
+  });
+
+  it("allows /step navigation after a step-frames slideshow slide", async () => {
+    vi.useFakeTimers();
+    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
+    await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides, delay_ms: 1000 }),
+    });
+    // Should be at frame 0; step next moves to frame 1.
+    const stepRes = await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+    expect(await stepRes.json()).toEqual({ ok: true, current_frame: 1, total_frames: 3 });
+    vi.useRealTimers();
+  });
+});
+
 describe("POST /slideshow/stop", () => {
   it("returns { ok: true } even when no slideshow is running", async () => {
     const res = await app.request("/slideshow/stop", { method: "POST" });

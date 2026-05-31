@@ -2,8 +2,8 @@
 // Phase 2 feature (Sprint 9).
 
 import { broadcast } from "./ws.js";
-import { setCanvas } from "./session.js";
-import type { CanvasType } from "./session.js";
+import { setCanvas, setStepFrames } from "./session.js";
+import type { CanvasType, StepFrame } from "./session.js";
 
 export interface Slide {
   type: string;
@@ -14,16 +14,30 @@ export interface Slide {
 let activeTimer: ReturnType<typeof setInterval> | null = null;
 
 function broadcastSlide(slide: Slide): void {
-  // Update session state so export() reflects the current slide.
-  if (slide.type !== "step-frames") {
+  if (slide.type === "step-frames") {
+    // Unpack step-frames: store all frames in session and broadcast frame 0.
+    const spec = JSON.parse(slide.payload) as { frame_type: string; frames: StepFrame[] };
+    const { frames, frame_type } = spec;
+    setStepFrames(frames, frame_type, slide.payload, slide.title);
+    broadcast({
+      action: "replace",
+      type: frame_type,
+      payload: frames[0].payload,
+      frameLabel: frames[0].label,
+      stepFrames: true,
+      currentFrame: 0,
+      totalFrames: frames.length,
+      ...(slide.title !== undefined ? { title: slide.title } : {}),
+    });
+  } else {
     setCanvas(slide.type as CanvasType, slide.payload, slide.title);
+    broadcast({
+      action: "replace",
+      type: slide.type,
+      payload: slide.payload,
+      ...(slide.title !== undefined ? { title: slide.title } : {}),
+    });
   }
-  broadcast({
-    action: "replace",
-    type: slide.type,
-    payload: slide.payload,
-    ...(slide.title !== undefined ? { title: slide.title } : {}),
-  });
 }
 
 /**
