@@ -10,6 +10,7 @@ export default defineConfig({
       "/render": "http://localhost:3000",
       "/clear": "http://localhost:3000",
       "/export": "http://localhost:3000",
+      "/step": "http://localhost:3000",
       "/mcp": "http://localhost:3000",
       // WebSocket proxy requires ws: true — HTTP proxy alone does not cover WS connections.
       "/stream": {
