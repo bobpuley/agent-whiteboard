@@ -13,7 +13,7 @@ The MCP server exposes tools to the agent.
 |------|-----------|-------------|-------|
 | `render` | `render(type, payload)` | Push content to the canvas. `type` selects the renderer (e.g. `"mermaid"`). Always replaces the current canvas state in v1. `options` parameter deferred to Phase 2 (theme, action variants). | MVP |
 | `clear` | `clear()` | Reset the current session canvas. | MVP |
-| `export` | `export()` | Return the current canvas source spec. Response: `{ "ok": true, "data": "<mermaid source>" }` — `data` is an empty string if canvas is empty or cleared. Binary export is Phase 2. | MVP |
+| `export` | `export()` | Return the current canvas source spec. Response: `{ "ok": true, "data": "<source>" }` — `data` is the verbatim last payload passed to `render()`, for all content types. Empty string if canvas is empty or cleared. Binary export is Phase 2. | MVP |
 | `step` | `step(direction)` | Advance (`"next"`) or rewind (`"prev"`) a step-through sequence. | Phase 2 |
 
 ---
@@ -26,10 +26,10 @@ The MCP server exposes tools to the agent.
 |----|------|--------|-------|
 | V1 | Diagrams | Mermaid | MVP |
 | V2 | Export — text | Returns Mermaid source spec | MVP |
-| V3 | Diagrams | D2 | Phase 2 |
-| V4 | SVG / HTML | Inline SVG; HTML+CSS for simple animations | Phase 2 |
-| V5 | Data charts | Vega-Lite JSON | Phase 2 |
-| V6 | Math | LaTeX / KaTeX | Phase 2 |
+| V3 | SVG / HTML | Inline SVG; HTML+CSS for simple animations | Phase 2 |
+| V4 | Data charts | Vega-Lite JSON | Phase 2 |
+| V5 | Math | LaTeX / KaTeX | Phase 2 |
+| V3b | Diagrams | D2 | Post-Phase-2 (requires server-side render process) |
 | V7 | Step-through frames | Ordered frame arrays; agent-driven transitions via `step()` | Phase 2 |
 | V8 | Export — binary | PNG / SVG / PDF download | Phase 2 |
 | V9 | Visual history | Navigable snapshots (timeline or thumbnails) | Phase 2 |
@@ -78,7 +78,8 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | V1 | Render Mermaid diagrams with auto-refresh, zoom/pan | MVP |
 | V1a | If the browser renderer fails (e.g. Mermaid.js throws), display the error message inline on the canvas in place of the diagram | MVP |
 | V2 | Export: Mermaid source text via `export()` | MVP |
-| V3 | Support D2, SVG/HTML, Vega-Lite, KaTeX renderers | Phase 2 |
+| V3 | Support SVG/HTML, Vega-Lite, KaTeX renderers | Phase 2 |
+| V3b | Support D2 renderer | Post-Phase-2 (requires server-side render process) |
 | V4 | Export: PNG/SVG/PDF download | Phase 2 |
 | V5 | Step-through mode: agent sends ordered frame array; `step(direction)` advances/rewinds | Phase 2 |
 | V6 | Visual history: navigable snapshots (timeline or thumbnails) | Phase 2 |
@@ -115,7 +116,8 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 - Cross-session persistence / history across restarts: Phase 2
 - Binary export (PNG/SVG/PDF): Phase 2
 - Step-through frames / `step()` tool: Phase 2
-- D2, Vega-Lite, KaTeX, SVG/HTML renderers: Phase 2
+- SVG/HTML, Vega-Lite, KaTeX renderers: Phase 2
+- D2 renderer: post-Phase-2 (requires server-side render process)
 - Concurrent browser connections / multi-tab state sync: Phase 2 (second tab starts blank in v1)
 - WebSocket reconnection state replay: Phase 2 — on disconnect the browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry in v1.
 - Free-form canvas / whiteboard drawing: deferred (nice-to-have)

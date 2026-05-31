@@ -55,7 +55,7 @@
 - Full server-side Mermaid parse validation (run Mermaid.js in Node context at `render()` time; reject before browser push)
 - Bidirectionality (browser → agent): implemented via a **separate stdio channel server** (Channels API, Claude Code ≥ v2.1.80 research preview). The channel server bridges browser WebSocket/REST → `notifications/claude/channel` events in the Claude Code session. The existing SSE server is unchanged. Requires `--dangerously-load-development-channels` during preview. See `02` E1 for full rationale.
 - `step()` tool + step-through frame sequences
-- D2, Vega-Lite, KaTeX, SVG/HTML renderers
+- SVG/HTML, Vega-Lite, KaTeX renderers (D2 is post-Phase-2 — requires server-side render process)
 - Multi-panel / named tabs
 - Binary export (PNG/SVG/PDF)
 - Multi-user session management
@@ -81,7 +81,8 @@ The tool's JSON Schema and description are read by the agent when it loads the M
 |-----------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `mermaid` | `string` — must begin with a valid diagram keyword (`graph`, `flowchart`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `gantt`, `pie`, `mindmap`) |
 
-Phase 2 types (not exposed in v1): `d2`, `vega-lite`, `katex`, `svg`, `html`, `step-frames`.
+Phase 2 types (not exposed in v1): `vega-lite`, `katex`, `svg`, `html`, `step-frames`.
+Post-Phase-2 (deferred): `d2` — requires a server-side render process, not client-side.
 
 **Layer 2 — Server-side validation** (safety net, in `session.ts` or `mcp.ts`)
 Lightweight checks after the agent call arrives. On failure, returns a structured error the agent can act on:
