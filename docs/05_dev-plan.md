@@ -138,6 +138,15 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ---
 
+### Sprint 9 — Bug fix: slideshow step-frames renders nothing
+
+- [ ] **`server/slideshow.ts` — `broadcastSlide()`:** when a slide's `type` is `"step-frames"`, parse the JSON payload, call `setStepFrames()`, and broadcast frame 0 in the same format as `POST /render` (`{ action: "replace", type: frame_type, payload: frames[0].payload, stepFrames: true, currentFrame: 0, totalFrames: N }`). For all other types, the existing passthrough is correct.
+- [ ] **Tests:** add a test asserting that a slideshow containing a `step-frames` slide broadcasts the first frame (not the raw JSON) and leaves the session in step-frames state (so subsequent `POST /step` calls work).
+
+**DoD:** `node manualtests/showcase.js --type step-frames` shows the first frame of the step-through sequence in the browser; Prev/Next navigation continues to work after the slideshow stops.
+
+---
+
 ### Sprint 10 — Bidirectionality (deferred — after 5–8)
 
 Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 time — research preview flag). Defer until Sprints 5–8 are shipped and the Channels API is closer to GA.

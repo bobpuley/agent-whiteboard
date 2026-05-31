@@ -55,6 +55,14 @@ Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline nee
 
 ---
 
+## C2b — Slideshow broadcast parity with /render (Sprint 9 bug)
+
+~~> ⚠️ ASSUMPTION (Sprint 9): "validates each slide (same rules as /render)" was interpreted as applying to validation only. `broadcastSlide()` forwarded the raw type and payload to the browser without unpacking step-frames.~~
+
+> ✅ CORRECTED: "same rules as /render" must extend to **broadcast format**. For `step-frames` slides, the server must unpack the JSON, call `setStepFrames()`, and emit the same `{ type: frame_type, payload: frames[0].payload, stepFrames: true, currentFrame: 0, totalFrames: N }` event that `POST /render` produces. The browser has no renderer for `type: "step-frames"` and silently renders nothing when this contract is violated. Fixed in Sprint 9 bug-fix task (see `05`).
+
+---
+
 ## D. Agent Behavior
 
 **D1 — Agents can generate valid rendering specs**

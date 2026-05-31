@@ -59,7 +59,7 @@
 
 **Phase 2 additions** (not in v1):
 - Bidirectionality (browser → agent): implemented via a **separate stdio channel server** (Channels API, Claude Code ≥ v2.1.80 research preview). The channel server bridges browser WebSocket/REST → `notifications/claude/channel` events in the Claude Code session. The existing SSE server is unchanged. Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 — research preview flag, may change before GA). See `02` E1 for full rationale.
-- Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9
+- Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9. Each slide in a slideshow is broadcast using the same WebSocket event format as `POST /render`: `step-frames` slides are unpacked server-side (frame 0 broadcast as `{ type: frame_type, payload: frames[0].payload, stepFrames: true, currentFrame: 0, totalFrames: N }`); all other types broadcast verbatim.
 - Multi-panel / named tabs
 - Binary export (PNG/SVG/PDF)
 - `options.theme` and action-variant options for `render()`

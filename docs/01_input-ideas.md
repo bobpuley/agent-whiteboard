@@ -226,3 +226,11 @@ Decision: custom renderer. Mermaid, step-through animations, and data charts (Ve
 
 **C7 — Marimo as notebook alternative** ✅ RESOLVED
 Decision: not applicable. Marimo is a Python notebook runtime — incompatible with the custom renderer + MCP server architecture. Closed.
+
+---
+
+## Bug Reports
+
+**B1 — Slideshow step-frames slide renders nothing (Sprint 9)**
+- Observed: running the showcase with `--type step-frames` (or any slideshow containing a `step-frames` slide) shows nothing in the browser — no diagram, no error.
+- Expected: frame 0 of the step-frames sequence should appear, identical to calling `render(type="step-frames", …)` directly.
