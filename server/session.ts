@@ -23,3 +23,8 @@ export function exportCanvas(): string {
   if (canvas.type === "empty") return "";
   return canvas.payload;
 }
+
+/** Reset canvas to empty — for use in tests only. */
+export function resetCanvas(): void {
+  canvas = { type: "empty" };
+}
