@@ -29,7 +29,7 @@ export function createMcpServer(): McpServer {
         '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{\"$schema\":\"...\",\"mark\":\"bar\",...}" })\n' +
         '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate.\n' +
         'options (optional): { "title": "My diagram" } — displays a label above the canvas; omit to show no title. Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { title: "System flow" } })',
-      inputSchema: {
+      inputSchema: z.object({
         type: z
           .enum(["mermaid", "svg", "html", "katex", "vega-lite", "step-frames"])
           .describe("Content type."),
@@ -43,7 +43,7 @@ export function createMcpServer(): McpServer {
           .object({ title: z.string().optional() })
           .optional()
           .describe('Optional display options. title: label shown above the canvas (e.g. { "title": "My diagram" }).'),
-      },
+      }),
     },
     async ({ type, payload, options }) => {
       const title = options?.title;
@@ -182,11 +182,11 @@ export function createMcpServer(): McpServer {
         'Advance ("next") or rewind ("prev") the step cursor for a loaded step-frames sequence. ' +
         'Returns { "ok": true, "current_frame": N, "total_frames": M }. ' +
         'Returns { "ok": false, "error": "..." } if no step-frames sequence is loaded.',
-      inputSchema: {
+      inputSchema: z.object({
         direction: z
           .enum(["next", "prev"])
           .describe('"next" to advance, "prev" to rewind.'),
-      },
+      }),
     },
     ({ direction }) => {
       const result = stepCursor(direction);
@@ -237,7 +237,7 @@ export function createMcpServer(): McpServer {
     "clear",
     {
       description: "Reset the whiteboard canvas to a blank state.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     () => {
       cancelSlideshow();
@@ -259,7 +259,7 @@ export function createMcpServer(): McpServer {
         'delay_ms: interval in milliseconds between slides.\n' +
         "A new call cancels any running slideshow. Use slideshow_stop() to stop early.\n" +
         'Example: slideshow({ slides: [{ type: "mermaid", payload: "graph TD; A-->B", title: "Slide 1" }], delay_ms: 3000 })',
-      inputSchema: {
+      inputSchema: z.object({
         slides: z
           .array(
             z.object({
@@ -274,7 +274,7 @@ export function createMcpServer(): McpServer {
           .number()
           .positive()
           .describe("Milliseconds between slide advances."),
-      },
+      }),
     },
     async ({ slides, delay_ms }) => {
       // Validate each slide payload.
@@ -335,7 +335,7 @@ export function createMcpServer(): McpServer {
       description:
         "Cancel the running slideshow timer. The last rendered slide remains on screen. " +
         "No-op if no slideshow is running.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     () => {
       cancelSlideshow();
@@ -354,7 +354,7 @@ export function createMcpServer(): McpServer {
         'Response: { "ok": true, "data": "<source>" }. ' +
         "For step-frames: returns the full original frames JSON string (not the current frame). " +
         "data is an empty string if the canvas is empty or was cleared.",
-      inputSchema: {},
+      inputSchema: z.object({}),
     },
     () => {
       const data = exportCanvas();
