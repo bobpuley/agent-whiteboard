@@ -49,6 +49,7 @@
     │  • Renders: Mermaid, SVG/HTML, KaTeX, Vega-Lite (v1); step-through frames
     │  • export() returns last render() payload as text (all types)
     │  • Auto-opens on server start
+    │  • Done button → POST /user-done → signalDone() → wakes wait_done() tool
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -57,9 +58,13 @@
 - SVG/HTML, Vega-Lite, KaTeX renderers — Sprint 5 ✅ (D2 is post-Phase-2 — requires server-side render process)
 - `options.title` overlay — Sprint 8 ✅
 
-**Phase 2 additions** (not in v1):
-- Bidirectionality (browser → agent): implemented via a **separate stdio channel server** (Channels API, Claude Code ≥ v2.1.80 research preview). The channel server bridges browser WebSocket/REST → `notifications/claude/channel` events in the Claude Code session. The existing SSE server is unchanged. Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 — research preview flag, may change before GA). See `02` E1 for full rationale.
-- Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9. Each slide in a slideshow is broadcast using the same WebSocket event format as `POST /render`. `step-frames` slides are **expanded into individual timer ticks** — each frame is broadcast at `delay_ms` intervals (frame N as `{ type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M }`). No new WebSocket event types or server components needed; `startSlideshow()` expands step-frames into a flat tick sequence before starting the timer.
+**Shipped in Phase 2:**
+- Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9 ✅. Each slide broadcast using the same WebSocket event format as `POST /render`. `step-frames` slides expanded into individual timer ticks.
+- `wait_done()` tool + Done button — Sprint 10 ✅. `server/events.ts` EventEmitter bus; `signalDone()` called by `POST /user-done`; `waitForDone()` called by both `POST /wait-done` (REST) and `wait_done()` (MCP tool). See §3 and §4.
+- Channels API experiment (`server/channel.ts`) — Sprint 10 ✅. Stdio MCP channel server + HTTP relay on port 3001. Useful for async push events; not used as the primary "wait for user" primitive (see `02` E1).
+
+**Remaining Phase 2 / Phase 3:**
+- Node click events and other interactive signals (browser → agent via `signalNodeClick()` pattern)
 - Multi-panel / named tabs
 - Binary export (PNG/SVG/PDF)
 - `options.theme` and action-variant options for `render()`
@@ -76,6 +81,7 @@
 | `clear()`                         | Resets in-memory canvas state and step cursor; sends clear command to browser                                                                                                                                                       |
 | `export()`                        | Returns the last submitted source payload verbatim as a string. For all types (mermaid, svg, katex, vega-lite, step-frames): returns whatever was passed to `render()`. Empty string if canvas is empty or cleared.                 |
 | `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
+| `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
 
 ### Validation — two layers
 
@@ -121,6 +127,10 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /step` was added in Sprint 7 (MVP ✅). Body: `{ "direction": "next" | "prev" }`. Returns the same shape as the MCP `step()` response.
 
+`POST /user-done` was added in Sprint 10 (Phase 2 ✅). No body required. Calls `signalDone()` to wake all pending `wait_done()` calls; also forwards to channel relay. Returns `{ ok: true }`.
+
+`POST /wait-done` was added in Sprint 10 (Phase 2 ✅). No body. Long-polls until `signalDone()` fires or the 10-minute timeout elapses. Returns `{ ok: true }`.
+
 ---
 
 ## 4. Data Flows
@@ -160,6 +170,18 @@ agent calls export()
   → otherwise:
       MCP tool returns { ok: true, data: "<source>" }  (verbatim last render() payload, any type)
   (no WebSocket push — export is a read-only query; browser state is unchanged)
+```
+
+### Done Signal
+
+```
+user clicks Done button in browser
+  → browser fires POST /user-done to Hono server
+  → server calls signalDone()  (events.ts EventEmitter bus)
+  → all pending waitForDone() promises resolve
+  → any suspended wait_done() MCP tool calls return { ok: true } to agent
+  → server also forwards to channel relay on port 3001 (if running)
+  → browser button shows "Sent ✓" for 2s
 ```
 
 ---

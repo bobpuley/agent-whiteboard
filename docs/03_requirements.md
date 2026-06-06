@@ -17,6 +17,7 @@ The MCP server exposes tools to the agent.
 | `step` | `step(direction)` | Advance (`"next"`) or rewind (`"prev"`) a step-through sequence. | MVP |
 | `slideshow` | `slideshow(slides, delay_ms)` | Load a playlist of slides (`[{ type, payload, title? }]`) and auto-advance the canvas on a server-side timer at `delay_ms` intervals. A new call cancels any running slideshow. | Phase 2 |
 | `slideshow_stop` | `slideshow_stop()` | Cancel the running slideshow timer; last rendered slide remains on screen. | Phase 2 |
+| `wait_done` | `wait_done()` | Block until the user clicks the Done button in the browser. Returns `{ "ok": true }` when the user signals they are ready to continue. Times out after 10 minutes (returns `{ "ok": true }` regardless). Intended usage: `render(...)` → `wait_done()` → continue lesson. | Phase 2 (Sprint 10 ✅) |
 
 ---
 
@@ -42,7 +43,8 @@ The MCP server exposes tools to the agent.
 |-------|-----------|------|
 | Agent → Server | MCP (primary) | Agent calls tools; server executes render commands |
 | Server → Browser | WebSocket (`/stream`) | Incremental, real-time updates pushed to the SPA |
-| Agent → Server (alt) | REST `POST /render`, `POST /clear`, `GET /export`, `POST /step`, `POST /slideshow`, `POST /slideshow/stop` | Low-level fallback; also usable via `curl` for debugging. `POST /slideshow` and `POST /slideshow/stop` added in Phase 2 alongside the slideshow MCP tools. |
+| Agent → Server (alt) | REST `POST /render`, `POST /clear`, `GET /export`, `POST /step`, `POST /slideshow`, `POST /slideshow/stop`, `POST /wait-done` | Low-level fallback; also usable via `curl` for debugging. `POST /slideshow` and `POST /slideshow/stop` added in Phase 2 alongside the slideshow MCP tools. `POST /wait-done` long-polls until the user clicks Done. |
+| Browser → Server | `POST /user-done` | Browser Done button fires this; server calls `signalDone()` to wake any pending `wait_done()` calls, then optionally forwards to the channel relay. |
 | Browser → Server | WebSocket back-channel | Reserved for Phase 2 bidirectionality (user events) |
 
 File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
@@ -72,6 +74,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | F5 | Session management with cross-session persistence (`session_id`, history across restarts) | Phase 2 |
 | F7 | Slideshow: `POST /slideshow` (and `slideshow()` MCP tool) accepts `{ slides: [{ type, payload, title? }], delay_ms }`, validates each slide (same rules as `POST /render`), starts a server-side timer that auto-advances the canvas. Each slide is broadcast to the browser using the **same WebSocket event format** that `POST /render` would produce for that slide's type. For `step-frames` slides, the server **expands each frame into a separate timer tick**: each frame is broadcast in sequence at `delay_ms` intervals (frame 0 immediately, frame 1 after one tick, frame 2 after two ticks, etc.) — the same format as `POST /render` produces for each frame (`{ type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M }`). Manual Prev/Next navigation remains functional during and after the slideshow. A new call cancels any running slideshow; `POST /render` and `POST /clear` also cancel it. At most one active slideshow at a time. | Phase 2 |
 | F8 | Slideshow stop: `POST /slideshow/stop` (and `slideshow_stop()` MCP tool) cancels the running timer; last rendered slide remains on screen. No-op if no slideshow is running. | Phase 2 |
+| F9 | Done signal: `POST /user-done` (browser button) wakes all pending `wait_done()` MCP tool calls via an in-process EventEmitter. `POST /wait-done` (REST) long-polls until the signal fires or the 10-minute timeout elapses. Multiple concurrent `wait_done()` calls are all resolved simultaneously by a single click. | Phase 2 (Sprint 10 ✅) |
 | F6 | HTML/SVG payloads must be sanitized with DOMPurify in the browser before render; sanitization is silent (cleaned output rendered, no error state). No server-side hard gate for HTML/SVG — the `type` field is validated but the payload is passed through. | MVP |
 
 ### Rendering & Visualization
@@ -96,7 +99,8 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | U2 | CLI-friendly invocation: `curl -X POST …` or thin wrapper script | MVP |
 | U2a | WebSocket disconnect: browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry. | MVP |
 | U3 | Terminal ASCII fallback if no browser available | Phase 2 |
-| U4 | Click-to-expand, tooltip, highlight nodes/edges; events sent back to agent | Phase 2 |
+| U4a | Done button: always-visible button (bottom-right); fires `POST /user-done`; shows "Sent ✓" for 2s after click | Phase 2 (Sprint 10 ✅) |
+| U4b | Click-to-expand, tooltip, highlight nodes/edges; events sent back to agent | Phase 2 |
 | U5 | Structured input widgets (quiz, sliders, drag-to-order); events returned to agent | Phase 2 |
 | U6 | Theme control: agent sets theme via `options.theme` in `render()`; user can also toggle it in the browser UI | Phase 2 |
 
@@ -116,7 +120,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
 - Multiple named panels/tabs: Phase 2 (one canvas at a time in v1)
 - Terminal ASCII fallback: Phase 2 (browser always assumed available in v1)
-- Bidirectionality (user events → agent): Phase 2
+- Full bidirectionality (node clicks, sliders, quiz widgets → agent): Phase 2. Basic "user is done" signal (`wait_done()` + Done button) is shipped in Sprint 10.
 - Cross-session persistence / history across restarts: Phase 2
 - Binary export (PNG/SVG/PDF): Phase 2
 - D2 renderer: post-Phase-2 (requires server-side render process)
