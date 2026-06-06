@@ -168,16 +168,51 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ---
 
-### Sprint 10 — Bidirectionality (deferred — after 5–8)
+### Sprint 10 — Bidirectionality experiment: "Done" button ✅
 
-Requires `--dangerously-load-development-channels server:agent-whiteboard-events` during preview (verify exact syntax at Sprint 10 time — research preview flag). Defer until Sprints 5–8 are shipped and the Channels API is closer to GA.
+**Goal:** validate the Channels API end-to-end with the smallest useful signal — a "Done" button in the browser that tells Claude to continue.
 
-**Trigger to proceed:** `--dangerously-load-development-channels` is no longer required (Channels API reaches GA in Claude Code), or the research preview has been stable across two consecutive Claude Code releases.
+**Scope:**
+- [x] `server/channel.ts` (new): stdio MCP channel server with `capabilities.experimental: { 'claude/channel': {} }` + HTTP relay on port 3001 (default, overridable via `CHANNEL_PORT` env var)
+- [x] `server/app.ts`: `POST /user-done` endpoint — forwards to channel relay; gracefully ignores if channel server not running
+- [x] `client/src/App.svelte`: "Done" button (bottom-right, always visible); shows "Sent ✓" for 2s after click
+- [x] `.mcp.json`: `agent-whiteboard-channel` stdio entry (`node_modules/.bin/tsx server/channel.ts`)
 
-See `02` E1 for architecture. High-level:
-- New stdio channel server (`server/channel.ts`) separate from the SSE server
-- Bridges browser WebSocket user events → `notifications/claude/channel` events
-- Adds a `reply` tool so Claude can send messages back through the channel
+**To test:**
+1. `npm run dev` (starts main server + Vite as before)
+2. In a **new** Claude Code session: `claude --dangerously-load-development-channels server:agent-whiteboard-channel`
+3. Ask Claude to render a diagram; click "Done" in the browser
+4. Claude Code context receives: `<channel source="agent-whiteboard-channel" event="user_done">User has finished exploring...</channel>`
+
+**DoD:** Claude Code receives a `<channel>` tag when the user clicks "Done"; the button shows "Sent ✓" feedback; the main server works normally if the channel server is not running.
+
+---
+
+### Sprint 10 — `wait_done()` MCP tool ✅
+
+**Insight from channels experiment:** `notifications/claude/channel` is designed for async push events. Using it as a "gate" (block until user acts) is unreliable because the notification arrives mid-stream and Claude Code may process it unpredictably. A long-polling MCP tool is the correct primitive for a blocking "wait for user" pattern.
+
+**Changes:**
+- [x] `server/events.ts` (new): `signalDone()` + `waitForDone()` — in-process EventEmitter bus with 10-minute timeout
+- [x] `server/app.ts`: `POST /user-done` calls `signalDone()` (wakes waiting `wait_done` calls); new `POST /wait-done` long-polls until signal
+- [x] `server/mcp.ts`: `wait_done()` tool — calls `waitForDone()` directly; blocks from agent's perspective until browser Done is clicked
+
+**Agent usage pattern:**
+```
+render(type="mermaid", payload="...", options={ title: "..." })
+wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
+// continue lesson
+```
+
+**DoD:** agent calls `wait_done()` after `render()` and does not continue until the user clicks Done in the browser; clicking Done resolves all pending `wait_done()` calls simultaneously; times out after 10 minutes.
+
+---
+
+### Sprint 10 — Next steps (bidirectionality full implementation)
+
+- Node click events: browser button/click → `POST /user-done`-style endpoint → `signalNodeClick(nodeId)` → new MCP tool `wait_node_click()`
+- Optional `reply` tool on the channel server so Claude can send messages back to the browser
+- See `02` E1 for channel server architecture details
 
 ---
 

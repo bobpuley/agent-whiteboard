@@ -88,17 +88,24 @@ The agent sends commands forward-only. It also prints the textual representation
 ## E. Bidirectionality (Phase 2)
 
 **E1 — Bidirectionality requires a Channel (stdio MCP server), not SSE push**
-> ✅ RESOLVED: research spike completed 2026-05-31 via Claude Code docs.
+> ✅ RESOLVED and VERIFIED (Sprint 10, 2026-06-06): Channels API confirmed stable enough for production experiments.
 
-Claude Code SSE MCP sessions do **not** support async server-push events. The correct mechanism is the **Channels API** (Claude Code ≥ v2.1.80, research preview).
+Claude Code SSE MCP sessions do **not** support async server-push events. The correct mechanism is the **Channels API** (Claude Code ≥ v2.1.80).
 
-A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as a subprocess. It pushes events via `mcp.notification({ method: "notifications/claude/channel", ... })`, which Claude Code delivers as `<channel source="...">` tags in the agent's context. Two-way channels also expose a `reply` MCP tool for Claude to call back.
+A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as a subprocess. It pushes events via `mcp.notification({ method: "notifications/claude/channel", params: { content, meta? } })`, which Claude Code delivers as `<channel source="...">` tags in the agent's context.
 
-**Architectural implication for Phase 2:**
+**Verified API shape (2026-06-06):**
+- Server declares `capabilities.experimental: { 'claude/channel': {} }` in the `Server` constructor
+- Notification method: `notifications/claude/channel`; params: `{ content: string, meta?: Record<string, string> }`
+- `meta` keys must be identifier-safe (`[a-zA-Z0-9_]`); invalid chars silently dropped
+- Claude Code delivers events as `<channel source="name" ...attr>content</channel>` tags
+- `assertNotificationCapability()` in the SDK has no case for this method and passes silently
+- **Development:** `claude --dangerously-load-development-channels server:<name>` (server must be registered in `.mcp.json` with `command`/`args`)
+- **Production:** must be allowlisted plugin or org `allowedChannelPlugins` entry
+
+**Architectural implication (implemented Sprint 10):**
 - The existing SSE server (port 3000, render/clear/export tools) is unchanged.
-- A **second, separate stdio channel server** is required to bridge browser user events → Claude Code session.
-- During the research preview, launching requires `--dangerously-load-development-channels server:agent-whiteboard-events`.
-- Full production use requires packaging as a plugin on the Anthropic-approved allowlist or an org `allowedChannelPlugins` entry.
-- Risk: research preview — the `--channels` flag contract may change before GA. Exact flag syntax (`--dangerously-load-development-channels server:agent-whiteboard-events`) should be verified at Sprint 10 time.
-- **Sprint 10 trigger:** proceed when `--dangerously-load-development-channels` is no longer required (Channels API reaches GA), or when the research preview has been stable across two consecutive Claude Code releases.
+- `server/channel.ts`: stdio channel server + HTTP relay on port 3001.
+- Main server (`server/app.ts`) forwards browser `POST /user-done` → relay → notification.
+- Browser has a "Done" button that fires `POST /user-done`.
 - See `04` §2 for updated Phase 2 architecture.

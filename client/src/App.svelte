@@ -65,6 +65,18 @@
       body: JSON.stringify({ direction }),
     });
   }
+
+  // Done button — signals Claude Code via the channel server that the user finished exploring.
+  let doneSent = false;
+  let doneTimer: ReturnType<typeof setTimeout> | null = null;
+
+  async function handleDone() {
+    if (doneSent) return;
+    await fetch("/user-done", { method: "POST" });
+    doneSent = true;
+    if (doneTimer) clearTimeout(doneTimer);
+    doneTimer = setTimeout(() => { doneSent = false; }, 2000);
+  }
 </script>
 
 <main>
@@ -113,6 +125,12 @@
       >Next &#8594;</button>
     </div>
   {/if}
+
+  <div class="done-bar">
+    <button class="done-btn" on:click={handleDone} disabled={doneSent}>
+      {doneSent ? "Sent ✓" : "Done"}
+    </button>
+  </div>
 </main>
 
 <style>
@@ -215,5 +233,33 @@
     color: #444;
     flex: 1;
     text-align: center;
+  }
+
+  .done-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 8px 16px 4px;
+  }
+
+  .done-btn {
+    padding: 5px 18px;
+    border: 1px solid #27ae60;
+    border-radius: 4px;
+    background: #fff;
+    color: #27ae60;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.1s;
+  }
+
+  .done-btn:hover:not(:disabled) {
+    background: #f0fff4;
+  }
+
+  .done-btn:disabled {
+    border-color: #aaa;
+    color: #aaa;
+    cursor: default;
   }
 </style>

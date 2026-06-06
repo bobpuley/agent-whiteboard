@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      "/user-done": "http://localhost:3000",
       "/render": "http://localhost:3000",
       "/clear": "http://localhost:3000",
       "/export": "http://localhost:3000",

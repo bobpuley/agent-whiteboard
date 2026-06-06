@@ -8,6 +8,7 @@ import type { StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
+import { waitForDone } from "./events.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -339,6 +340,25 @@ export function createMcpServer(): McpServer {
     },
     () => {
       cancelSlideshow();
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      };
+    }
+  );
+
+  // wait_done() — block until the user clicks Done in the browser.
+  server.registerTool(
+    "wait_done",
+    {
+      description:
+        "Block until the user clicks the Done button in the whiteboard browser. " +
+        "Call this immediately after render() when you want the user to review the diagram before you continue. " +
+        'Returns { "ok": true } when the user signals they are ready. ' +
+        "Example flow: render(...) → wait_done() → continue lesson",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      await waitForDone();
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
       };

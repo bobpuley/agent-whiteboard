@@ -2,6 +2,7 @@
 // Exported so tests can import it without spinning up a real server.
 
 import { Hono } from "hono";
+import { signalDone, waitForDone } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, setCanvas, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
@@ -205,6 +206,25 @@ export function createApp(): Hono {
 
   app.post("/slideshow/stop", (c) => {
     cancelSlideshow();
+    return c.json({ ok: true });
+  });
+
+  // ── User events — bidirectionality (Sprint 10 experiment) ───────────────────
+
+  app.post("/user-done", async (c) => {
+    signalDone(); // wake any pending wait_done() MCP tool calls
+    // Also forward to channel relay if Claude Code was started with the channels flag.
+    const channelPort = Number(process.env.CHANNEL_PORT ?? 3001);
+    try {
+      await fetch(`http://127.0.0.1:${channelPort}/user-done`, { method: "POST" });
+    } catch {
+      // Channel server not running — ignore.
+    }
+    return c.json({ ok: true });
+  });
+
+  app.post("/wait-done", async (c) => {
+    await waitForDone();
     return c.json({ ok: true });
   });
 

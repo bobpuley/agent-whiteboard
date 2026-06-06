@@ -3,6 +3,10 @@
     "agent-whiteboard": {
       "type": "sse",
       "url": "http://localhost:3000/mcp"
+    },
+    "agent-whiteboard-channel": {
+      "command": "node_modules/.bin/tsx",
+      "args": ["server/channel.ts"]
     }
   }
 }
