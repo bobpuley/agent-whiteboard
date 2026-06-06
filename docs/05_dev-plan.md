@@ -220,6 +220,52 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
+### Sprint 12 — Node click: plain `wait_click()` (no popup) ✅
+
+**Goal:** implement the minimal node/edge click feedback loop — agent calls `wait_click()`, user clicks any node or edge in a Mermaid diagram, agent receives the identity of the clicked element.
+
+**Scope:**
+
+- [x] **`server/events.ts`:** add `signalClick(event: ClickEvent)` + `waitForClick(): Promise<ClickEvent>` + `resetClick()` (test use). `ClickEvent`: `{ type: "node" | "edge" | "timeout", id: string, label: string }`. At most one pending `waitForClick()` at a time; a second call cancels the first.
+- [x] **`server/app.ts`:** `POST /node-click` endpoint — body: `{ type, id, label }`; calls `signalClick()`; returns `{ ok: true }`. No-op if no listener is pending. `POST /wait-click` long-polls until click or timeout.
+- [x] **`server/mcp.ts`:** `wait_click()` tool (no `node_actions` argument yet — that is Sprint 13). Pushes `set_node_actions` broadcast to arm/disarm browser. Returns `{ ok: true, type, id, label }`.
+- [x] **`client/src/renderers/Mermaid.svelte`:** `clickable` prop; attaches/detaches click listeners on SVG `.node` and `.edgeLabel` elements; extracts node ID from `flowchart-<id>-<N>` pattern; stops event propagation to prevent drag; adds `clickable-node` CSS class + cursor pointer.
+- [x] **`client/src/ws.ts`:** `set_node_actions` variant added to `RenderCommand` type.
+- [x] **`client/src/App.svelte`:** handles `set_node_actions` command; tracks `clickable` reactive state; passes to `MermaidRenderer`.
+- [x] **Tests:** 5 new integration tests for `POST /node-click` / `POST /wait-click` — no-op, round-trip, edge click, second-call cancels first, timeout via `vi.runAllTimersAsync()`. 53 tests total, all passing.
+- [x] **`manualtests/click-demo.js`:** renders a 3-node flowchart, long-polls `/wait-click`, logs the returned click event.
+
+**DoD:** ✅
+
+---
+
+### Sprint 13 — Node click: popup action menu + edge support + `node_actions`
+
+**Goal:** extend `wait_click()` with agent-pre-defined per-node popup menus; confirm edge support; validate across multiple Mermaid diagram types.
+
+**Scope:**
+
+- [ ] **`server/mcp.ts`:** add `node_actions` optional parameter to `wait_click()`.
+  - Input schema: `z.record(z.string(), z.array(z.string())).optional()` — map of node ID → string[].
+  - Push `{ action: "set_node_actions", node_actions, enabled: true }` (with the map populated) to browser.
+  - Return value now includes `action?: string` when a menu item was selected.
+- [ ] **`server/app.ts`:** `POST /node-click` body extended with optional `action?: string`.
+- [ ] **`client/src/renderers/Mermaid.svelte`:** popup menu logic.
+  - On click of a node whose ID has a non-empty entry in `node_actions`: render an inline floating menu (absolute-positioned `<div>`) listing the action strings.
+  - User clicks a menu item → fire `POST /node-click` with `{ type, id, label, action }`.
+  - Clicking a node with no registered actions (empty array or missing key) → fire `POST /node-click` without `action`.
+  - Clicking outside the menu dismisses it without firing.
+  - Edge clicks: always plain (no popup), `type: "edge"`, include `source`, `target` derived from SVG id.
+- [ ] **Tests:** integration tests for `node_actions` round-trip (menu selection returned in click event); plain click on unregistered node; edge click.
+- [ ] **Validate across Mermaid types:** test `flowchart LR`, `graph TD`, `classDiagram`. Document which types support reliable ID extraction; mark others as best-effort in `mcp.ts` tool description.
+- [ ] **`manualtests/click-demo.js`:** extend to demonstrate popup menu — pre-register `{ "B": ["Explain this", "Drill down"] }`, click node B, log selected action.
+
+**DoD:**
+- Agent calls `wait_click(node_actions={ "B": ["Explain this", "Drill down"] })` after rendering a `graph TD`; clicking node B shows a popup with two options; selecting "Drill down" resolves `wait_click()` with `{ ok: true, type: "node", id: "B", label: "Server", action: "Drill down" }`; clicking an unregistered node returns a plain click (no action); clicking an edge returns `{ type: "edge", id: "B_C", ... }`.
+- Menu dismisses cleanly on outside click; browser returns to normal (non-clickable) state after resolution.
+
+---
+
 ---
 
 ### Sprint 11 — Playwright e2e tests ✅

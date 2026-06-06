@@ -2,7 +2,8 @@
 // Exported so tests can import it without spinning up a real server.
 
 import { Hono } from "hono";
-import { signalDone, waitForDone } from "./events.js";
+import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
+import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, setCanvas, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
@@ -226,6 +227,27 @@ export function createApp(): Hono {
   app.post("/wait-done", async (c) => {
     await waitForDone();
     return c.json({ ok: true });
+  });
+
+  // ── Node / edge click events (Phase 2 — Sprint 12) ───────────────────────────
+
+  app.post("/node-click", async (c) => {
+    const body = await c.req.json<{ type?: string; id?: string; label?: string }>();
+    if (body.type !== "node" && body.type !== "edge") {
+      return c.json({ ok: false, error: 'type must be "node" or "edge"' }, 400);
+    }
+    const event: ClickEvent = {
+      type: body.type,
+      id: body.id ?? "",
+      label: body.label ?? "",
+    };
+    signalClick(event); // no-op if no wait_click() is pending
+    return c.json({ ok: true });
+  });
+
+  app.post("/wait-click", async (c) => {
+    const event = await waitForClick();
+    return c.json({ ok: true, ...event });
   });
 
   app.get("/export", (c) => {

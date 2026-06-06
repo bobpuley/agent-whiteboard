@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import { resetCanvas } from "./session.js";
 import { cancelSlideshow } from "./slideshow.js";
+import { resetClick } from "./events.js";
 
 // Use a fresh app instance per suite; session state is reset between each test.
 const app = createApp();
@@ -9,6 +10,7 @@ const app = createApp();
 afterEach(() => {
   cancelSlideshow();
   resetCanvas();
+  resetClick();
 });
 
 // ── POST /render ─────────────────────────────────────────────────────────────
@@ -693,6 +695,98 @@ describe("POST /slideshow — step-frames auto-advance (B2)", () => {
     expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe(
       "<svg><circle r='5'/></svg>"
     );
+    vi.useRealTimers();
+  });
+});
+
+// ── Sprint 12 — POST /node-click / POST /wait-click ──────────────────────────
+
+describe("POST /node-click", () => {
+  it("returns { ok: true } even when no wait_click() is pending (no-op)", async () => {
+    const res = await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "A", label: "Client" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("rejects unknown type with 400", async () => {
+    const res = await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "button", id: "x", label: "y" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/node.*edge/i);
+  });
+
+  it("resolves a pending /wait-click when fired", async () => {
+    // Start wait-click without awaiting — it long-polls.
+    const waitPromise = app.request("/wait-click", { method: "POST" });
+
+    // Yield so the waitForClick() promise is registered before we fire node-click.
+    await new Promise((r) => setTimeout(r, 0));
+
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "B", label: "Server" }),
+    });
+
+    const res = await waitPromise;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, type: "node", id: "B", label: "Server" });
+  });
+
+  it("edge click resolves /wait-click with type=edge", async () => {
+    const waitPromise = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "edge", id: "L_A_B_0", label: "HTTP" }),
+    });
+
+    const res = await waitPromise;
+    expect(await res.json()).toEqual({ ok: true, type: "edge", id: "L_A_B_0", label: "HTTP" });
+  });
+
+  it("second /wait-click cancels the first (replaces listener)", async () => {
+    const first = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Second call cancels first — first resolves with timeout.
+    const second = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Fire node-click — should resolve the second listener.
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "X", label: "X" }),
+    });
+
+    const firstBody = await (await first).json<{ ok: boolean; type: string }>();
+    const secondBody = await (await second).json<{ ok: boolean; type: string }>();
+
+    expect(firstBody).toEqual({ ok: true, type: "timeout", id: "", label: "" });
+    expect(secondBody).toEqual({ ok: true, type: "node", id: "X", label: "X" });
+  });
+
+  it("/wait-click resolves with timeout after timeout fires", async () => {
+    vi.useFakeTimers();
+    const waitPromise = app.request("/wait-click", { method: "POST" });
+
+    // runAllTimersAsync advances all pending timers and flushes async work.
+    await vi.runAllTimersAsync();
+
+    const res = await waitPromise;
+    expect(await res.json()).toEqual({ ok: true, type: "timeout", id: "", label: "" });
     vi.useRealTimers();
   });
 });

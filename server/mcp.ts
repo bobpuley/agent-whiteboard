@@ -8,7 +8,7 @@ import type { StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
-import { waitForDone } from "./events.js";
+import { waitForClick, waitForDone } from "./events.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -342,6 +342,37 @@ export function createMcpServer(): McpServer {
       cancelSlideshow();
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      };
+    }
+  );
+
+  // wait_click() — arm click listener, block until user clicks a node/edge.
+  server.registerTool(
+    "wait_click",
+    {
+      description:
+        "Arm the browser for a single node or edge click on the current Mermaid diagram. " +
+        "The browser highlights clickable elements; one click resolves the call. " +
+        "Returns { \"ok\": true, \"type\": \"node\"|\"edge\", \"id\": \"<id>\", \"label\": \"<label>\" }. " +
+        "On timeout (10 min): returns { \"ok\": true, \"type\": \"timeout\" }. " +
+        "Applies to graph/flowchart diagrams; other Mermaid types are best-effort. " +
+        "Only one wait_click() may be pending at a time — a second call cancels the first. " +
+        "Example flow: render({ type: \"mermaid\", payload: \"graph TD; A-->B\" }) → wait_click() → handle result",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      // Arm the browser click listener.
+      broadcast({ action: "set_node_actions", node_actions: {}, enabled: true });
+      const event = await waitForClick();
+      // Disarm the browser.
+      broadcast({ action: "set_node_actions", enabled: false });
+      if (event.type === "timeout") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: true, type: "timeout" }) }],
+        };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true, type: event.type, id: event.id, label: event.label }) }],
       };
     }
   );

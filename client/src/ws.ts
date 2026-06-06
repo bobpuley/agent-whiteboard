@@ -11,7 +11,12 @@ export type RenderCommand =
       currentFrame?: number; // step-frames cursor position (0-indexed)
       totalFrames?: number;  // total frames in the loaded sequence
     }
-  | { action: "clear" };
+  | { action: "clear" }
+  | {
+      action: "set_node_actions";
+      enabled: boolean;
+      node_actions?: Record<string, string[]>; // node ID → action labels (Sprint 13)
+    };
 
 type CommandHandler = (cmd: RenderCommand) => void;
 

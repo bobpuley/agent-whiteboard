@@ -3,6 +3,7 @@
   import { afterUpdate, onDestroy, onMount } from "svelte";
 
   export let source: string;
+  export let clickable = false;
 
   let wrapper: HTMLDivElement;
   let container: HTMLDivElement;
@@ -65,12 +66,108 @@
     dragging = false;
   }
 
+  // ── Node / edge click detection ─────────────────────────────────────────────
+
+  function extractNodeId(el: Element): string | null {
+    // Mermaid flowchart node IDs: "flowchart-<nodeId>-<N>"
+    const m = el.id.match(/^flowchart-(.+)-\d+$/)
+    return m ? m[1] : null
+  }
+
+  function extractNodeLabel(el: Element): string {
+    const label =
+      el.querySelector('.nodeLabel') ??
+      el.querySelector('.label') ??
+      el
+    return label.textContent?.trim() ?? ''
+  }
+
+  function extractEdgeId(el: Element): string | null {
+    // Mermaid edge paths: id like "L_A_B_0" or "L-A-B-0"
+    const group = el.closest('[id]')
+    if (!group) return null
+    return group.id || null
+  }
+
+  function stopPropagation(e: Event) {
+    // Prevent wrapper's mousedown from starting a drag when clicking a node.
+    e.stopPropagation()
+  }
+
+  async function onNodeClick(e: Event) {
+    e.stopPropagation()
+    const el = (e.currentTarget as Element).closest('.node') ?? (e.currentTarget as Element)
+    const id = extractNodeId(el) ?? el.id
+    const label = extractNodeLabel(el)
+    await fetch('/node-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'node', id, label }),
+    }).catch(() => { /* server might not be listening */ })
+  }
+
+  async function onEdgeClick(e: Event) {
+    e.stopPropagation()
+    const el = e.currentTarget as Element
+    const id = extractEdgeId(el) ?? ''
+    const label = el.textContent?.trim() ?? ''
+    await fetch('/node-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'edge', id, label }),
+    }).catch(() => { /* server might not be listening */ })
+  }
+
+  let clickCleanup: (() => void) | null = null
+
+  function attachClickListeners() {
+    detachClickListeners()
+    if (!container) return
+    const svg = container.querySelector('svg')
+    if (!svg) return
+
+    const nodes = svg.querySelectorAll<Element>('.node')
+    const edgeLabels = svg.querySelectorAll<Element>('.edgeLabel')
+
+    for (const node of nodes) {
+      node.addEventListener('click', onNodeClick)
+      node.addEventListener('mousedown', stopPropagation)
+      ;(node as HTMLElement).style.cursor = 'pointer'
+      node.classList.add('clickable-node')
+    }
+    for (const edge of edgeLabels) {
+      edge.addEventListener('click', onEdgeClick)
+      edge.addEventListener('mousedown', stopPropagation)
+      ;(edge as HTMLElement).style.cursor = 'pointer'
+    }
+
+    clickCleanup = () => {
+      for (const node of nodes) {
+        node.removeEventListener('click', onNodeClick)
+        node.removeEventListener('mousedown', stopPropagation)
+        ;(node as HTMLElement).style.cursor = ''
+        node.classList.remove('clickable-node')
+      }
+      for (const edge of edgeLabels) {
+        edge.removeEventListener('click', onEdgeClick)
+        edge.removeEventListener('mousedown', stopPropagation)
+        ;(edge as HTMLElement).style.cursor = ''
+      }
+    }
+  }
+
+  function detachClickListeners() {
+    clickCleanup?.()
+    clickCleanup = null
+  }
+
   // ── Mermaid rendering ───────────────────────────────────────────────────────
   mermaid.initialize({ startOnLoad: false, theme: "default" });
 
   async function renderDiagram(src: string) {
     errorMessage = null;
     resetTransform();
+    detachClickListeners();
     if (!src) {
       if (container) container.innerHTML = "";
       return;
@@ -79,6 +176,7 @@
       const id = `mermaid-${Date.now()}`;
       const { svg } = await mermaid.render(id, src);
       if (container) container.innerHTML = svg;
+      if (clickable) attachClickListeners();
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
       if (container) container.innerHTML = "";
@@ -103,7 +201,11 @@
   onDestroy(() => {
     window.removeEventListener("mousemove", onMousemove);
     window.removeEventListener("mouseup", onMouseup);
+    detachClickListeners();
   });
+
+  // Re-attach (or detach) click listeners when clickable prop changes.
+  $: if (clickable) { attachClickListeners() } else { detachClickListeners() }
 
   $: transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
   $: cursor = dragging ? "grabbing" : "grab";
@@ -179,5 +281,13 @@
     color: #bbb;
     pointer-events: none;
     user-select: none;
+  }
+
+  /* Visual cue when nodes are clickable — applied via JS (cursor + outline). */
+  :global(.mermaid-container svg .node.clickable-node rect),
+  :global(.mermaid-container svg .node.clickable-node circle),
+  :global(.mermaid-container svg .node.clickable-node polygon) {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
   }
 </style>

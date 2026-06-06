@@ -23,10 +23,12 @@
 
   let canvas: CanvasState = { type: "empty" };
   let disconnected = false;
+  let clickable = false;
 
   function handleCommand(cmd: RenderCommand) {
     if (cmd.action === "clear") {
       canvas = { type: "empty" };
+      clickable = false;
     } else if (cmd.action === "replace") {
       canvas = {
         type: cmd.type as CanvasType,
@@ -37,6 +39,8 @@
         currentFrame: cmd.currentFrame,
         totalFrames: cmd.totalFrames,
       };
+    } else if (cmd.action === "set_node_actions") {
+      clickable = cmd.enabled;
     }
   }
 
@@ -95,7 +99,7 @@
       {#if canvas.type === "empty"}
         <p class="placeholder">Waiting for content…</p>
       {:else if canvas.type === "mermaid"}
-        <MermaidRenderer source={canvas.payload} />
+        <MermaidRenderer source={canvas.payload} {clickable} />
       {:else if canvas.type === "svg" || canvas.type === "html"}
         <HtmlRenderer source={canvas.payload} type={canvas.type} />
       {:else if canvas.type === "katex"}
