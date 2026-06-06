@@ -11,8 +11,10 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite --config client/vite.config.ts",
     "dev:open": "wait-on http://localhost:5173 && node -e \"import('open').then(m => m.default('http://localhost:5173'))\"",
+    "dev:test": "concurrently --kill-others-on-fail --names \"server,client\" \"tsx server/index.ts\" \"npm run dev:client\"",
     "build": "tsc -p tsconfig.json && vite build --config client/vite.config.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
@@ -30,6 +32,7 @@
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@sveltejs/vite-plugin-svelte": "^2.4.6",
     "@tsconfig/svelte": "^5.0.4",
     "@types/node": "^20.17.57",

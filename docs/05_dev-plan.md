@@ -216,6 +216,53 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
+---
+
+### Sprint 11 — Playwright e2e tests ✅
+
+**Goal:** add end-to-end browser tests for the full interactive surface, now that `wait_done()` / Done button completes the bidirectional MVP.
+
+**Setup:**
+- [x] Install `@playwright/test`; use system Chrome (`channel: "chrome"`) — no Playwright browser download needed
+- [x] `playwright.config.ts` at root: `testDir: "./e2e"`, `webServer` starts `dev:test` (server + Vite, no `dev:open`)
+- [x] `dev:test` script: `tsx server/index.ts` + `npm run dev:client` (no browser auto-open)
+- [x] `test:e2e` script: `playwright test`
+- [x] `vitest.config.ts` added to scope Vitest to `server/**/*.test.ts` only, so Vitest ignores `e2e/`
+
+**Tests (`e2e/canvas.spec.ts` — 16 tests, all passing):**
+
+*Initial state:*
+- [x] Shows "Waiting for content…" placeholder on load
+
+*Rendering (all renderer types):*
+- [x] Mermaid: `POST /render` → `.mermaid-container svg` visible in browser
+- [x] HTML: `POST /render` → custom element visible inside `.html-renderer`
+- [x] SVG: `POST /render` → `<svg>` visible inside `.html-renderer`
+- [x] KaTeX: `POST /render` → `.katex` element visible inside `.katex-renderer`
+- [x] Vega-Lite: `POST /render` → `<svg>` chart visible inside `.vegalite-renderer`
+
+*Title overlay:*
+- [x] `options.title` present → `.canvas-title` shows with correct text
+- [x] No `options.title` → `.canvas-title` not visible
+- [x] `POST /clear` → `.canvas-title` disappears
+
+*Clear:*
+- [x] `POST /clear` after render → placeholder returns, renderer element gone
+
+*Step-frames (browser interaction):*
+- [x] Load step-frames → `.step-bar` visible, Prev disabled, Next enabled
+- [x] Frame label shown in `.step-label`
+- [x] Click Next → label advances to frame 2, Prev becomes enabled
+- [x] Click Prev → label rewinds to frame 1, Prev disabled again
+- [x] Click Next twice → reaches last frame, Next disabled
+
+*Done button:*
+- [x] Click Done → button shows "Sent ✓" (disabled), reverts to "Done" after 2 s
+
+**DoD:** `npm run test:e2e` runs all 16 tests green in ~6 s using the existing dev servers (reuses running servers in dev, starts fresh in CI). `npm test` (Vitest) continues to cover 47 server integration tests, unaffected.
+
+---
+
 ## Definition of Done — MVP
 - Agent can call `render(type="mermaid", payload)` and diagram appears in browser within 200ms
 - Agent can call `clear()` to reset the canvas
