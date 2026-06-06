@@ -200,6 +200,16 @@ Interactive / bidirectional use cases:
 - User drags a node / object in simulation → agent recalculates and explains the change (c04)
 - Quiz: user clicks the wrong node in a diagram → agent reacts (c06)
 
+**Node/edge click interactions (Phase 2 — post Sprint 11, 2026-06-07):**
+Following the successful `wait_done()` prototype, the next bidirectionality milestone is node and edge click events. Concrete use cases:
+1. Click a node → agent generates a drill-down diagram expanding the collapsed steps in that box
+2. Click a node → agent (or server) navigates to the step in the sequence where that node first appears
+3. Click a node → agent explains it in the CLI
+4. Click a node → browser shows a popup menu of agent-pre-defined actions; user picks one; agent handles the chosen action
+5. Same interactions for edge clicks
+
+Agent API: `wait_click()` blocking tool (same pattern as `wait_done()`) — agent arms the listener, browser highlights clickable elements, one click resolves the tool call. For popup menus, the agent passes `node_actions` (a map of node ID → string array) as an argument; the browser shows the popup on click and returns the chosen action alongside the node ID. `wait_click()` applies to any currently rendered Mermaid diagram (both plain and step-frames).
+
 ---
 
 ## Open Conflicts

@@ -87,6 +87,17 @@ The agent sends commands forward-only. It also prints the textual representation
 
 ## E. Bidirectionality (Phase 2)
 
+**E2 — Mermaid SVG node IDs are extractable from click events**
+> ⚠️ ASSUMPTION: Mermaid renders each diagram node as an SVG `<g>` element whose `id` attribute follows a predictable pattern (e.g. `flowchart-A-0`, `flowchart-B-1`). We assume the original source node ID (`A`, `B`) can be reliably recovered by stripping the prefix and trailing disambiguation counter.
+- Risk: the ID format varies across diagram types (`flowchart-*` vs `sequence*` vs `classDiagram-*`) and may change across Mermaid major versions. Edge elements follow a different pattern.
+- Risk: some diagram types (e.g. `sequenceDiagram`, `erDiagram`) use auto-generated numeric IDs that do not embed the node label — click detection for those types may return an opaque ID rather than a human-readable label.
+- **Decision:** accept for Phase 2. Target `graph`/`flowchart` diagrams first (most common teaching use case). Sequence/ER diagram click support deferred pending investigation. Pin Mermaid to `^11` already; treat any ID-format change as a deliberate upgrade.
+
+**E3 — `wait_click()` applies to Mermaid diagrams only (Phase 2 initial scope)**
+> ⚠️ ASSUMPTION: Click interactivity is limited to Mermaid-rendered diagrams. Other renderer types (SVG, HTML, Vega-Lite, KaTeX) may support click in future phases but are out of scope for Phase 2 initial implementation.
+- Risk: SVG and HTML renderers could also benefit from click events, but DOM structure and element ID schemes differ significantly — each would need its own click-extraction logic.
+- **Decision:** Mermaid-only for Phase 2. Extend to other renderers in later phases.
+
 **E1 — Bidirectionality requires a Channel (stdio MCP server), not SSE push**
 > ✅ RESOLVED and VERIFIED (Sprint 10, 2026-06-06): Channels API confirmed stable enough for production experiments.
 

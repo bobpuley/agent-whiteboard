@@ -18,6 +18,7 @@ The MCP server exposes tools to the agent.
 | `slideshow` | `slideshow(slides, delay_ms)` | Load a playlist of slides (`[{ type, payload, title? }]`) and auto-advance the canvas on a server-side timer at `delay_ms` intervals. A new call cancels any running slideshow. | Phase 2 |
 | `slideshow_stop` | `slideshow_stop()` | Cancel the running slideshow timer; last rendered slide remains on screen. | Phase 2 |
 | `wait_done` | `wait_done()` | Block until the user clicks the Done button in the browser. Returns `{ "ok": true }` when the user signals they are ready to continue. Times out after 10 minutes (returns `{ "ok": true }` regardless). Intended usage: `render(...)` → `wait_done()` → continue lesson. | Phase 2 (Sprint 10 ✅) |
+| `wait_click` | `wait_click([node_actions])` | Arm the browser for a single node or edge click on the current Mermaid diagram (plain or step-frames). Applies to `graph`/`flowchart` diagrams; other Mermaid types are best-effort. Optional `node_actions`: map of node ID → string array; browser shows a popup menu for nodes with registered actions; user selects one. Returns `{ "ok": true, "type": "node"\|"edge", "id": "<id>", "label": "<label>", "action": "<chosen action>" }` (`action` present only when `node_actions` was provided and user selected one). Times out after 10 minutes. Usage: `render(...)` → `wait_click(node_actions?)` → agent handles click result. | Phase 2 |
 
 ---
 
@@ -45,7 +46,8 @@ The MCP server exposes tools to the agent.
 | Server → Browser | WebSocket (`/stream`) | Incremental, real-time updates pushed to the SPA |
 | Agent → Server (alt) | REST `POST /render`, `POST /clear`, `GET /export`, `POST /step`, `POST /slideshow`, `POST /slideshow/stop`, `POST /wait-done` | Low-level fallback; also usable via `curl` for debugging. `POST /slideshow` and `POST /slideshow/stop` added in Phase 2 alongside the slideshow MCP tools. `POST /wait-done` long-polls until the user clicks Done. |
 | Browser → Server | `POST /user-done` | Browser Done button fires this; server calls `signalDone()` to wake any pending `wait_done()` calls, then optionally forwards to the channel relay. |
-| Browser → Server | WebSocket back-channel | Reserved for Phase 2 bidirectionality (user events) |
+| Browser → Server | `POST /node-click` | Browser fires when user clicks a node or edge (while `wait_click()` is armed). Body: `{ type: "node"\|"edge", id, label, action? }`. Server calls `signalClick(event)` to resolve pending `wait_click()` calls. Returns `{ ok: true }`. |
+| Server → Browser (WebSocket) | `{ action: "set_node_actions", node_actions, enabled }` | Sent when `wait_click()` is called. `node_actions`: map of node ID → string array (empty map = any click accepted, no popup). `enabled: true` arms the click listener; `enabled: false` disarms it (sent after click resolves or on timeout). |
 
 File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
@@ -100,7 +102,9 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | U2a | WebSocket disconnect: browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry. | MVP |
 | U3 | Terminal ASCII fallback if no browser available | Phase 2 |
 | U4a | Done button: always-visible button (bottom-right); fires `POST /user-done`; shows "Sent ✓" for 2s after click | Phase 2 (Sprint 10 ✅) |
-| U4b | Click-to-expand, tooltip, highlight nodes/edges; events sent back to agent | Phase 2 |
+| U4b | Node/edge click detection: while `wait_click()` is armed, Mermaid diagram nodes and edges are click-interactive; clicked element is identified and reported back to agent via `wait_click()` return value. Applies to `graph`/`flowchart` diagrams; other Mermaid types best-effort. | Phase 2 |
+| U4c | Popup action menu: when `wait_click()` is called with `node_actions`, nodes with registered actions show a popup menu on click; user selects an action; selection is included in the `wait_click()` response. Nodes without registered actions in the map accept a plain click (no popup). | Phase 2 |
+| U4d | Click state feedback: while `wait_click()` is armed, nodes/edges are visually highlighted (cursor, border, or opacity) to indicate they are clickable. State is cleared after click resolves or on timeout. | Phase 2 |
 | U5 | Structured input widgets (quiz, sliders, drag-to-order); events returned to agent | Phase 2 |
 | U6 | Theme control: agent sets theme via `options.theme` in `render()`; user can also toggle it in the browser UI | Phase 2 |
 
@@ -120,7 +124,8 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
 - Multiple named panels/tabs: Phase 2 (one canvas at a time in v1)
 - Terminal ASCII fallback: Phase 2 (browser always assumed available in v1)
-- Full bidirectionality (node clicks, sliders, quiz widgets → agent): Phase 2. Basic "user is done" signal (`wait_done()` + Done button) is shipped in Sprint 10.
+- Node/edge click interactions (`wait_click()`): Phase 2 — planned Sprints 12–13. Basic "user is done" signal (`wait_done()` + Done button) is shipped in Sprint 10.
+- Slider/quiz widgets → agent: Phase 2 (later, after node clicks).
 - Cross-session persistence / history across restarts: Phase 2
 - Binary export (PNG/SVG/PDF): Phase 2
 - D2 renderer: post-Phase-2 (requires server-side render process)

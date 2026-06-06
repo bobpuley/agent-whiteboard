@@ -82,6 +82,7 @@
 | `export()`                        | Returns the last submitted source payload verbatim as a string. For all types (mermaid, svg, katex, vega-lite, step-frames): returns whatever was passed to `render()`. Empty string if canvas is empty or cleared.                 |
 | `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
 | `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
+| `wait_click([node_actions])`      | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. `node_actions` (optional): map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` command before suspending. Returns `{ ok: true, type, id, label, action? }`. Only one `wait_click()` active at a time; a second call cancels the first. (Phase 2 — Sprint 12) |
 
 ### Validation — two layers
 
@@ -117,7 +118,8 @@ On success:
 | `render` | `{ "ok": true }`                                                                                                                        | `{ "ok": false, "error": "..." }` |
 | `clear`  | `{ "ok": true }`                                                                                                                        | — (always succeeds)               |
 | `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | — (always succeeds) |
-| `step`   | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                                 | `{ "ok": false, "error": "..." }` |
+| `step`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
+| `wait_click` | `{ "ok": true, "type": "node"\|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }` — `action` only present when `node_actions` was supplied and user selected one. On timeout: `{ "ok": true, "type": "timeout" }`. | — |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
 
@@ -130,6 +132,8 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 `POST /user-done` was added in Sprint 10 (Phase 2 ✅). No body required. Calls `signalDone()` to wake all pending `wait_done()` calls; also forwards to channel relay. Returns `{ ok: true }`.
 
 `POST /wait-done` was added in Sprint 10 (Phase 2 ✅). No body. Long-polls until `signalDone()` fires or the 10-minute timeout elapses. Returns `{ ok: true }`.
+
+`POST /node-click` — Phase 2 (Sprint 12). Body: `{ "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }`. Calls `signalClick(event)` (events.ts) to resolve any pending `waitForClick()`. Returns `{ "ok": true }`. No-op if no `wait_click()` is pending.
 
 ---
 
@@ -183,6 +187,33 @@ user clicks Done button in browser
   → server also forwards to channel relay on port 3001 (if running)
   → browser button shows "Sent ✓" for 2s
 ```
+
+### Node Click Flow (Phase 2 — Sprint 12)
+
+```
+agent calls wait_click([node_actions])
+  → server pushes WebSocket command to browser:
+      { action: "set_node_actions", node_actions: { "A": ["Explain", "Drill down"], ... }, enabled: true }
+  → browser arms click listener on all Mermaid SVG node/edge elements
+      (nodes with registered actions show popup on click; others accept plain click)
+  → server suspends via waitForClick()
+  → user clicks a node (or selects an action from popup)
+  → browser fires POST /node-click:
+      { type: "node", id: "A", label: "Client", action: "Drill down" }
+  → server calls signalClick(event)  (events.ts EventEmitter bus)
+  → waitForClick() resolves
+  → server pushes { action: "set_node_actions", enabled: false } to disarm browser
+  → MCP wait_click() returns { ok: true, type: "node", id: "A", label: "Client", action: "Drill down" }
+
+Agent then handles the result (examples):
+  • case 1 — drill-down: call render() with an expanded diagram
+  • case 2 — navigation: call step() until the target frame
+  • case 3 — explain: generate explanation in CLI
+  • case 4 — action chosen: switch on action string, call appropriate tool
+```
+
+**Mermaid node ID extraction (browser-side):**
+After `mermaid.render()` produces an SVG, the Svelte component intercepts `click` events on SVG elements with class `.node` (nodes) and `.edgePath` / `.edgeLabel` (edges). Node IDs are embedded in the SVG element's `id` attribute as `flowchart-<nodeId>-<counter>`; the component strips prefix and counter to recover the original source ID. For edge elements, source+target are extracted from the `id`. Node labels are read from the innerText of the `.nodeLabel` child element.
 
 ---
 
@@ -255,7 +286,7 @@ agent-whiteboard/
 │   ├── mcp.ts            # MCP tool definitions and handlers
 │   ├── session.ts        # in-memory canvas state
 │   ├── slideshow.ts      # slideshow timer logic
-│   ├── events.ts         # signalDone / waitForDone EventEmitter bus
+│   ├── events.ts         # signalDone/waitForDone + signalClick/waitForClick EventEmitter bus
 │   ├── validate.ts       # Mermaid keyword + parse validation
 │   ├── ws.ts             # WebSocket push to browser
 │   └── channel.ts        # stdio channel server (Channels API experiment)
