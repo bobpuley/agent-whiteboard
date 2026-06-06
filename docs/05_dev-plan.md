@@ -38,23 +38,27 @@
 - [x] Extracted `createApp()` into `server/app.ts` (testable without side effects); added `resetCanvas()` to `session.ts` for test isolation
 - [x] `server/app.test.ts`: 9 integration tests covering all 4 scenarios from the testing strategy (valid render, invalid keyword, render→export round-trip, clear→export empty)
 
-### Testing strategy — v1
+### Testing strategy
 
-Minimal automated integration tests only. No unit tests, no e2e/browser automation in v1.
+Two test layers:
+
+**Layer 1 — Server integration tests (Vitest)**
+
+`server/app.test.ts` — 47 tests covering all REST endpoints. Runs with `npm test`. Scoped to `server/**/*.test.ts` via `vitest.config.ts` (added Sprint 11).
 
 MCP tool handlers are thin wrappers over the same session logic exercised by the REST tests. MCP correctness verified manually: `export()`, `render()`, and `clear()` confirmed working end-to-end (MCP → WebSocket → browser) on 2026-05-31.
 
-Covered by automated tests:
-- `POST /render` with a valid Mermaid payload → `{ ok: true }`
-- `POST /render` with a missing/invalid keyword → `{ ok: false, error: "..." }`, canvas unchanged
-- `POST /render` then `GET /export` (or MCP `export()`) → returns the submitted source
-- `POST /clear` → canvas reset; subsequent `export()` returns empty string
+**Layer 2 — Browser e2e tests (Playwright) — Sprint 11 ✅**
 
-Test runner: **Vitest** (shares the Node/TypeScript stack; no separate config needed).
+`e2e/canvas.spec.ts` — 16 tests covering the full interactive browser surface. Runs with `npm run test:e2e`. Uses system Chrome (`channel: "chrome"`); `dev:test` starts the servers without opening a browser.
 
-Full Mermaid render correctness and browser behaviour verified manually.
-
-Playwright e2e: deferred to after Sprint 10 (bidirectionality) — browser interaction tests are most valuable once the full interactive surface is stable. No dedicated sprint before then.
+Covered scenarios:
+- Initial placeholder state (confirms WebSocket connects)
+- All 5 renderer types actually render in the browser (Mermaid, HTML, SVG, KaTeX, Vega-Lite)
+- Title overlay show/hide/clear
+- Clear reverts canvas to placeholder
+- Step-frames: step-bar visible, Prev/Next disabled states, frame labels, browser button clicks (full client→server→WebSocket→browser round-trip)
+- Done button label feedback and 2 s revert
 
 ### Sprint 5 — Additional renderers ✅
 

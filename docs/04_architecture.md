@@ -250,18 +250,31 @@ Step-through is a two-tool protocol:
 agent-whiteboard/
 ├── server/
 │   ├── index.ts          # entry point — starts HTTP + WebSocket + MCP
+│   ├── app.ts            # Hono app + REST endpoints (testable, no startup side effects)
+│   ├── app.test.ts       # Vitest integration tests (47 tests)
 │   ├── mcp.ts            # MCP tool definitions and handlers
 │   ├── session.ts        # in-memory canvas state
-│   └── ws.ts             # WebSocket push to browser
+│   ├── slideshow.ts      # slideshow timer logic
+│   ├── events.ts         # signalDone / waitForDone EventEmitter bus
+│   ├── validate.ts       # Mermaid keyword + parse validation
+│   ├── ws.ts             # WebSocket push to browser
+│   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/
 │   │   ├── App.svelte
-│   │   ├── renderers/    # one file per content type
-│   │   │   └── Mermaid.svelte   # only v1 renderer
-│   │   └── ws.ts         # WebSocket client
+│   │   ├── ws.ts         # WebSocket client
+│   │   └── renderers/    # one file per content type
+│   │       ├── Mermaid.svelte
+│   │       ├── Html.svelte
+│   │       ├── Katex.svelte
+│   │       └── VegaLite.svelte
 │   └── public/
+├── e2e/
+│   └── canvas.spec.ts    # Playwright e2e tests (16 tests) — Sprint 11
 ├── docs/
 ├── .mcp.json             # MCP server registration — committed to repo
+├── playwright.config.ts  # Playwright config — Sprint 11
+├── vitest.config.ts      # scopes Vitest to server/**/*.test.ts — Sprint 11
 ├── tsconfig.json         # server TypeScript config (see below)
 ├── package.json
 └── CLAUDE.md
