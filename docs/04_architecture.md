@@ -126,7 +126,7 @@ On success:
 | `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | — (always succeeds) |
 | `step`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
 | `seek`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
-| `wait_click` | `{ "ok": true, "type": "node"\|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }` — `action` only present when `node_actions` was supplied and user selected one. On timeout: `{ "ok": true, "type": "timeout" }`. | — |
+| `wait_click` | `{ "ok": true, "type": "node"\|"edge", "id": "<id>", "label": "<label>", "action": "<string or null>" }` — `action` field always present; null when no menu shown or click was plain; string value when menu item was selected. On timeout: `{ "ok": true, "type": "timeout" }`. | — |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
 
@@ -197,6 +197,25 @@ user clicks Done button in browser
   → browser button shows "Sent ✓" for 2s
 ```
 
+### Slideshow Command (Phase 2 — Sprint 9)
+
+```
+agent calls slideshow(slides=[...], delay_ms=1000)
+  → MCP server validates each slide (same rules as render)
+  → startSlideshow() begins server-side timer
+  → each tick broadcasts a slide to browser:
+      for non-step-frames slides:
+        { action: "replace", type: slide_type, payload: slide_payload, title?: slide_title }
+      for step-frames slides (expanded into frame ticks):
+        frame N: { action: "replace", type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frame_title }
+        (each frame broadcast at delay_ms intervals)
+  → browser renders each slide in sequence
+  → after last slide, slideshow stops (no loop in v1)
+  → MCP tool returns { ok: true }
+```
+
+**Slideshow cancellation:** `POST /render`, `POST /clear`, or a new `POST /slideshow` call cancels any running slideshow. `POST /slideshow/stop` also cancels. `POST /step` and `POST /seek` do not cancel.
+
 ### Node Click Flow (Phase 2 — Sprint 12 plain click)
 
 ```
@@ -233,10 +252,10 @@ agent calls wait_click(node_actions={ "A": ["Explain", "Drill down"] })
 ```
 
 **Mermaid node ID extraction (browser-side):**
-After `mermaid.render()` produces an SVG, the Svelte component intercepts `click` events on SVG elements with class `.node` (nodes) and `.edgePath` / `.edgeLabel` (edges). Node IDs are embedded in the SVG element's `id` attribute as `flowchart-<nodeId>-<counter>`; the component strips prefix and counter to recover the original source ID. For edge elements, source+target are extracted from the `id`. Node labels are read from the innerText of the `.nodeLabel` child element.
+After `mermaid.render()` produces an SVG, the Svelte component intercepts `click` events on SVG elements with class `.node` (nodes) and `.edgePath` / `.edgeLabel` (edges). Node IDs are embedded in the SVG element's `id` attribute as `flowchart-<nodeId>-<counter>`; the component strips prefix and counter to recover the original source ID. For edge elements, source+target are extracted from the `id`. Node labels are read from the `.nodeLabel` child element (fallback to `.label` or element itself if `.nodeLabel` is missing); text is extracted via `textContent?.trim()`.
 
 **`node_to_frame` autonomous navigation (Phase 2 — Sprint 13):**
-When `render(type="step-frames", options.node_to_frame={...})` is called, the browser attaches click listeners automatically (no `wait_click()` or agent involvement needed). On click, if the node ID is in the map, the browser calls `POST /seek` with the target frame index; otherwise the click is ignored. `wait_click()` and `node_to_frame` are mutually exclusive: `set_node_actions enabled:true` (from a `wait_click()` call) overrides `node_to_frame` for the duration of the call; `set_node_actions enabled:false` restores `node_to_frame` behaviour.
+When `render(type="step-frames", options.node_to_frame={...})` is called, the browser attaches click listeners automatically (no `wait_click()` or agent involvement needed). On click, if the node ID is in the map, the browser calls `POST /seek` with the target frame index; otherwise the click is ignored. `wait_click()` and `node_to_frame` are mutually exclusive: `set_node_actions enabled:true` (from a `wait_click()` call) disarms `node_to_frame` for the duration of the call. After `wait_click()` resolves or times out and `set_node_actions enabled:false` is sent, the browser does *not* automatically restore `node_to_frame` — the agent must call `render()` again with the `node_to_frame` map if it wants to re-enable autonomous navigation.
 
 ---
 
@@ -268,7 +287,7 @@ When `render(type="step-frames", options.node_to_frame={...})` is called, the br
 | `theme`          | `"dark" \| "light"`              | Phase 2 | `"dark"` | Sets the canvas theme for this render call. Persists until next `render()` or explicit change. |
 | `node_to_frame`  | `Record<string, number>`          | Phase 2 (Sprint 13) | — | Only valid when `type="step-frames"`. Declares a node ID → frame index map; the browser attaches click listeners automatically and navigates to the mapped frame on click — no `wait_click()` call needed. `wait_click()` overrides `node_to_frame` for the duration of its call (see §4 Node Click Flow). |
 
-Additional `options` keys (action variants etc.) are deferred beyond Phase 2.
+**Action-variant options (deferred beyond Phase 2):** Agent-controlled customizations to rendering behavior — e.g., "highlight this path in the diagram," "collapse this section," "show only these relationships." Planned as a generic `actions: [{ action, params }]` structure; deferred pending experience with how agents actually use the whiteboard.
 
 ### Step-frames protocol (MVP — Sprint 7 ✅)
 

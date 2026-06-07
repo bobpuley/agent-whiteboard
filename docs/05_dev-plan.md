@@ -257,7 +257,7 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
   - Clicking outside the menu dismisses it without firing.
   - Edge clicks: always plain (no popup), `type: "edge"`, include `source`, `target` derived from SVG id.
 - [ ] **Tests:** integration tests for `node_actions` round-trip (menu selection returned in click event); plain click on unregistered node; edge click.
-- [ ] **Validate across Mermaid types:** test `flowchart LR`, `graph TD`, `classDiagram`. Document which types support reliable ID extraction; mark others as best-effort in `mcp.ts` tool description.
+- [ ] **Validate across Mermaid types:** test `flowchart LR`, `graph TD`, `classDiagram` to understand current limits. Document which types support reliable ID extraction (expected: graph/flowchart good, others best-effort); mark limitations in `mcp.ts` tool description. No attempt to extend support to new types in this sprint.
 - [ ] **`manualtests/click-demo.js`:** extend to demonstrate popup menu — pre-register `{ "B": ["Explain this", "Drill down"] }`, click node B, log selected action.
 
 **DoD:**
@@ -266,13 +266,15 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
-### Sprint 13 — Client-controlled step-frame navigation (`node_to_frame`)
+### Sprint 13 — Client-controlled step-frame navigation + POST /wait-click bugfix (Pending start)
 
-**Goal:** let the agent attach a node→frame map to a step-frames render so the browser navigates frames directly on click — no `wait_click()` or agent involvement needed.
+**Status:** Pending start (2026-06-07). Contains four related tasks: POST /wait-click bugfix, seek() MCP tool, POST /seek endpoint, node_to_frame autonomous navigation.
 
-**Motivation:** `wait_click()` is agent-controlled — the agent blocks, receives the click, then decides how to navigate. For the common case of "click this node to jump to its detail frame," the agent should be able to declare the map up front and go idle; the browser handles the rest autonomously.
+**Goal:** Complete bidirectional feature set for Phase 2 — let the agent control frame navigation via `seek()`, and optionally attach a node→frame map to render so the browser navigates autonomously via node clicks.
 
-**Bug fix included in Sprint 13 — `POST /wait-click` does not arm the browser:**
+**Motivation:** `wait_click()` is agent-controlled — the agent blocks, receives the click, then decides how to navigate. For the common case of "click this node to jump to its detail frame," the agent should be able to declare the map up front and go idle; the browser handles the rest autonomously. `seek()` provides random-access frame navigation without repeated `step()` calls.
+
+**Bug fix — `POST /wait-click` does not arm the browser:**
 `POST /wait-click` (REST fallback for `wait_click()`) calls `waitForClick()` directly without broadcasting `set_node_actions enabled:true` first. The browser's `clickable` state stays `false`, so no click listeners are attached and nodes show no visual cue. The MCP `wait_click()` tool correctly arms the browser; the REST path does not.
 - [ ] **`server/app.ts` — `POST /wait-click`:** broadcast `{ action: "set_node_actions", enabled: true }` before `waitForClick()`; broadcast `{ action: "set_node_actions", enabled: false }` after it resolves (or times out).
 - [ ] **`manualtests/click-demo.js`:** already uses `POST /wait-click` — will work correctly once the endpoint is fixed. No script changes needed.
