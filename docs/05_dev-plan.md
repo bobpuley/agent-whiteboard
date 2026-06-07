@@ -266,23 +266,17 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
-### Bug fix — `POST /wait-click` does not arm the browser
-
-**Root cause:** `POST /wait-click` (REST fallback for `wait_click()`) calls `waitForClick()` directly without broadcasting `set_node_actions enabled:true` first. The browser's `clickable` state stays `false`, so no click listeners are attached and nodes show no visual cue. The MCP `wait_click()` tool correctly arms the browser; the REST path does not.
-
-- [ ] **`server/app.ts` — `POST /wait-click`:** broadcast `{ action: "set_node_actions", enabled: true }` before `waitForClick()`; broadcast `{ action: "set_node_actions", enabled: false }` after it resolves (or times out).
-- [ ] **`manualtests/click-demo.js`:** already uses `POST /wait-click` — will work correctly once the endpoint is fixed. No script changes needed.
-- [ ] **Tests:** add integration test asserting that `POST /wait-click` triggers a `set_node_actions` broadcast.
-
-**DoD:** `node manualtests/click-demo.js` renders the diagram and nodes immediately show a pointer cursor and blue outline; clicking a node resolves the long-poll and logs the event.
-
----
-
 ### Sprint 13 — Client-controlled step-frame navigation (`node_to_frame`)
 
 **Goal:** let the agent attach a node→frame map to a step-frames render so the browser navigates frames directly on click — no `wait_click()` or agent involvement needed.
 
 **Motivation:** `wait_click()` is agent-controlled — the agent blocks, receives the click, then decides how to navigate. For the common case of "click this node to jump to its detail frame," the agent should be able to declare the map up front and go idle; the browser handles the rest autonomously.
+
+**Bug fix included in Sprint 13 — `POST /wait-click` does not arm the browser:**
+`POST /wait-click` (REST fallback for `wait_click()`) calls `waitForClick()` directly without broadcasting `set_node_actions enabled:true` first. The browser's `clickable` state stays `false`, so no click listeners are attached and nodes show no visual cue. The MCP `wait_click()` tool correctly arms the browser; the REST path does not.
+- [ ] **`server/app.ts` — `POST /wait-click`:** broadcast `{ action: "set_node_actions", enabled: true }` before `waitForClick()`; broadcast `{ action: "set_node_actions", enabled: false }` after it resolves (or times out).
+- [ ] **`manualtests/click-demo.js`:** already uses `POST /wait-click` — will work correctly once the endpoint is fixed. No script changes needed.
+- [ ] **Tests:** add integration test asserting that `POST /wait-click` triggers a `set_node_actions` broadcast.
 
 **Scope:**
 

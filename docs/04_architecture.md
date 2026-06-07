@@ -62,9 +62,13 @@
 - Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9 ✅. Each slide broadcast using the same WebSocket event format as `POST /render`. `step-frames` slides expanded into individual timer ticks.
 - `wait_done()` tool + Done button — Sprint 10 ✅. `server/events.ts` EventEmitter bus; `signalDone()` called by `POST /user-done`; `waitForDone()` called by both `POST /wait-done` (REST) and `wait_done()` (MCP tool). See §3 and §4.
 - Channels API experiment (`server/channel.ts`) — Sprint 10 ✅. Stdio MCP channel server + HTTP relay on port 3001. Useful for async push events; not used as the primary "wait for user" primitive (see `02` E1).
+- `wait_click()` tool (plain click, no popup) + `POST /node-click` endpoint — Sprint 12 ✅. Browser arms click listeners on Mermaid SVG nodes/edges; `signalClick()`/`waitForClick()` EventEmitter bus in `server/events.ts`. See §3 and §4.
 
 **Remaining Phase 2 / Phase 3:**
-- Node click events and other interactive signals (browser → agent via `signalNodeClick()` pattern)
+- `wait_click()` — `node_actions` popup menu + edge support (Sprint 14)
+- `POST /wait-click` REST fallback does not yet arm the browser (bug fix, Sprint 14 area)
+- `seek(frame)` MCP tool + `POST /seek` REST endpoint — client-controlled frame navigation (Sprint 13)
+- `options.node_to_frame` on `render()` — declarative node→frame map for autonomous browser navigation (Sprint 13)
 - Multi-panel / named tabs
 - Binary export (PNG/SVG/PDF)
 - `options.theme` and action-variant options for `render()`
@@ -81,8 +85,10 @@
 | `clear()`                         | Resets in-memory canvas state and step cursor; sends clear command to browser                                                                                                                                                       |
 | `export()`                        | Returns the last submitted source payload verbatim as a string. For all types (mermaid, svg, katex, vega-lite, step-frames): returns whatever was passed to `render()`. Empty string if canvas is empty or cleared.                 |
 | `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
+| `seek(frame)` *(Sprint 13)*       | Jumps the step-frame cursor to an arbitrary frame index. Useful for random-access navigation without repeated `step()` calls. Returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no `step-frames` sequence is loaded or frame is out of range. (Phase 2 — Sprint 13) |
 | `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
-| `wait_click([node_actions])`      | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. `node_actions` (optional): map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` command before suspending. Returns `{ ok: true, type, id, label, action? }`. Only one `wait_click()` active at a time; a second call cancels the first. (Phase 2 — Sprint 12) |
+| `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label }` on click; `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
+| `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action? }` — `action` present only when a menu item was selected. (Phase 2 — Sprint 14) |
 
 ### Validation — two layers
 
@@ -119,6 +125,7 @@ On success:
 | `clear`  | `{ "ok": true }`                                                                                                                        | — (always succeeds)               |
 | `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | — (always succeeds) |
 | `step`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
+| `seek`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
 | `wait_click` | `{ "ok": true, "type": "node"\|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }` — `action` only present when `node_actions` was supplied and user selected one. On timeout: `{ "ok": true, "type": "timeout" }`. | — |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
@@ -215,6 +222,9 @@ Agent then handles the result (examples):
 **Mermaid node ID extraction (browser-side):**
 After `mermaid.render()` produces an SVG, the Svelte component intercepts `click` events on SVG elements with class `.node` (nodes) and `.edgePath` / `.edgeLabel` (edges). Node IDs are embedded in the SVG element's `id` attribute as `flowchart-<nodeId>-<counter>`; the component strips prefix and counter to recover the original source ID. For edge elements, source+target are extracted from the `id`. Node labels are read from the innerText of the `.nodeLabel` child element.
 
+**`node_to_frame` autonomous navigation (Phase 2 — Sprint 13):**
+When `render(type="step-frames", options.node_to_frame={...})` is called, the browser attaches click listeners automatically (no `wait_click()` or agent involvement needed). On click, if the node ID is in the map, the browser calls `POST /seek` with the target frame index; otherwise the click is ignored. `wait_click()` and `node_to_frame` are mutually exclusive: `set_node_actions enabled:true` (from a `wait_click()` call) overrides `node_to_frame` for the duration of the call; `set_node_actions enabled:false` restores `node_to_frame` behaviour.
+
 ---
 
 ## 5. API Payload Shape
@@ -241,8 +251,9 @@ After `mermaid.render()` produces an SVG, the Svelte component intercepts `click
 
 | Key     | Type                   | Phase | Default  | Description                              |
 |---------|------------------------|-------|----------|------------------------------------------|
-| `title` | `string`               | MVP   | `""`     | Displays a label above the canvas for this render call. Hidden if absent or empty. Cleared by `clear()`. Not included in `export()` output. |
-| `theme` | `"dark" \| "light"`   | Phase 2 | `"dark"` | Sets the canvas theme for this render call. Persists until next `render()` or explicit change. |
+| `title`          | `string`                          | MVP     | `""`    | Displays a label above the canvas for this render call. Hidden if absent or empty. Cleared by `clear()`. Not included in `export()` output. |
+| `theme`          | `"dark" \| "light"`              | Phase 2 | `"dark"` | Sets the canvas theme for this render call. Persists until next `render()` or explicit change. |
+| `node_to_frame`  | `Record<string, number>`          | Phase 2 (Sprint 13) | — | Only valid when `type="step-frames"`. Declares a node ID → frame index map; the browser attaches click listeners automatically and navigates to the mapped frame on click — no `wait_click()` call needed. `wait_click()` overrides `node_to_frame` for the duration of its call (see §4 Node Click Flow). |
 
 Additional `options` keys (action variants etc.) are deferred beyond Phase 2.
 
