@@ -422,4 +422,94 @@ const totalClientMs = clientSlides.reduce((acc, s) => {
 console.log(`\n── Section 7: client-managed slideshow (${totalClientMs / 1000}s total) ──`);
 await runClientSlideshow(clientSlides);
 
+// ── Section 8 — seek() random-access navigation ───────────────────────────────
+//
+// Loads a 4-frame step sequence, then jumps to arbitrary frames via POST /seek.
+// Demonstrates that seek() reaches any frame in one call — no repeated step().
+
+const seekFrames = JSON.stringify({
+  frame_type: "mermaid",
+  frames: [
+    {
+      label: "Frame 0 — Request arrives",
+      payload: `graph LR
+  C([Client]) -->|Request| G[API Gateway]
+  style C fill:#4caf50,color:#fff
+  style G fill:#2196f3,color:#fff`,
+    },
+    {
+      label: "Frame 1 — Auth check",
+      payload: `graph LR
+  C([Client]) -->|Request| G[API Gateway]
+  G -->|Token| A[Auth Service]
+  style C fill:#9e9e9e,color:#fff
+  style G fill:#9e9e9e,color:#fff
+  style A fill:#2196f3,color:#fff`,
+    },
+    {
+      label: "Frame 2 — Business logic",
+      payload: `graph LR
+  C([Client]) -->|Request| G[API Gateway]
+  G -->|Token| A[Auth Service]
+  A -->|OK| S[Order Service]
+  S -->|Query| DB[(Database)]
+  style C fill:#9e9e9e,color:#fff
+  style G fill:#9e9e9e,color:#fff
+  style A fill:#9e9e9e,color:#fff
+  style S fill:#2196f3,color:#fff
+  style DB fill:#2196f3,color:#fff`,
+    },
+    {
+      label: "Frame 3 — Response",
+      payload: `graph LR
+  C([Client]) -->|Request| G[API Gateway]
+  G -->|Token| A[Auth Service]
+  A -->|OK| S[Order Service]
+  S -->|Query| DB[(Database)]
+  DB -->|Data| S
+  S -->|Response| C
+  style C fill:#4caf50,color:#fff
+  style G fill:#9e9e9e,color:#fff
+  style A fill:#9e9e9e,color:#fff
+  style S fill:#9e9e9e,color:#fff
+  style DB fill:#9e9e9e,color:#fff`,
+    },
+  ],
+});
+
+async function runSeekDemo() {
+  const PAUSE = Math.min(DELAY_MS, 2000);
+
+  // Load the sequence (frame 0 is shown).
+  const renderRes = await post("/render", {
+    type: "step-frames",
+    payload: seekFrames,
+    options: { title: "8 — seek() demo: frame 0 → 3 → 1 → 2" },
+  });
+  if (!renderRes.ok) {
+    console.error(`   ✗ render failed: ${renderRes.error}`);
+    process.exit(1);
+  }
+  console.log("   ✓ loaded 4-frame sequence (frame 0)");
+  await new Promise((r) => setTimeout(r, PAUSE));
+
+  // Jump directly to frame 3 — no step() chain needed.
+  const s3 = await post("/seek", { frame: 3 });
+  console.log(`   → seek(3) → frame ${s3.current_frame}/${s3.total_frames - 1}: "${JSON.parse(seekFrames).frames[3].label}"`);
+  await new Promise((r) => setTimeout(r, PAUSE));
+
+  // Jump back to frame 1.
+  const s1 = await post("/seek", { frame: 1 });
+  console.log(`   → seek(1) → frame ${s1.current_frame}/${s1.total_frames - 1}: "${JSON.parse(seekFrames).frames[1].label}"`);
+  await new Promise((r) => setTimeout(r, PAUSE));
+
+  // Jump to frame 2.
+  const s2 = await post("/seek", { frame: 2 });
+  console.log(`   → seek(2) → frame ${s2.current_frame}/${s2.total_frames - 1}: "${JSON.parse(seekFrames).frames[2].label}"`);
+  await new Promise((r) => setTimeout(r, PAUSE));
+}
+
+console.log("\n── Section 8: seek() random-access frame navigation ──");
+await runSeekDemo();
+
 console.log("\n✅  Showcase complete.\n");
