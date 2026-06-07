@@ -7,7 +7,7 @@ A domain-agnostic interactive whiteboard for AI teacher agents. An AI agent rend
 ```
 [Claude Code agent]
     │
-    └── MCP tools (render / clear / export / step / slideshow / wait_done)
+    └── MCP tools (render / clear / export / step / seek / slideshow / wait_done / wait_click)
            │
            ▼
     [Node.js server :3000]  — MCP over SSE + REST fallback + WebSocket
@@ -62,12 +62,19 @@ Push content to the whiteboard canvas. Replaces whatever is currently on screen.
 
 `options` (optional):
 - `title` — string label displayed above the canvas for this render call.
+- `node_to_frame` — (`step-frames` only) map of node ID → frame index. When set, clicking a mapped node in the browser jumps directly to its frame via `POST /seek` — no `wait_click()` call needed. Overridden for the duration of any `wait_click()` call; agent must re-render with the map to re-enable it.
 
 **Returns:** `{ "ok": true }` or `{ "ok": false, "error": "..." }`
 
 ### `step(direction)`
 
 Advance (`"next"`) or rewind (`"prev"`) the step cursor for a loaded `step-frames` sequence.
+
+**Returns:** `{ "ok": true, "current_frame": N, "total_frames": M }` or `{ "ok": false, "error": "..." }`
+
+### `seek(frame)`
+
+Jump the step-frame cursor to an arbitrary frame index without repeated `step()` calls.
 
 **Returns:** `{ "ok": true, "current_frame": N, "total_frames": M }` or `{ "ok": false, "error": "..." }`
 
@@ -106,6 +113,14 @@ Block until the user clicks the **Done** button in the browser tab, then return.
 
 **Returns:** `{ "ok": true }`
 
+### `wait_click()`
+
+Arm the browser for a single node or edge click on the current Mermaid diagram. Nodes are highlighted with a blue outline and pointer cursor. Applies reliably to `graph`/`flowchart` diagrams; other types are best-effort.
+
+Only one `wait_click()` may be pending at a time — a second call cancels the first. Times out after 10 minutes.
+
+**Returns:** `{ "ok": true, "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": null }` on click, or `{ "ok": true, "type": "timeout" }` on timeout.
+
 ## Step-frames payload shape
 
 ```json
@@ -142,8 +157,11 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `GET /export` | — |
 | `POST /slideshow` | `{ "slides": [...], "delay_ms": N }` |
 | `POST /slideshow/stop` | — |
+| `POST /seek` | `{ "frame": N }` |
 | `POST /user-done` | — (simulates the Done button click) |
 | `POST /wait-done` | — (long-polls until Done is signalled) |
+| `POST /node-click` | `{ "type": "node"\|"edge", "id": "...", "label": "..." }` (sent by browser) |
+| `POST /wait-click` | — (long-polls until a node/edge click is signalled) |
 
 All endpoints return the same JSON shapes as the MCP tools.
 
