@@ -3,7 +3,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearCanvas, exportCanvas, getCanvas, setCanvas, setStepFrames, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, setCanvas, setStepFrames, stepCursor } from "./session.js";
 import type { StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid } from "./validate.js";
@@ -41,13 +41,17 @@ export function createMcpServer(): McpServer {
               "For vega-lite and step-frames: must be valid JSON. For svg/html/katex: any string."
           ),
         options: z
-          .object({ title: z.string().optional() })
+          .object({
+            title: z.string().optional(),
+            node_to_frame: z.record(z.string(), z.number()).optional(),
+          })
           .optional()
-          .describe('Optional display options. title: label shown above the canvas (e.g. { "title": "My diagram" }).'),
+          .describe('Optional display options. title: label shown above the canvas. node_to_frame (step-frames only): map of node ID → frame index for autonomous browser navigation; clicking a mapped node jumps directly to its frame without wait_click().'),
       }),
     },
     async ({ type, payload, options }) => {
       const title = options?.title;
+      const nodeToFrame = options?.node_to_frame;
       if (type === "mermaid") {
         if (!hasMermaidKeyword(payload)) {
           return {
@@ -149,7 +153,7 @@ export function createMcpServer(): McpServer {
           };
         }
         cancelSlideshow();
-        setStepFrames(frames, spec.frame_type, payload, title);
+        setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame);
         broadcast({
           action: "replace",
           type: spec.frame_type,
@@ -159,6 +163,7 @@ export function createMcpServer(): McpServer {
           currentFrame: 0,
           totalFrames: frames.length,
           ...(title !== undefined ? { title } : {}),
+          ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
         });
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
@@ -229,6 +234,51 @@ export function createMcpServer(): McpServer {
             }),
           },
         ],
+      };
+    }
+  );
+
+  // seek(frame) — jump the step cursor to an arbitrary frame index.
+  server.registerTool(
+    "seek",
+    {
+      description:
+        'Jump the step-frame cursor to an arbitrary frame index. ' +
+        'Useful for random-access navigation without repeated step() calls. ' +
+        'Returns { "ok": true, "current_frame": N, "total_frames": M }. ' +
+        'Returns { "ok": false, "error": "..." } if no step-frames sequence is loaded or frame is out of range.',
+      inputSchema: z.object({
+        frame: z.number().int().nonnegative().describe("Zero-based frame index to jump to."),
+      }),
+    },
+    ({ frame }) => {
+      const state = getCanvas();
+      if (state.type !== "step-frames") {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "no step-frames sequence is loaded" }) }],
+        };
+      }
+      const total = state.frames.length;
+      if (frame < 0 || frame >= total) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: `frame out of range: must be 0–${total - 1}` }) }],
+        };
+      }
+      seekStepFrame(frame);
+      const f = state.frames[frame];
+      broadcast({
+        action: "replace",
+        type: state.frameType,
+        payload: f.payload,
+        frameLabel: f.label,
+        stepFrames: true,
+        currentFrame: frame,
+        totalFrames: total,
+        ...(state.title !== undefined ? { title: state.title } : {}),
+        ...(state.nodeToFrame !== undefined ? { nodeToFrame: state.nodeToFrame } : {}),
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true, current_frame: frame, total_frames: total }) }],
       };
     }
   );

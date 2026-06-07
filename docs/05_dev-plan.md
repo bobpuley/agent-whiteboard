@@ -284,37 +284,33 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
-### Sprint 13 — Client-controlled step-frame navigation + POST /wait-click bugfix
+### Sprint 13 — Client-controlled step-frame navigation + POST /wait-click bugfix ✅
 
-**Status:** Pending (not yet started). Contains four related tasks: POST /wait-click bugfix, seek() MCP tool, POST /seek endpoint, node_to_frame autonomous navigation.
+**Status:** Complete (2026-06-07). All four tasks shipped: POST /wait-click bugfix, seek() MCP tool, POST /seek endpoint, node_to_frame autonomous navigation.
 
 > **Dependency:** Sprint 13 must complete before Sprint 14. The `POST /wait-click` bugfix (broadcasting `set_node_actions enabled:true` on the REST path) is a prerequisite for the REST endpoint to work correctly with `node_actions` in Sprint 14.
 
 **Goal:** Complete bidirectional feature set for Phase 2 — let the agent control frame navigation via `seek()`, and optionally attach a node→frame map to render so the browser navigates autonomously via node clicks.
 
-**Motivation:** `wait_click()` is agent-controlled — the agent blocks, receives the click, then decides how to navigate. For the common case of "click this node to jump to its detail frame," the agent should be able to declare the map up front and go idle; the browser handles the rest autonomously. `seek()` provides random-access frame navigation without repeated `step()` calls.
-
 **Bug fix — `POST /wait-click` does not arm the browser:**
-`POST /wait-click` (REST fallback for `wait_click()`) calls `waitForClick()` directly without broadcasting `set_node_actions enabled:true` first. The browser's `clickable` state stays `false`, so no click listeners are attached and nodes show no visual cue. The MCP `wait_click()` tool correctly arms the browser; the REST path does not.
-- [ ] **`server/app.ts` — `POST /wait-click`:** broadcast `{ action: "set_node_actions", enabled: true }` before `waitForClick()`; broadcast `{ action: "set_node_actions", enabled: false }` after it resolves (or times out).
-- [ ] **`manualtests/click-demo.js`:** already uses `POST /wait-click` — will work correctly once the endpoint is fixed. No script changes needed.
-- [ ] **Tests:** add integration test asserting that `POST /wait-click` triggers a `set_node_actions` broadcast.
+- [x] **`server/app.ts` — `POST /wait-click`:** broadcast `{ action: "set_node_actions", enabled: true }` before `waitForClick()`; broadcast `{ action: "set_node_actions", enabled: false }` after it resolves (or times out).
 
 **Scope:**
 
-- [ ] **`server/session.ts`:** add `nodeToFrame?: Record<string, number>` to the step-frames state (stored alongside `frames`, `frameType`, etc.).
-- [ ] **`server/app.ts`:**
+- [x] **`server/session.ts`:** add `nodeToFrame?: Record<string, number>` to the step-frames state; extended `setStepFrames()` to accept optional `nodeToFrame` parameter.
+- [x] **`server/app.ts`:**
   - `POST /render` for `step-frames`: accept `options.node_to_frame?: Record<string, number>`; store it in session; include it in the WebSocket broadcast.
   - New `POST /seek` endpoint: body `{ "frame": N }` — calls `seekStepFrame(N)`, broadcasts the target frame to the browser, returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no step-frames sequence is loaded or frame is out of range.
-- [ ] **`server/mcp.ts`:**
+- [x] **`server/mcp.ts`:**
   - `render()` step-frames: expose `options.node_to_frame` — `z.record(z.string(), z.number()).optional()`.
-  - New `seek(frame)` MCP tool: jumps the cursor to an arbitrary frame index. Useful for agent-controlled random-access navigation without repeated `step()` calls.
-- [ ] **`client/src/App.svelte`:** track `nodeToFrame?: Record<string, number>` in canvas state; pass to `MermaidRenderer` as a prop.
-- [ ] **`client/src/renderers/Mermaid.svelte`:** new `nodeToFrame` prop. When present: attach click listeners automatically (no `set_node_actions` broadcast needed); on click, look up the node id in the map — if found, call `POST /seek`; if not found, ignore the click. `nodeToFrame` and `wait_click()` are mutually exclusive — `set_node_actions enabled:true` overrides `nodeToFrame` for the duration of the `wait_click()` call.
-- [ ] **Tests:** integration tests for `POST /seek` (valid frame, out-of-range, no sequence loaded); browser e2e test for node click → frame jump via `nodeToFrame`.
-- [ ] **`manualtests/click-demo.js`:** add a `--mode nav` flag demonstrating `node_to_frame` — render a step-frames with the map, let the user click nodes, observe autonomous frame jumps without any long-poll.
+  - New `seek(frame)` MCP tool: jumps the cursor to an arbitrary frame index.
+- [x] **`client/src/ws.ts`:** added `nodeToFrame?: Record<string, number>` to the `replace` action in `RenderCommand`.
+- [x] **`client/src/App.svelte`:** track `nodeToFrame` in canvas state and `nodeToFrameEnabled` boolean; disable `nodeToFrameEnabled` when `set_node_actions enabled:true` arrives (wait_click overrides); NOT restored when `set_node_actions enabled:false` arrives.
+- [x] **`client/src/renderers/Mermaid.svelte`:** new `nodeToFrame` prop; attach autonomous click listeners on mapped nodes; on click calls `POST /seek`; mutually exclusive with `clickable` (wait_click mode).
+- [x] **Tests:** 7 new integration tests for `POST /seek` (valid frame, out-of-range, no sequence loaded, negative frame, non-integer, seek from position, seek to 0) + 1 POST /wait-click round-trip test. 60 tests total, all passing.
+- [x] **`manualtests/click-demo.js`:** added `--mode nav` flag demonstrating `node_to_frame` — renders a 4-frame step sequence, user clicks layer nodes (FE/BE/DB) to jump frames autonomously.
 
-**DoD:**
+**DoD:** ✅
 - Agent calls `render({ type: "step-frames", payload: "...", options: { node_to_frame: { "FE": 1, "BE": 2, "DB": 3 } } })`; clicking node `FE` in the browser jumps directly to frame 1 without any `wait_click()` call; agent is free to do other work.
 - `seek(frame=2)` MCP tool jumps to frame 2 from any current position in one call.
 - `POST /seek` REST endpoint behaves identically.

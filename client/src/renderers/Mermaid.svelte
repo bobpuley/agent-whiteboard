@@ -4,6 +4,7 @@
 
   export let source: string;
   export let clickable = false;
+  export let nodeToFrame: Record<string, number> | undefined = undefined;
 
   let wrapper: HTMLDivElement;
   let container: HTMLDivElement;
@@ -161,6 +162,49 @@
     clickCleanup = null
   }
 
+  // ── Autonomous node-to-frame navigation ────────────────────────────────────
+
+  let ntfCleanup: (() => void) | null = null
+
+  function attachNodeToFrameListeners(map: Record<string, number>) {
+    detachNodeToFrameListeners()
+    if (!container) return
+    const svg = container.querySelector('svg')
+    if (!svg) return
+
+    const nodes = svg.querySelectorAll<HTMLElement>('.node')
+    for (const node of nodes) {
+      const id = extractNodeId(node)
+      if (id === null || !(id in map)) continue
+      const targetFrame = map[id]
+      const handler = (e: Event) => {
+        e.stopPropagation()
+        fetch('/seek', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frame: targetFrame }),
+        }).catch(() => { /* no-op */ })
+      }
+      node.addEventListener('click', handler)
+      node.addEventListener('mousedown', stopPropagation)
+      node.style.cursor = 'pointer'
+      ntfCleanup = (() => {
+        const prev = ntfCleanup
+        return () => {
+          prev?.()
+          node.removeEventListener('click', handler)
+          node.removeEventListener('mousedown', stopPropagation)
+          node.style.cursor = ''
+        }
+      })()
+    }
+  }
+
+  function detachNodeToFrameListeners() {
+    ntfCleanup?.()
+    ntfCleanup = null
+  }
+
   // ── Mermaid rendering ───────────────────────────────────────────────────────
   mermaid.initialize({ startOnLoad: false, theme: "default" });
 
@@ -177,6 +221,7 @@
       const { svg } = await mermaid.render(id, src);
       if (container) container.innerHTML = svg;
       if (clickable) attachClickListeners();
+      else if (nodeToFrame) attachNodeToFrameListeners(nodeToFrame);
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : String(err);
       if (container) container.innerHTML = "";
@@ -202,10 +247,14 @@
     window.removeEventListener("mousemove", onMousemove);
     window.removeEventListener("mouseup", onMouseup);
     detachClickListeners();
+    detachNodeToFrameListeners();
   });
 
   // Re-attach (or detach) click listeners when clickable prop changes.
   $: if (clickable) { attachClickListeners() } else { detachClickListeners() }
+
+  // Re-attach (or detach) node-to-frame listeners when nodeToFrame prop changes.
+  $: if (nodeToFrame) { attachNodeToFrameListeners(nodeToFrame) } else { detachNodeToFrameListeners() }
 
   $: transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
   $: cursor = dragging ? "grabbing" : "grab";

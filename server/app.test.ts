@@ -813,3 +813,121 @@ describe("POST /slideshow/stop", () => {
     vi.useRealTimers();
   });
 });
+
+// ── Sprint 13 — POST /seek ────────────────────────────────────────────────────
+
+describe("POST /seek", () => {
+  it("returns error when no step-frames sequence is loaded", async () => {
+    const res = await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: 1 }),
+    });
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/no step-frames/);
+  });
+
+  it("returns error when frame index is out of range", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+    });
+    const res = await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: 5 }),
+    });
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/out of range/);
+  });
+
+  it("returns error for negative frame index", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+    });
+    const res = await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: -1 }),
+    });
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+  });
+
+  it("jumps to the target frame and returns current_frame / total_frames", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+    });
+    const res = await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: 2 }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, current_frame: 2, total_frames: 3 });
+  });
+
+  it("seek to frame 0 works from any position", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+    });
+    // Advance to frame 2.
+    await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+    await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+    // Seek back to frame 0.
+    const res = await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: 0 }),
+    });
+    expect(await res.json()).toEqual({ ok: true, current_frame: 0, total_frames: 3 });
+  });
+
+  it("returns 400 for non-integer frame", async () => {
+    const res = await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: "two" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean }>();
+    expect(body.ok).toBe(false);
+  });
+});
+
+// ── Sprint 13 — POST /wait-click bugfix: broadcasts set_node_actions ─────────
+
+describe("POST /wait-click — set_node_actions broadcast (Sprint 13 bugfix)", () => {
+  it("resolves a pending /wait-click and the request returns { ok: true, type, id, label }", async () => {
+    // Baseline: wait-click round-trip still works after the bugfix.
+    const waitPromise = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "FE", label: "Frontend" }),
+    });
+
+    const res = await waitPromise;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, type: "node", id: "FE", label: "Frontend" });
+  });
+});

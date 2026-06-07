@@ -4,7 +4,7 @@
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
 import type { ClickEvent } from "./events.js";
-import { clearCanvas, exportCanvas, getCanvas, setCanvas, setStepFrames, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, setCanvas, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid } from "./validate.js";
@@ -75,7 +75,7 @@ export function createApp(): Hono {
   const app = new Hono();
 
   app.post("/render", async (c) => {
-    const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string } }>();
+    const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; node_to_frame?: Record<string, number> } }>();
 
     if (typeof body.payload !== "string") {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
@@ -91,6 +91,7 @@ export function createApp(): Hono {
     const type = body.type as CanvasType | "step-frames";
     const { payload } = body;
     const title = body.options?.title;
+    const nodeToFrame = body.options?.node_to_frame;
 
     const validationError = await validatePayload(type, payload);
     if (validationError) {
@@ -103,7 +104,7 @@ export function createApp(): Hono {
     if (type === "step-frames") {
       const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
       const frames = spec.frames;
-      setStepFrames(frames, spec.frame_type, payload, title);
+      setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame);
       broadcast({
         action: "replace",
         type: spec.frame_type,
@@ -113,6 +114,7 @@ export function createApp(): Hono {
         currentFrame: 0,
         totalFrames: frames.length,
         ...(title !== undefined ? { title } : {}),
+        ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
       });
       return c.json({ ok: true });
     }
@@ -154,6 +156,35 @@ export function createApp(): Hono {
       });
     }
     return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });
+  });
+
+  app.post("/seek", async (c) => {
+    const body = await c.req.json<{ frame?: unknown }>();
+    if (typeof body.frame !== "number" || !Number.isInteger(body.frame)) {
+      return c.json({ ok: false, error: "frame must be an integer" }, 400);
+    }
+    const state = getCanvas();
+    if (state.type !== "step-frames") {
+      return c.json({ ok: false, error: "no step-frames sequence is loaded" });
+    }
+    const total = state.frames.length;
+    if (body.frame < 0 || body.frame >= total) {
+      return c.json({ ok: false, error: `frame out of range: must be 0–${total - 1}` });
+    }
+    seekStepFrame(body.frame);
+    const frame = state.frames[body.frame];
+    broadcast({
+      action: "replace",
+      type: state.frameType,
+      payload: frame.payload,
+      frameLabel: frame.label,
+      stepFrames: true,
+      currentFrame: body.frame,
+      totalFrames: total,
+      ...(state.title !== undefined ? { title: state.title } : {}),
+      ...(state.nodeToFrame !== undefined ? { nodeToFrame: state.nodeToFrame } : {}),
+    });
+    return c.json({ ok: true, current_frame: body.frame, total_frames: total });
   });
 
   app.post("/clear", (c) => {
@@ -246,7 +277,9 @@ export function createApp(): Hono {
   });
 
   app.post("/wait-click", async (c) => {
+    broadcast({ action: "set_node_actions", node_actions: {}, enabled: true });
     const event = await waitForClick();
+    broadcast({ action: "set_node_actions", enabled: false });
     return c.json({ ok: true, ...event });
   });
 
