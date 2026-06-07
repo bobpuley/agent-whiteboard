@@ -87,7 +87,7 @@
 | `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
 | `seek(frame)` *(Sprint 13)*       | Jumps the step-frame cursor to an arbitrary frame index. Useful for random-access navigation without repeated `step()` calls. Returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no `step-frames` sequence is loaded or frame is out of range. (Phase 2 — Sprint 13) |
 | `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
-| `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label }` on click; `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
+| `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label, action: null }` on click (`action` is always present; null in Sprint 12 because no popup menu exists yet); `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
 | `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action? }` — `action` present only when a menu item was selected. (Phase 2 — Sprint 14) |
 
 ### Validation — two layers
@@ -141,6 +141,8 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 `POST /wait-done` was added in Sprint 10 (Phase 2 ✅). No body. Long-polls until `signalDone()` fires or the 10-minute timeout elapses. Returns `{ ok: true }`.
 
 `POST /node-click` — Phase 2 (Sprint 12). Body: `{ "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }`. Calls `signalClick(event)` (events.ts) to resolve any pending `waitForClick()`. Returns `{ "ok": true }`. No-op if no `wait_click()` is pending.
+
+`POST /wait-click` is plain-click only — it does not accept a `node_actions` body even in Sprint 14. REST endpoints are `curl`-friendly fallbacks for debugging and non-MCP agents; popup menus (`node_actions`) are an MCP-exclusive feature requiring browser-side coordination. Use the MCP `wait_click(node_actions)` tool for popup menu support.
 
 `POST /seek` — Phase 2 (Sprint 13). Body: `{ "frame": N }`. Calls `seekStepFrame(N)`, broadcasts the target frame to the browser. Returns the same shape as the MCP `seek()` response: `{ "ok": true, "current_frame": N, "total_frames": M }`. Error if no step-frames sequence is loaded or frame is out of range.
 
