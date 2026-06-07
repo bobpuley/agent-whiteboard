@@ -266,9 +266,9 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
-### Sprint 13 — Client-controlled step-frame navigation + POST /wait-click bugfix (Pending start)
+### Sprint 13 — Client-controlled step-frame navigation + POST /wait-click bugfix
 
-**Status:** Pending start (2026-06-07). Contains four related tasks: POST /wait-click bugfix, seek() MCP tool, POST /seek endpoint, node_to_frame autonomous navigation.
+**Status:** Pending (not yet started). Contains four related tasks: POST /wait-click bugfix, seek() MCP tool, POST /seek endpoint, node_to_frame autonomous navigation.
 
 **Goal:** Complete bidirectional feature set for Phase 2 — let the agent control frame navigation via `seek()`, and optionally attach a node→frame map to render so the browser navigates autonomously via node clicks.
 

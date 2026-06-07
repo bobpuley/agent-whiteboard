@@ -9,8 +9,10 @@
 
 **A1 — Local-only deployment (v1)**
 The whiteboard runs on localhost for v1. No cloud hosting, no multi-user access, no auth.
-- Constraint: the server must not hardcode localhost — binding address must be configurable so the same service can be exposed remotely without code changes.
+- Deployment assumption: v1 assumes a single trusted user on a local network. The server is not hardened for untrusted access; REST endpoints are world-accessible on the configured port without authentication.
+- Constraint: the binding address must be configurable via environment variables so the same codebase can run on different hosts without changes (for local development on different machines, not for remote deployment).
 - Risk: if auth and multi-user are not designed for from the start, adding them later may require structural rework.
+- **Phase 3:** auth, session isolation, and per-user canvas states required for multi-user or hostile-network deployment.
 
 **A2 — Target user is a developer / technical learner**
 Non-technical audiences are out of scope for v1; expansion is a future consideration.
@@ -97,6 +99,23 @@ The agent sends commands forward-only. It also prints the textual representation
 > ✅ DECISION: Click interactivity is limited to Mermaid-rendered diagrams for Phase 2. Other renderer types (SVG, HTML, Vega-Lite, KaTeX) may support click in future phases but are out of scope for Phase 2.
 - Risk: SVG and HTML renderers could also benefit from click events, but DOM structure and element ID schemes differ significantly — each would need its own click-extraction logic.
 - **Decision:** Mermaid-only for Phase 2. Extend to other renderers in later phases.
+
+**Maintenance — Mermaid major version upgrades**
+
+Mermaid is pinned to `^11` due to breaking changes in the SVG structure and node ID formats between major versions. When a new major version is released:
+
+1. Run `npm run test:e2e` (Playwright tests) — especially `e2e/canvas.spec.ts` which covers Mermaid rendering
+2. If tests pass, the ID extraction logic and render behavior are still compatible — upgrade is safe
+3. If tests fail (e.g., node click detection broken, SVG structure changed), the extraction logic must be updated:
+   - Check `client/src/renderers/Mermaid.svelte` — `extractNodeId()` and `extractEdgeId()` functions
+   - Update the regex patterns or DOM traversal logic to match the new Mermaid SVG format
+   - Re-run e2e tests to verify
+4. **Deprecation period:** optional — release a patch with the new Mermaid version as supported; no need for a migration period in v1
+5. **Process:** treat Mermaid upgrades as deliberate decisions, not automatic updates. Update `package.json` pinning explicitly and document the change in the commit message.
+
+Current Mermaid version constraint in `package.json`: `"mermaid": "^11.4.0"`
+
+---
 
 **E1 — Bidirectionality requires a Channel (stdio MCP server), not SSE push**
 > ✅ RESOLVED and VERIFIED (Sprint 10, 2026-06-06): Channels API confirmed stable enough for production experiments.

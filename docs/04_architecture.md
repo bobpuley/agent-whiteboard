@@ -144,6 +144,8 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /seek` — Phase 2 (Sprint 13). Body: `{ "frame": N }`. Calls `seekStepFrame(N)`, broadcasts the target frame to the browser. Returns the same shape as the MCP `seek()` response: `{ "ok": true, "current_frame": N, "total_frames": M }`. Error if no step-frames sequence is loaded or frame is out of range.
 
+`POST /slideshow` failure behavior: If validation fails for any slide in the playlist, the server returns `{ ok: false, error: "..." }`. No timer is started, and the canvas state is unchanged (remains as the last successful `render()` or `clear()`). If a slideshow is already running and a new `POST /slideshow` request fails, the running slideshow continues unaffected (error returned, new request rejected).
+
 ---
 
 ## 4. Data Flows
@@ -207,8 +209,8 @@ agent calls slideshow(slides=[...], delay_ms=1000)
       for non-step-frames slides:
         { action: "replace", type: slide_type, payload: slide_payload, title?: slide_title }
       for step-frames slides (expanded into frame ticks):
-        frame N: { action: "replace", type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frame_title }
-        (each frame broadcast at delay_ms intervals)
+        frame N: { action: "replace", type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frames[N].label }
+        (each frame broadcast at delay_ms intervals; frame labels shown as titles, not original slide title)
   → browser renders each slide in sequence
   → after last slide, slideshow stops (no loop in v1)
   → MCP tool returns { ok: true }
@@ -252,7 +254,20 @@ agent calls wait_click(node_actions={ "A": ["Explain", "Drill down"] })
 ```
 
 **Mermaid node ID extraction (browser-side):**
-After `mermaid.render()` produces an SVG, the Svelte component intercepts `click` events on SVG elements with class `.node` (nodes) and `.edgePath` / `.edgeLabel` (edges). Node IDs are embedded in the SVG element's `id` attribute as `flowchart-<nodeId>-<counter>`; the component strips prefix and counter to recover the original source ID. For edge elements, source+target are extracted from the `id`. Node labels are read from the `.nodeLabel` child element (fallback to `.label` or element itself if `.nodeLabel` is missing); text is extracted via `textContent?.trim()`.
+After `mermaid.render()` produces an SVG, the Svelte component intercepts `click` events on SVG elements with class `.node` (nodes) and `.edgeLabel` (edges).
+
+**Node extraction:**
+- Node IDs are embedded in the SVG element's `id` attribute using the pattern `flowchart-<nodeId>-<N>` where N is a counter
+- Extraction regex: `/flowchart-(.+?)-\d+$/` — captures `nodeId` from the middle
+- Node labels are read from the `.nodeLabel` child element if present, falling back to `.label` child, or the element's `textContent` itself
+- Label extraction: `textContent?.trim()` from the identified label element
+
+**Edge extraction:**
+- Edge elements are `.edgeLabel` in the SVG
+- Edge ID is inherited from the parent group element (the closest ancestor with an `id` attribute), typically `L_<source>_<target>_<N>` or similar
+- Edge labels are the `textContent?.trim()` of the clicked element
+
+This extraction logic is hardcoded for `graph`/`flowchart` diagram types; other Mermaid types may have different SVG structures (see U4b for diagram type support matrix).
 
 **`node_to_frame` autonomous navigation (Phase 2 — Sprint 13):**
 When `render(type="step-frames", options.node_to_frame={...})` is called, the browser attaches click listeners automatically (no `wait_click()` or agent involvement needed). On click, if the node ID is in the map, the browser calls `POST /seek` with the target frame index; otherwise the click is ignored. `wait_click()` and `node_to_frame` are mutually exclusive: `set_node_actions enabled:true` (from a `wait_click()` call) disarms `node_to_frame` for the duration of the call. After `wait_click()` resolves or times out and `set_node_actions enabled:false` is sent, the browser does *not* automatically restore `node_to_frame` — the agent must call `render()` again with the `node_to_frame` map if it wants to re-enable autonomous navigation.

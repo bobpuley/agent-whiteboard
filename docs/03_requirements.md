@@ -45,7 +45,7 @@ The MCP server exposes tools to the agent.
 |-------|-----------|------|
 | Agent → Server | MCP (primary) | Agent calls tools; server executes render commands |
 | Server → Browser | WebSocket (`/stream`) | Incremental, real-time updates pushed to the SPA |
-| Agent → Server (alt) | REST `POST /render`, `POST /clear`, `GET /export`, `POST /step`, `POST /seek`, `POST /slideshow`, `POST /slideshow/stop`, `POST /wait-done`, `POST /wait-click` | Low-level fallback; also usable via `curl` for debugging. `POST /slideshow` and `POST /slideshow/stop` added in Phase 2 alongside the slideshow MCP tools. `POST /wait-done` long-polls until the user clicks Done. `POST /seek` (Sprint 13): body `{ "frame": N }`; jumps step-frame cursor, returns same shape as `step()`. `POST /wait-click` (Sprint 12 ✅): long-polls until a node/edge click; broadcasts `set_node_actions enabled:true` before suspending and `enabled:false` after resolution (bugfix in Sprint 13). |
+| Agent → Server (alt) | REST `POST /render`, `POST /clear`, `GET /export`, `POST /step`, `POST /seek`, `POST /slideshow`, `POST /slideshow/stop`, `POST /wait-done`, `POST /wait-click` | Low-level fallback; also usable via `curl` for debugging. `POST /slideshow` and `POST /slideshow/stop` added in Phase 2 alongside the slideshow MCP tools. `POST /step` body: `{ "direction": "next" \| "prev" }`. `POST /seek` body: `{ "frame": N }`; jumps step-frame cursor, returns `{ ok: true, current_frame: N, total_frames: M }` or error. `POST /wait-done` long-polls until the user clicks Done. `POST /wait-click` long-polls until a node/edge click; broadcasts `set_node_actions enabled:true` before suspending and `enabled:false` after resolution. |
 | Browser → Server | `POST /user-done` | Browser Done button fires this; server calls `signalDone()` to wake any pending `wait_done()` calls, then optionally forwards to the channel relay. |
 | Browser → Server | `POST /node-click` | Browser fires when user clicks a node or edge (while `wait_click()` is armed). Body: `{ type: "node"\|"edge", id, label, action? }`. Server calls `signalClick(event)` to resolve pending `wait_click()` calls. Returns `{ ok: true }`. |
 | Server → Browser (WebSocket) | `{ action: "set_node_actions", node_actions, enabled }` | Sent when `wait_click()` is called. `node_actions`: map of node ID → string array (empty map = any click accepted, no popup). `enabled: true` arms the click listener; `enabled: false` disarms it (sent after click resolves or on timeout). |
@@ -73,9 +73,9 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | F2 | Support rendering types: Mermaid, SVG, HTML, KaTeX, Vega-Lite. D2 deferred (requires server-side render process). | MVP |
 | F3 | Full-spec replace: agent always sends the complete updated spec; per-element mutation deferred to Phase 2 | MVP |
 | F3a | Validation is a hard gate: invalid payloads are rejected and returned as `{ ok: false, error: "..." }` to the agent; nothing is pushed to the browser and canvas state is unchanged | MVP |
-| F4 | REST endpoints (`POST /render`, `POST /clear`, `GET /export`, `POST /step`) are a fallback for agents that do not support MCP/WebSocket (e.g. `curl` testing). Primary path is MCP → WebSocket `/stream`. | MVP |
+| F4 | REST endpoints (`POST /render`, `POST /clear`, `GET /export`, `POST /step`) are a fallback for agents that do not support MCP/WebSocket (e.g. `curl` testing). Primary path is MCP → WebSocket `/stream`. Note: `POST /wait-click` REST endpoint has a known limitation in v1 (fixed in Sprint 13) — it does not yet broadcast the browser click-listener arm signal, so click interactivity is unavailable via REST; use the MCP `wait_click()` tool instead for full functionality. | MVP |
 | F5 | Session management with cross-session persistence (`session_id`, history across restarts) | Phase 2 |
-| F7 | Slideshow: `POST /slideshow` (and `slideshow()` MCP tool) accepts `{ slides: [{ type, payload, title? }], delay_ms }`. Validation (same hard gate as `POST /render`): each slide's `type` and `payload` are validated; `title` (if present) must be a string; if *any* slide fails validation, the entire slideshow request is rejected with `{ ok: false, error: "..." }` and no timer starts. On success, a server-side timer auto-advances the canvas. Each slide is broadcast to the browser using the **same WebSocket event format** that `POST /render` would produce for that slide's type. For `step-frames` slides, the server **expands each frame into a separate timer tick**: each frame is broadcast in sequence at `delay_ms` intervals (frame 0 immediately, frame 1 after one tick, frame 2 after two ticks, etc.) — the same format as `POST /render` produces for each frame (`{ type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M }`). Manual Prev/Next navigation remains functional during and after the slideshow. A new call cancels any running slideshow; `POST /render` and `POST /clear` also cancel it. At most one active slideshow at a time. ✅ Implemented in Sprint 9 (2026-05-31). | Phase 2 |
+| F7 | Slideshow: `POST /slideshow` (and `slideshow()` MCP tool) accepts `{ slides: [{ type, payload, title? }], delay_ms }`. Validation (same hard gate as `POST /render`): each slide's `type` and `payload` are validated; `title` (if present) must be a string; if *any* slide fails validation, the entire slideshow request is rejected with `{ ok: false, error: "..." }` and no timer starts. On success, a server-side timer auto-advances the canvas. Each slide is broadcast to the browser using the **same WebSocket event format** that `POST /render` would produce for that slide's type. For `step-frames` slides, the server **expands each frame into a separate timer tick**: each frame is broadcast in sequence at `delay_ms` intervals (frame 0 immediately, frame 1 after one tick, frame 2 after two ticks, etc.) — the same format as `POST /render` produces for each frame (`{ type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frame_label }`). Frame labels (from `frames[N].label` in the step-frames payload) are shown as title overlays during auto-advance; the original slideshow slide's `title` is not used during frame ticks. Manual Prev/Next navigation remains functional during and after the slideshow. A new call cancels any running slideshow; `POST /render` and `POST /clear` also cancel it. At most one active slideshow at a time. ✅ Implemented in Sprint 9 (2026-05-31). | Phase 2 |
 | F8 | Slideshow stop: `POST /slideshow/stop` (and `slideshow_stop()` MCP tool) cancels the running timer; last rendered slide remains on screen. No-op if no slideshow is running. Note: `POST /render` and `POST /clear` also cancel any running slideshow (canvas ownership transfers to agent). `POST /step` and `POST /seek` do not cancel slideshow. | Phase 2 |
 | F9 | Done signal: `POST /user-done` (browser button) wakes all pending `wait_done()` MCP tool calls via an in-process EventEmitter. `POST /wait-done` (REST) long-polls until the signal fires or the 10-minute timeout elapses. Multiple concurrent `wait_done()` calls are all resolved simultaneously by a single click. | Phase 2 (Sprint 10 ✅) |
 | F6 | HTML/SVG payloads must be sanitized with DOMPurify in the browser before render; sanitization is silent (cleaned output rendered, no error state). No server-side hard gate for HTML/SVG — the `type` field is validated but the payload is passed through. | MVP |
@@ -100,12 +100,12 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 |----|-------------|-------|
 | U1 | Zero-config startup: one command launches server, opens browser, starts listening | MVP |
 | U2 | CLI-friendly invocation: `curl -X POST …` or thin wrapper script | MVP |
-| U2a | WebSocket disconnect: browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry. | MVP |
+| U2a | WebSocket disconnect: browser clears the canvas and displays "Server disconnected. Restart `npm run dev`." No auto-retry. Pending `wait_done()` and `wait_click()` operations timeout after 30 seconds if disconnect occurs; the agent can reconnect and re-arm if needed. | MVP |
 | U3 | Terminal ASCII fallback if no browser available | Phase 2 |
 | U4a | Done button: always-visible button (bottom-right); fires `POST /user-done`; shows "Sent ✓" for 2s after click | Phase 2 (Sprint 10 ✅) |
-| U4b | Node/edge click detection: while `wait_click()` is armed, Mermaid diagram nodes and edges are click-interactive; clicked element is identified and reported back to agent via `wait_click()` return value. Applies to `graph`/`flowchart` diagrams; other Mermaid types best-effort. | Phase 2 |
+| U4b | Node/edge click detection: while `wait_click()` is armed, Mermaid diagram nodes and edges are click-interactive; clicked element is identified and reported back to agent via `wait_click()` return value. Primary support: `graph`/`flowchart` diagrams reliably extract source node IDs. Secondary support ("best-effort"): `sequenceDiagram` and `erDiagram` use auto-generated numeric IDs; click events return these opaque IDs, not human-readable source node names. Other diagram types may support clicks depending on their SVG structure; unsupported clicks are silently ignored. Only one `wait_click()` can be active at a time; a second `wait_click()` call cancels the previous one without error. | Phase 2 |
 | U4c | Popup action menu: when `wait_click()` is called with `node_actions`, nodes with registered actions show a popup menu on click; user selects an action; selection is included in the `wait_click()` response. Nodes without registered actions in the map accept a plain click (no popup). | Phase 2 |
-| U4d | Click state feedback: while `wait_click()` is armed, nodes/edges are visually highlighted (cursor, border, or opacity) to indicate they are clickable. State is cleared after click resolves or on timeout. | Phase 2 |
+| U4d | Click state feedback: while `wait_click()` is armed, nodes and edges are visually indicated as clickable. Nodes show a blue outline (`#3498db`, 2px solid with 2px offset); cursor changes to `pointer` on all clickable elements. Highlighting is applied as a CSS class and inline cursor style; state is cleared after click resolves or on timeout. | Phase 2 |
 | U4e | Autonomous frame navigation (`node_to_frame`): when `render(type="step-frames", options.node_to_frame={...})` is called, browser attaches click listeners automatically; clicking a mapped node jumps directly to its frame via `POST /seek` without agent involvement. `wait_click()` overrides `node_to_frame` for the duration of its call. | Phase 2 (Sprint 13) |
 | U5 | Structured input widgets (quiz, sliders, drag-to-order); events returned to agent | Phase 2 |
 | U6 | Theme control: agent sets theme via `options.theme` in `render()`; user can also toggle it in the browser UI | Phase 2 |
@@ -119,6 +119,32 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | NF3 | Cross-platform: macOS, Linux, Windows |
 | NF4 | `<200ms` render for diagrams under 500 nodes; debounce on stream |
 | NF5 | Plugin/extension system for new renderer types | Post-Phase-2 |
+| NF6 | Resource limits: no artificial hard limits in v1 (constrained only by Node.js memory and browser rendering capacity). Server validation rejects malformed payloads, but does not enforce maximum sizes. Future phases may add quotas. |
+| NF7 | `node_actions` server validation: server validates `node_actions` is a `Record<string, string[]>` (map of node ID → string array); on failure, returns `{ ok: false, error: "..." }`. Does **not** validate that node IDs exist in the diagram (agent is responsible for correctness). |
+
+---
+
+## 5b. Tool Error Scenarios
+
+**Agent error recovery:** The agent is responsible for deciding how to handle errors returned by the server. The server returns `{ ok: false, error: "<message>" }` for validation failures and certain invalid states; the agent can inspect the error and retry, recover, or fail gracefully.
+
+| Tool | Success response | Error cases |
+|------|------------------|------------|
+| `render()` | `{ ok: true }` | Invalid payload (keyword, syntax, JSON, format) → `{ ok: false, error: "..." }` |
+| `clear()` | `{ ok: true }` | Never fails (always succeeds) |
+| `export()` | `{ ok: true, data: "<source>" }` | Never fails; returns empty string if canvas is blank |
+| `step()` | `{ ok: true, current_frame: N, total_frames: M }` | No step-frames loaded → `{ ok: false, error: "..." }`. Direction invalid → `{ ok: false, error: "..." }` |
+| `seek()` | `{ ok: true, current_frame: N, total_frames: M }` | No step-frames loaded → `{ ok: false, error: "..." }`. Frame out of range → `{ ok: false, error: "..." }` |
+| `wait_done()` | `{ ok: true }` | Never fails; times out after 10 minutes (returns `{ ok: true }` regardless) |
+| `wait_click()` | `{ ok: true, type, id, label, action? }` or `{ ok: true, type: "timeout" }` | Never fails; times out after 10 minutes; on timeout, returns `{ ok: true, type: "timeout" }` |
+| `slideshow()` | `{ ok: true }` | Any slide fails validation → `{ ok: false, error: "..." }` (entire slideshow rejected, no timer started) |
+| `slideshow_stop()` | `{ ok: true }` | Never fails; no-op if no slideshow running |
+
+**Error recovery strategies:**
+- Invalid render payload: agent can inspect the error and either fix the syntax or escalate to the user
+- Step out of range: agent should clamp to `[0, totalFrames-1]` or inform the user
+- No step-frames loaded: agent attempted to step/seek without first loading a step-frames sequence; check render history or render a sequence before step/seek
+- Slideshow validation fails: check the error message for which slide failed; agent can fix that slide and retry the entire slideshow
 
 ---
 
