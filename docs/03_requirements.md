@@ -136,7 +136,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | `step()` | `{ ok: true, current_frame: N, total_frames: M }` | No step-frames loaded → `{ ok: false, error: "..." }`. Direction invalid → `{ ok: false, error: "..." }` |
 | `seek()` | `{ ok: true, current_frame: N, total_frames: M }` | No step-frames loaded → `{ ok: false, error: "..." }`. Frame out of range → `{ ok: false, error: "..." }` |
 | `wait_done()` | `{ ok: true }` | Never fails; times out after 10 minutes (returns `{ ok: true }` regardless) |
-| `wait_click()` | `{ ok: true, type, id, label, action? }` or `{ ok: true, type: "timeout" }` | Never fails; times out after 10 minutes; on timeout, returns `{ ok: true, type: "timeout" }` |
+| `wait_click()` | `{ ok: true, type, id, label, action }` (`action` always present: null when no popup shown, string when menu item selected) or `{ ok: true, type: "timeout" }` | Never fails; times out after 10 minutes; on timeout, returns `{ ok: true, type: "timeout" }` |
 | `slideshow()` | `{ ok: true }` | Any slide fails validation → `{ ok: false, error: "..." }` (entire slideshow rejected, no timer started) |
 | `slideshow_stop()` | `{ ok: true }` | Never fails; no-op if no slideshow running |
 
