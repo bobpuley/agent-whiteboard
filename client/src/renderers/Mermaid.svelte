@@ -70,7 +70,7 @@
 
   function extractNodeId(el: Element): string | null {
     // Mermaid flowchart node IDs: "flowchart-<nodeId>-<N>"
-    const m = el.id.match(/^flowchart-(.+)-\d+$/)
+    const m = el.id.match(/flowchart-(.+?)-\d+$/)
     return m ? m[1] : null
   }
 

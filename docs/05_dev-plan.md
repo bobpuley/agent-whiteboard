@@ -228,7 +228,7 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 - [x] **`server/events.ts`:** add `signalClick(event: ClickEvent)` + `waitForClick(): Promise<ClickEvent>` + `resetClick()` (test use). `ClickEvent`: `{ type: "node" | "edge" | "timeout", id: string, label: string }`. At most one pending `waitForClick()` at a time; a second call cancels the first.
 - [x] **`server/app.ts`:** `POST /node-click` endpoint — body: `{ type, id, label }`; calls `signalClick()`; returns `{ ok: true }`. No-op if no listener is pending. `POST /wait-click` long-polls until click or timeout.
-- [x] **`server/mcp.ts`:** `wait_click()` tool (no `node_actions` argument yet — that is Sprint 13). Pushes `set_node_actions` broadcast to arm/disarm browser. Returns `{ ok: true, type, id, label }`.
+- [x] **`server/mcp.ts`:** `wait_click()` tool (no `node_actions` argument yet — that is Sprint 14). Pushes `set_node_actions` broadcast to arm/disarm browser. Returns `{ ok: true, type, id, label }`.
 - [x] **`client/src/renderers/Mermaid.svelte`:** `clickable` prop; attaches/detaches click listeners on SVG `.node` and `.edgeLabel` elements; extracts node ID from `flowchart-<id>-<N>` pattern; stops event propagation to prevent drag; adds `clickable-node` CSS class + cursor pointer.
 - [x] **`client/src/ws.ts`:** `set_node_actions` variant added to `RenderCommand` type.
 - [x] **`client/src/App.svelte`:** handles `set_node_actions` command; tracks `clickable` reactive state; passes to `MermaidRenderer`.
@@ -239,7 +239,7 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
-### Sprint 13 — Node click: popup action menu + edge support + `node_actions`
+### Sprint 14 — Node click: popup action menu + edge support + `node_actions`
 
 **Goal:** extend `wait_click()` with agent-pre-defined per-node popup menus; confirm edge support; validate across multiple Mermaid diagram types.
 
@@ -263,6 +263,45 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 **DoD:**
 - Agent calls `wait_click(node_actions={ "B": ["Explain this", "Drill down"] })` after rendering a `graph TD`; clicking node B shows a popup with two options; selecting "Drill down" resolves `wait_click()` with `{ ok: true, type: "node", id: "B", label: "Server", action: "Drill down" }`; clicking an unregistered node returns a plain click (no action); clicking an edge returns `{ type: "edge", id: "B_C", ... }`.
 - Menu dismisses cleanly on outside click; browser returns to normal (non-clickable) state after resolution.
+
+---
+
+### Bug fix — `POST /wait-click` does not arm the browser
+
+**Root cause:** `POST /wait-click` (REST fallback for `wait_click()`) calls `waitForClick()` directly without broadcasting `set_node_actions enabled:true` first. The browser's `clickable` state stays `false`, so no click listeners are attached and nodes show no visual cue. The MCP `wait_click()` tool correctly arms the browser; the REST path does not.
+
+- [ ] **`server/app.ts` — `POST /wait-click`:** broadcast `{ action: "set_node_actions", enabled: true }` before `waitForClick()`; broadcast `{ action: "set_node_actions", enabled: false }` after it resolves (or times out).
+- [ ] **`manualtests/click-demo.js`:** already uses `POST /wait-click` — will work correctly once the endpoint is fixed. No script changes needed.
+- [ ] **Tests:** add integration test asserting that `POST /wait-click` triggers a `set_node_actions` broadcast.
+
+**DoD:** `node manualtests/click-demo.js` renders the diagram and nodes immediately show a pointer cursor and blue outline; clicking a node resolves the long-poll and logs the event.
+
+---
+
+### Sprint 13 — Client-controlled step-frame navigation (`node_to_frame`)
+
+**Goal:** let the agent attach a node→frame map to a step-frames render so the browser navigates frames directly on click — no `wait_click()` or agent involvement needed.
+
+**Motivation:** `wait_click()` is agent-controlled — the agent blocks, receives the click, then decides how to navigate. For the common case of "click this node to jump to its detail frame," the agent should be able to declare the map up front and go idle; the browser handles the rest autonomously.
+
+**Scope:**
+
+- [ ] **`server/session.ts`:** add `nodeToFrame?: Record<string, number>` to the step-frames state (stored alongside `frames`, `frameType`, etc.).
+- [ ] **`server/app.ts`:**
+  - `POST /render` for `step-frames`: accept `options.node_to_frame?: Record<string, number>`; store it in session; include it in the WebSocket broadcast.
+  - New `POST /seek` endpoint: body `{ "frame": N }` — calls `seekStepFrame(N)`, broadcasts the target frame to the browser, returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no step-frames sequence is loaded or frame is out of range.
+- [ ] **`server/mcp.ts`:**
+  - `render()` step-frames: expose `options.node_to_frame` — `z.record(z.string(), z.number()).optional()`.
+  - New `seek(frame)` MCP tool: jumps the cursor to an arbitrary frame index. Useful for agent-controlled random-access navigation without repeated `step()` calls.
+- [ ] **`client/src/App.svelte`:** track `nodeToFrame?: Record<string, number>` in canvas state; pass to `MermaidRenderer` as a prop.
+- [ ] **`client/src/renderers/Mermaid.svelte`:** new `nodeToFrame` prop. When present: attach click listeners automatically (no `set_node_actions` broadcast needed); on click, look up the node id in the map — if found, call `POST /seek`; if not found, ignore the click. `nodeToFrame` and `wait_click()` are mutually exclusive — `set_node_actions enabled:true` overrides `nodeToFrame` for the duration of the `wait_click()` call.
+- [ ] **Tests:** integration tests for `POST /seek` (valid frame, out-of-range, no sequence loaded); browser e2e test for node click → frame jump via `nodeToFrame`.
+- [ ] **`manualtests/click-demo.js`:** add a `--mode nav` flag demonstrating `node_to_frame` — render a step-frames with the map, let the user click nodes, observe autonomous frame jumps without any long-poll.
+
+**DoD:**
+- Agent calls `render({ type: "step-frames", payload: "...", options: { node_to_frame: { "FE": 1, "BE": 2, "DB": 3 } } })`; clicking node `FE` in the browser jumps directly to frame 1 without any `wait_click()` call; agent is free to do other work.
+- `seek(frame=2)` MCP tool jumps to frame 2 from any current position in one call.
+- `POST /seek` REST endpoint behaves identically.
 
 ---
 
