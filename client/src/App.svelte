@@ -19,16 +19,22 @@
         frameLabel?: string;
         currentFrame?: number;
         totalFrames?: number;
+        nodeToFrame?: Record<string, number>;
       };
 
   let canvas: CanvasState = { type: "empty" };
   let disconnected = false;
   let clickable = false;
+  // nodeToFrameEnabled is set true on replace with nodeToFrame, and set false when
+  // set_node_actions enabled:true arrives (wait_click overrides it). It is NOT
+  // restored when set_node_actions enabled:false arrives — agent must re-render.
+  let nodeToFrameEnabled = false;
 
   function handleCommand(cmd: RenderCommand) {
     if (cmd.action === "clear") {
       canvas = { type: "empty" };
       clickable = false;
+      nodeToFrameEnabled = false;
     } else if (cmd.action === "replace") {
       canvas = {
         type: cmd.type as CanvasType,
@@ -38,9 +44,12 @@
         frameLabel: cmd.frameLabel,
         currentFrame: cmd.currentFrame,
         totalFrames: cmd.totalFrames,
+        nodeToFrame: cmd.nodeToFrame,
       };
+      nodeToFrameEnabled = cmd.nodeToFrame !== undefined;
     } else if (cmd.action === "set_node_actions") {
       clickable = cmd.enabled;
+      if (cmd.enabled) nodeToFrameEnabled = false;
     }
   }
 
@@ -99,7 +108,7 @@
       {#if canvas.type === "empty"}
         <p class="placeholder">Waiting for content…</p>
       {:else if canvas.type === "mermaid"}
-        <MermaidRenderer source={canvas.payload} {clickable} />
+        <MermaidRenderer source={canvas.payload} {clickable} nodeToFrame={nodeToFrameEnabled ? canvas.nodeToFrame : undefined} />
       {:else if canvas.type === "svg" || canvas.type === "html"}
         <HtmlRenderer source={canvas.payload} type={canvas.type} />
       {:else if canvas.type === "katex"}

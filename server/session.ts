@@ -9,7 +9,7 @@ export interface StepFrame {
 
 export type CanvasState =
   | { type: CanvasType; payload: string; title?: string }
-  | { type: "step-frames"; frames: StepFrame[]; frameType: string; currentFrame: number; rawPayload: string; title?: string }
+  | { type: "step-frames"; frames: StepFrame[]; frameType: string; currentFrame: number; rawPayload: string; title?: string; nodeToFrame?: Record<string, number> }
   | { type: "empty" };
 
 let canvas: CanvasState = { type: "empty" };
@@ -22,8 +22,8 @@ export function setCanvas(type: CanvasType, payload: string, title?: string): vo
   canvas = { type, payload, ...(title !== undefined ? { title } : {}) };
 }
 
-export function setStepFrames(frames: StepFrame[], frameType: string, rawPayload: string, title?: string): void {
-  canvas = { type: "step-frames", frames, frameType, currentFrame: 0, rawPayload, ...(title !== undefined ? { title } : {}) };
+export function setStepFrames(frames: StepFrame[], frameType: string, rawPayload: string, title?: string, nodeToFrame?: Record<string, number>): void {
+  canvas = { type: "step-frames", frames, frameType, currentFrame: 0, rawPayload, ...(title !== undefined ? { title } : {}), ...(nodeToFrame !== undefined ? { nodeToFrame } : {}) };
 }
 
 /**

@@ -10,6 +10,7 @@ export type RenderCommand =
       stepFrames?: boolean;  // true when this is part of a step-frames sequence
       currentFrame?: number; // step-frames cursor position (0-indexed)
       totalFrames?: number;  // total frames in the loaded sequence
+      nodeToFrame?: Record<string, number>; // node ID → frame index for autonomous navigation
     }
   | { action: "clear" }
   | {
