@@ -66,7 +66,7 @@
 
 **Remaining Phase 2 / Phase 3:**
 - `wait_click()` — `node_actions` popup menu + edge support (Sprint 14)
-- `POST /wait-click` REST fallback does not yet arm the browser (bug fix, Sprint 14 area)
+- `POST /wait-click` REST fallback does not yet arm the browser (bug fix, Sprint 13)
 - `seek(frame)` MCP tool + `POST /seek` REST endpoint — client-controlled frame navigation (Sprint 13)
 - `options.node_to_frame` on `render()` — declarative node→frame map for autonomous browser navigation (Sprint 13)
 - Multi-panel / named tabs
@@ -142,6 +142,8 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /node-click` — Phase 2 (Sprint 12). Body: `{ "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }`. Calls `signalClick(event)` (events.ts) to resolve any pending `waitForClick()`. Returns `{ "ok": true }`. No-op if no `wait_click()` is pending.
 
+`POST /seek` — Phase 2 (Sprint 13). Body: `{ "frame": N }`. Calls `seekStepFrame(N)`, broadcasts the target frame to the browser. Returns the same shape as the MCP `seek()` response: `{ "ok": true, "current_frame": N, "total_frames": M }`. Error if no step-frames sequence is loaded or frame is out of range.
+
 ---
 
 ## 4. Data Flows
@@ -195,28 +197,39 @@ user clicks Done button in browser
   → browser button shows "Sent ✓" for 2s
 ```
 
-### Node Click Flow (Phase 2 — Sprint 12)
+### Node Click Flow (Phase 2 — Sprint 12 plain click)
 
 ```
-agent calls wait_click([node_actions])
+agent calls wait_click()
   → server pushes WebSocket command to browser:
-      { action: "set_node_actions", node_actions: { "A": ["Explain", "Drill down"], ... }, enabled: true }
+      { action: "set_node_actions", node_actions: {}, enabled: true }
   → browser arms click listener on all Mermaid SVG node/edge elements
-      (nodes with registered actions show popup on click; others accept plain click)
+      (any click accepted; no popup)
   → server suspends via waitForClick()
-  → user clicks a node (or selects an action from popup)
+  → user clicks a node
   → browser fires POST /node-click:
-      { type: "node", id: "A", label: "Client", action: "Drill down" }
+      { type: "node", id: "A", label: "Client" }
   → server calls signalClick(event)  (events.ts EventEmitter bus)
   → waitForClick() resolves
   → server pushes { action: "set_node_actions", enabled: false } to disarm browser
-  → MCP wait_click() returns { ok: true, type: "node", id: "A", label: "Client", action: "Drill down" }
+  → MCP wait_click() returns { ok: true, type: "node", id: "A", label: "Client" }
 
 Agent then handles the result (examples):
-  • case 1 — drill-down: call render() with an expanded diagram
-  • case 2 — navigation: call step() until the target frame
-  • case 3 — explain: generate explanation in CLI
-  • case 4 — action chosen: switch on action string, call appropriate tool
+  • drill-down: call render() with an expanded diagram
+  • navigation: call step() or seek() to the target frame
+  • explain: generate explanation in CLI
+```
+
+**Sprint 14 extension — `node_actions` popup menu:**
+```
+agent calls wait_click(node_actions={ "A": ["Explain", "Drill down"] })
+  → server pushes { action: "set_node_actions", node_actions: { "A": [...] }, enabled: true }
+  → user clicks node A → browser shows inline popup menu
+  → user selects "Drill down" → browser fires POST /node-click:
+      { type: "node", id: "A", label: "Client", action: "Drill down" }
+  → MCP wait_click() returns { ok: true, type: "node", id: "A", label: "Client", action: "Drill down" }
+  • clicking a node not in node_actions → plain click (no popup)
+  • clicking outside popup dismisses it without firing
 ```
 
 **Mermaid node ID extraction (browser-side):**
