@@ -8,10 +8,11 @@ import { parseArgs } from "node:util";
 
 const { values } = parseArgs({
   options: {
-    port:  { type: "string",  short: "p", default: "3000"      },
-    delay: { type: "string",  short: "d", default: "5000"      },
-    type:  { type: "string",  short: "t", default: ""          },
-    help:  { type: "boolean", short: "h", default: false       },
+    port:        { type: "string",  short: "p", default: "3000"  },
+    delay:       { type: "string",  short: "d", default: "5000"  },
+    type:        { type: "string",  short: "t", default: ""      },
+    interactive: { type: "boolean", short: "i", default: false   },
+    help:        { type: "boolean", short: "h", default: false   },
   },
   strict: true,
 });
@@ -26,6 +27,10 @@ Options:
   -t, --type <types>    Comma-separated types to include
                         (mermaid, svg, html, katex, vega-lite, step-frames)
                         Omit to show all slides.
+  -i, --interactive     Run Section 9: interactive drill-down demo.
+                        Requires a browser — renders an overview, waits for
+                        a node click, dispatches a hardcoded detail diagram,
+                        then waits for the Done button before finishing.
   -h, --help            Show this help
 `);
   process.exit(0);
@@ -511,5 +516,100 @@ async function runSeekDemo() {
 
 console.log("\n── Section 8: seek() random-access frame navigation ──");
 await runSeekDemo();
+
+// ── Section 9 — Interactive drill-down (wait_click + wait_done) ──────────────
+//
+// Simulates a real agent interaction loop:
+//   render overview → wait_click → dispatch hardcoded detail → wait_done → end
+//
+// Node IDs in the overview match Mermaid's SVG pattern (flowchart-<id>-N),
+// so clicking FE / BE / DB returns those IDs via the wait_click response.
+// A real agent would generate the detail diagram dynamically; here it is
+// hardcoded to make the demo self-contained.
+
+const DRILLDOWN = {
+  FE: {
+    title: "Frontend internals — click Done when ready",
+    payload: `graph TD
+  Browser[Browser SPA]
+  Svelte[Svelte components]
+  WS[WebSocket client]
+  Browser --> Svelte
+  Browser --> WS
+  WS -->|ws /stream| Server[Node server :3000]`,
+  },
+  BE: {
+    title: "Backend internals — click Done when ready",
+    payload: `graph TD
+  Hono[Hono HTTP :3000]
+  MCP[MCP server SSE /mcp]
+  WSS[WebSocket /stream]
+  REST[REST endpoints]
+  Hono --> MCP
+  Hono --> WSS
+  Hono --> REST`,
+  },
+  DB: {
+    title: "In-memory session — click Done when ready",
+    payload: `graph TD
+  Session[Session module]
+  Canvas[Canvas state]
+  Frames[Step-frames cursor]
+  NTF[nodeToFrame map]
+  Session --> Canvas
+  Session --> Frames
+  Session --> NTF`,
+  },
+};
+
+async function runInteractiveDemo() {
+  const overview = `graph TD
+  FE[Frontend]
+  BE[Backend]
+  DB[(Database)]
+  FE -->|HTTP| BE
+  BE -->|Query| DB`;
+
+  console.log("   rendering overview — open the browser tab and click a node");
+
+  const r1 = await post("/render", {
+    type: "mermaid",
+    payload: overview,
+    options: { title: "9 — Click FE, BE, or DB to drill in" },
+  });
+  if (!r1.ok) { console.error(`   ✗ render failed: ${r1.error}`); return; }
+
+  console.log("   waiting for click (POST /wait-click) …");
+  const click = await fetch(`${BASE}/wait-click`, { method: "POST" }).then((r) => r.json());
+
+  if (click.type === "timeout") {
+    console.log("   timed out — no click received within 10 minutes");
+    return;
+  }
+
+  console.log(`   ✓ click: type=${click.type}  id=${click.id}  label="${click.label}"`);
+
+  const detail = DRILLDOWN[click.id];
+  if (!detail) {
+    console.log(`   (no drill-down defined for "${click.id}" — expected FE, BE, or DB)`);
+    return;
+  }
+
+  const r2 = await post("/render", {
+    type: "mermaid",
+    payload: detail.payload,
+    options: { title: detail.title },
+  });
+  if (!r2.ok) { console.error(`   ✗ render failed: ${r2.error}`); return; }
+  console.log(`   ✓ drill-down rendered for "${click.id}" — click Done in the browser when ready`);
+
+  await fetch(`${BASE}/wait-done`, { method: "POST" });
+  console.log("   ✓ Done received");
+}
+
+if (values.interactive) {
+  console.log("\n── Section 9: interactive drill-down (wait_click + wait_done) ──");
+  await runInteractiveDemo();
+}
 
 console.log("\n✅  Showcase complete.\n");
