@@ -142,7 +142,7 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /node-click` — Phase 2 (Sprint 12). Body: `{ "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }`. Calls `signalClick(event)` (events.ts) to resolve any pending `waitForClick()`. Returns `{ "ok": true }`. No-op if no `wait_click()` is pending.
 
-`POST /wait-click` is plain-click only — it does not accept a `node_actions` body even in Sprint 14. REST endpoints are `curl`-friendly fallbacks for debugging and non-MCP agents; popup menus (`node_actions`) are an MCP-exclusive feature requiring browser-side coordination. Use the MCP `wait_click(node_actions)` tool for popup menu support.
+`POST /wait-click` accepts an optional `node_actions` body (`Record<string, string[]>`). If provided, the server validates it and broadcasts it to the browser via `set_node_actions` — popup menus appear for registered nodes exactly as they do via the MCP `wait_click(node_actions)` tool. Invalid `node_actions` returns `{ ok: false, error: "..." }` with 400. Omitting the body (or sending an empty body) arms a plain-click listener with no popup.
 
 `POST /seek` — Phase 2 (Sprint 13). Body: `{ "frame": N }`. Calls `seekStepFrame(N)`, broadcasts the target frame to the browser. Returns the same shape as the MCP `seek()` response: `{ "ok": true, "current_frame": N, "total_frames": M }`. Error if no step-frames sequence is loaded or frame is out of range.
 
