@@ -354,6 +354,32 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
+---
+
+### Sprint 15 — Test folder restructure
+
+**Goal:** consolidate all test-related files under a single `tests/` root with clear sub-directories by test kind. No new tests; no behavior changes.
+
+**Scope:**
+
+- [x] Create `tests/e2e/`, `tests/human_driven/`, `tests/unit/server/`, `tests/unit/client/` (empty placeholder)
+- [x] Move `e2e/canvas.spec.ts` → `tests/e2e/canvas.spec.ts`
+- [x] Move `manualtests/showcase.js` → `tests/human_driven/showcase.js`
+- [x] Move `manualtests/click-demo.js` → `tests/human_driven/click-demo.js`
+- [x] Move `server/app.test.ts` → `tests/unit/server/app.test.ts`
+- [x] Update `playwright.config.ts`: `testDir: "./tests/e2e"` (was `"./e2e"`)
+- [x] Update `vitest.config.ts`: `include` pattern to `["tests/unit/server/**/*.test.ts"]` (was `["server/**/*.test.ts"]`)
+- [x] Update `package.json` scripts: no changes needed — no `manualtests/` references in scripts
+- [x] Update import paths in `tests/unit/server/app.test.ts` (updated to `../../../server/*.js`)
+- [x] Remove `e2e/`, `manualtests/`, `server/app.test.ts`
+- [x] `test-results/` stays at root — no change needed (Playwright default output)
+- [x] `npm test` — 64 Vitest tests pass ✅
+- [x] `npm run test:e2e` — 16 Playwright tests pass ✅
+
+**DoD:** `npm test` and `npm run test:e2e` green; `node tests/human_driven/showcase.js` runs the slideshow demo; no test file remains outside `tests/`; `server/app.test.ts` and `e2e/` and `manualtests/` no longer exist.
+
+---
+
 ## Definition of Done — MVP
 - Agent can call `render(type="mermaid", payload)` and diagram appears in browser within 200ms
 - Agent can call `clear()` to reset the canvas

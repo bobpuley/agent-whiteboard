@@ -239,6 +239,28 @@ Decision: not applicable. Marimo is a Python notebook runtime — incompatible w
 
 ---
 
+## 9. Test Folder Restructure Proposal
+
+Current layout is fragmented:
+- `e2e/` — Playwright browser tests (`canvas.spec.ts`, 16 tests)
+- `manualtests/` — human-driven scripts (`showcase.js`, `click-demo.js`)
+- `server/app.test.ts` — Vitest unit/integration tests (64 tests)
+- `test-results/` — Playwright output artifact (generated, not source)
+
+Proposed unified layout:
+```
+./tests
+├── e2e/
+├── human_driven/
+└── unit/
+    ├── server/
+    └── client/
+```
+
+Motivation: all test-related code lives in one top-level `tests/` directory; clear separation by test kind; `client/` is a placeholder for future Svelte component unit tests.
+
+---
+
 ## Bug Reports
 
 **B1 — Slideshow step-frames slide renders nothing (Sprint 9)**

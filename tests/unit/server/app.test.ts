@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createApp } from "./app.js";
-import { resetCanvas } from "./session.js";
-import { cancelSlideshow } from "./slideshow.js";
-import { resetClick } from "./events.js";
+import { createApp } from "../../../server/app.js";
+import { resetCanvas } from "../../../server/session.js";
+import { cancelSlideshow } from "../../../server/slideshow.js";
+import { resetClick } from "../../../server/events.js";
 
 // Use a fresh app instance per suite; session state is reset between each test.
 const app = createApp();

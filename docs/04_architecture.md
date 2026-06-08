@@ -360,12 +360,21 @@ agent-whiteboard/
 │   │       ├── Katex.svelte
 │   │       └── VegaLite.svelte
 │   └── public/
-├── e2e/
-│   └── canvas.spec.ts    # Playwright e2e tests (16 tests) — Sprint 11
+├── tests/                # unified test root — Sprint 15 refactor
+│   ├── e2e/
+│   │   └── canvas.spec.ts      # Playwright e2e tests (16 tests) — Sprint 11
+│   ├── human_driven/
+│   │   ├── showcase.js          # manual slideshow demo
+│   │   └── click-demo.js        # manual click/popup demo
+│   └── unit/
+│       ├── server/
+│       │   └── app.test.ts      # Vitest integration tests (64 tests)
+│       └── client/              # placeholder — Svelte component unit tests (future)
+├── test-results/         # Playwright artifact output (generated, not source)
 ├── docs/
 ├── .mcp.json             # MCP server registration — committed to repo
-├── playwright.config.ts  # Playwright config — Sprint 11
-├── vitest.config.ts      # scopes Vitest to server/**/*.test.ts — Sprint 11
+├── playwright.config.ts  # Playwright config — testDir updated to ./tests/e2e — Sprint 15
+├── vitest.config.ts      # include updated to tests/unit/server/**/*.test.ts — Sprint 15
 ├── tsconfig.json         # server TypeScript config (see below)
 ├── package.json
 └── CLAUDE.md
