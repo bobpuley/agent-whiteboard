@@ -139,3 +139,18 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 - Main server (`server/app.ts`) forwards browser `POST /user-done` → relay → notification.
 - Browser has a "Done" button that fires `POST /user-done`.
 - See `04` §2 for updated Phase 2 architecture.
+
+---
+
+## F. Project Infrastructure
+
+**F1 — Test folder restructure (Sprint 15)**
+
+> ⚠️ ASSUMPTION: `tests/unit/client/` is a placeholder only — no Svelte component unit tests exist today. Creating the directory structure signals intent but adds no immediate test coverage.
+
+Risks from moving the three test roots:
+- `playwright.config.ts` `testDir` must be updated to `"./tests/e2e"` — a missed update breaks `npm run test:e2e`
+- `vitest.config.ts` `include` pattern must be updated to `"tests/unit/server/**/*.test.ts"` — a missed update causes Vitest to find no tests (silent pass instead of real coverage)
+- `package.json` scripts that reference `manualtests/` (e.g. `node manualtests/showcase.js`) must be updated; any external runbooks or docs referencing old paths will silently break
+- `test-results/` is a Playwright artifact output directory (controlled by `playwright.config.ts` `outputDir`); it is not a source folder and is not included in the `tests/` hierarchy — leaving it at root is correct, or it can be redirected to `tests/test-results/` via config without moving any source files
+- **Decision:** `test-results/` stays at root (default Playwright behavior) unless the user decides otherwise
