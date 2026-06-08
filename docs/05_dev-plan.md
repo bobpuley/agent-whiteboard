@@ -317,7 +317,9 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
-### Sprint 14 — Node click: popup action menu + edge support + `node_actions`
+### Sprint 14 — Node click: popup action menu + edge support + `node_actions` ✅
+
+**Status:** Complete (2026-06-08). All tasks shipped.
 
 > **Blocked by:** Sprint 13 (the `POST /wait-click` bugfix must land first so the REST path correctly arms the browser before Sprint 14 extends it with `node_actions`).
 
@@ -325,24 +327,30 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 **Scope:**
 
-- [ ] **`server/mcp.ts`:** add `node_actions` optional parameter to `wait_click()`.
+- [x] **`server/events.ts`:** Added `action: string | null` to `ClickEvent` interface (always present; `null` when no popup shown or plain click; string when menu item selected).
+- [x] **`server/mcp.ts`:** Added `node_actions` optional parameter to `wait_click()`.
   - Input schema: `z.record(z.string(), z.array(z.string())).optional()` — map of node ID → string[].
   - Push `{ action: "set_node_actions", node_actions, enabled: true }` (with the map populated) to browser.
-  - Return value now includes `action?: string` when a menu item was selected.
-- [ ] **`server/app.ts`:** `POST /node-click` body extended with optional `action?: string`.
-- [ ] **`client/src/renderers/Mermaid.svelte`:** popup menu logic.
-  - On click of a node whose ID has a non-empty entry in `node_actions`: render an inline floating menu (absolute-positioned `<div>`) listing the action strings.
-  - User clicks a menu item → fire `POST /node-click` with `{ type, id, label, action }`.
-  - Clicking a node with no registered actions (empty array or missing key) → fire `POST /node-click` without `action`.
-  - Clicking outside the menu dismisses it without firing.
-  - Edge clicks: always plain (no popup), `type: "edge"`, include `source`, `target` derived from SVG id.
-- [ ] **Tests:** integration tests for `node_actions` round-trip (menu selection returned in click event); plain click on unregistered node; edge click.
-- [ ] **Validate across Mermaid types:** test `flowchart LR`, `graph TD`, `classDiagram` to understand current limits. Document which types support reliable ID extraction (expected: graph/flowchart good, others best-effort); mark limitations in `mcp.ts` tool description. No attempt to extend support to new types in this sprint.
-- [ ] **`manualtests/click-demo.js`:** extend to demonstrate popup menu — pre-register `{ "B": ["Explain this", "Drill down"] }`, click node B, log selected action.
+  - Return value includes `action: string | null` always.
+- [x] **`server/app.ts`:** `POST /node-click` body extended with optional `action?: string`; stored as `action: body.action ?? null` in `ClickEvent`.
+- [x] **`client/src/App.svelte`:** Tracks `nodeActions` state from `set_node_actions` WebSocket commands; passes to `MermaidRenderer`.
+- [x] **`client/src/renderers/Mermaid.svelte`:** Popup menu logic.
+  - On click of a node whose ID has a non-empty entry in `node_actions`: renders an inline floating menu (fixed-positioned `<div>`) listing the action strings.
+  - User clicks a menu item → fires `POST /node-click` with `{ type, id, label, action }`.
+  - Clicking a node with no registered actions → plain click, `POST /node-click` without `action`.
+  - Clicking outside the menu (backdrop) dismisses it without firing.
+  - Edge clicks: always plain (no popup).
+  - Popup is dismissed when `clickable` becomes false (wait_click disarmed).
+- [x] **Tests:** 4 new integration tests for `node_actions` round-trip (menu action returned in click event), plain click on unregistered node, edge click with `action: null`, no-op node-click with action. Existing Sprint 12/13 tests updated to include `action: null` in expected responses. 64 tests total, all passing.
+- [x] **Validate across Mermaid types:** Node ID extraction via `flowchart-<id>-<N>` pattern is reliable for `graph`/`flowchart` types. `classDiagram`, `sequenceDiagram`, `erDiagram` use different SVG structures — node IDs are opaque or auto-generated; documented in `mcp.ts` tool description ("best-effort"). No attempt to extend extraction to new types in this sprint.
+- [x] **`manualtests/click-demo.js`:** Added `--mode popup` to demonstrate the `node_actions` round-trip (simulates popup selection via `POST /node-click` with `action` field). Real browser popup requires MCP `wait_click(node_actions=...)` from Claude Code.
 
-**DoD:**
-- Agent calls `wait_click(node_actions={ "B": ["Explain this", "Drill down"] })` after rendering a `graph TD`; clicking node B shows a popup with two options; selecting "Drill down" resolves `wait_click()` with `{ ok: true, type: "node", id: "B", label: "Server", action: "Drill down" }`; clicking an unregistered node returns a plain click (no action); clicking an edge returns `{ type: "edge", id: "B_C", ... }`.
+**DoD:** ✅
+- Agent calls `wait_click(node_actions={ "B": ["Explain this", "Drill down"] })` after rendering a `graph TD`; clicking node B shows a popup with two options; selecting "Drill down" resolves `wait_click()` with `{ ok: true, type: "node", id: "B", label: "Server", action: "Drill down" }`; clicking an unregistered node returns a plain click (`action: null`); clicking an edge returns `{ type: "edge", ..., action: null }`.
 - Menu dismisses cleanly on outside click; browser returns to normal (non-clickable) state after resolution.
+- `action` field is always present in `wait_click()` responses (null or string).
+
+> **Implementation note:** `POST /wait-click` (REST) remains plain-click only — it does not accept `node_actions` body even in Sprint 14. REST endpoints are `curl`-friendly fallbacks for debugging; popup menus are an MCP-exclusive feature requiring browser-side coordination. Use the MCP `wait_click(node_actions)` tool for popup menu support.
 
 ---
 

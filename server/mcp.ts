@@ -396,23 +396,36 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // wait_click() — arm click listener, block until user clicks a node/edge.
+  // wait_click(node_actions?) — arm click listener, block until user clicks a node/edge.
   server.registerTool(
     "wait_click",
     {
       description:
         "Arm the browser for a single node or edge click on the current Mermaid diagram. " +
-        "The browser highlights clickable elements; one click resolves the call. " +
-        "Returns { \"ok\": true, \"type\": \"node\"|\"edge\", \"id\": \"<id>\", \"label\": \"<label>\" }. " +
-        "On timeout (10 min): returns { \"ok\": true, \"type\": \"timeout\" }. " +
-        "Applies to graph/flowchart diagrams; other Mermaid types are best-effort. " +
-        "Only one wait_click() may be pending at a time — a second call cancels the first. " +
-        "Example flow: render({ type: \"mermaid\", payload: \"graph TD; A-->B\" }) → wait_click() → handle result",
-      inputSchema: z.object({}),
+        "The browser highlights clickable elements; one click resolves the call.\n" +
+        "Optional node_actions: map of node ID → string[] — nodes with registered actions show a popup menu on click; user selects one.\n" +
+        "Returns { \"ok\": true, \"type\": \"node\"|\"edge\", \"id\": \"<id>\", \"label\": \"<label>\", \"action\": \"<string or null>\" }.\n" +
+        "  action is null when no popup was shown or user clicked without selecting; string value when menu item was selected.\n" +
+        "On timeout (10 min): returns { \"ok\": true, \"type\": \"timeout\" }.\n" +
+        "Applies to graph/flowchart diagrams reliably; other Mermaid types (sequenceDiagram, erDiagram, classDiagram) are best-effort — node IDs may be opaque or extraction may fail.\n" +
+        "Only one wait_click() may be pending at a time — a second call cancels the first.\n" +
+        "Example — plain click: render({ type: \"mermaid\", payload: \"graph TD; A-->B\" }) → wait_click() → handle result\n" +
+        "Example — popup menu: wait_click({ node_actions: { \"B\": [\"Explain\", \"Drill down\"] } }) → user clicks B → selects action",
+      inputSchema: z.object({
+        node_actions: z
+          .record(z.string(), z.array(z.string()))
+          .optional()
+          .describe(
+            "Optional map of node ID → action labels. " +
+            "Nodes with a non-empty entry show a popup menu on click; user selects one action. " +
+            "Nodes not in the map accept a plain click (no popup). " +
+            "Edge clicks are always plain (no popup)."
+          ),
+      }),
     },
-    async () => {
-      // Arm the browser click listener.
-      broadcast({ action: "set_node_actions", node_actions: {}, enabled: true });
+    async ({ node_actions }) => {
+      // Arm the browser click listener, passing the node_actions map (or empty map for plain click).
+      broadcast({ action: "set_node_actions", node_actions: node_actions ?? {}, enabled: true });
       const event = await waitForClick();
       // Disarm the browser.
       broadcast({ action: "set_node_actions", enabled: false });
@@ -422,7 +435,16 @@ export function createMcpServer(): McpServer {
         };
       }
       return {
-        content: [{ type: "text", text: JSON.stringify({ ok: true, type: event.type, id: event.id, label: event.label }) }],
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ok: true,
+            type: event.type,
+            id: event.id,
+            label: event.label,
+            action: event.action,
+          }),
+        }],
       };
     }
   );

@@ -4,6 +4,7 @@
 
   export let source: string;
   export let clickable = false;
+  export let nodeActions: Record<string, string[]> | undefined = undefined;
   export let nodeToFrame: Record<string, number> | undefined = undefined;
 
   let wrapper: HTMLDivElement;
@@ -95,11 +96,48 @@
     e.stopPropagation()
   }
 
+  // ── Popup menu state ─────────────────────────────────────────────────────────
+
+  interface PopupState {
+    x: number
+    y: number
+    nodeId: string
+    nodeLabel: string
+    actions: string[]
+  }
+
+  let popup: PopupState | null = null
+
+  function dismissPopup() {
+    popup = null
+  }
+
+  async function selectAction(action: string) {
+    if (!popup) return
+    const { nodeId: id, nodeLabel: label } = popup
+    popup = null
+    await fetch('/node-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'node', id, label, action }),
+    }).catch(() => { /* server might not be listening */ })
+  }
+
   async function onNodeClick(e: Event) {
     e.stopPropagation()
     const el = (e.currentTarget as Element).closest('.node') ?? (e.currentTarget as Element)
     const id = extractNodeId(el) ?? el.id
     const label = extractNodeLabel(el)
+
+    // If this node has registered actions, show the popup menu.
+    const actions = nodeActions?.[id]
+    if (actions && actions.length > 0) {
+      const me = e as MouseEvent
+      popup = { x: me.clientX, y: me.clientY, nodeId: id, nodeLabel: label, actions }
+      return
+    }
+
+    // Plain click — no popup.
     await fetch('/node-click', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -112,6 +150,7 @@
     const el = e.currentTarget as Element
     const id = extractEdgeId(el) ?? ''
     const label = el.textContent?.trim() ?? ''
+    // Edge clicks are always plain (no popup).
     await fetch('/node-click', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -251,7 +290,7 @@
   });
 
   // Re-attach (or detach) click listeners when clickable prop changes.
-  $: if (clickable) { attachClickListeners() } else { detachClickListeners() }
+  $: if (clickable) { attachClickListeners() } else { detachClickListeners(); popup = null }
 
   // Re-attach (or detach) node-to-frame listeners when nodeToFrame prop changes.
   $: if (nodeToFrame) { attachNodeToFrameListeners(nodeToFrame) } else { detachNodeToFrameListeners() }
@@ -282,6 +321,24 @@
   {/if}
 
   <div class="zoom-hint">scroll to zoom · drag to pan · dbl-click to reset</div>
+
+  {#if popup}
+    <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+    <div class="popup-backdrop" on:click={dismissPopup}></div>
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div
+      class="node-action-popup"
+      style="position: fixed; left: {popup.x}px; top: {popup.y}px;"
+      on:click|stopPropagation={() => {}}
+    >
+      {#each popup.actions as action}
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div class="popup-item" role="button" tabindex="0" on:click={() => selectAction(action)} on:keydown={(e) => e.key === 'Enter' && selectAction(action)}>
+          {action}
+        </div>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -338,5 +395,42 @@
   :global(.mermaid-container svg .node.clickable-node polygon) {
     outline: 2px solid #3498db;
     outline-offset: 2px;
+  }
+
+  /* Transparent backdrop — covers the whole viewport to catch outside clicks. */
+  .popup-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+  }
+
+  /* Floating popup menu. */
+  .node-action-popup {
+    z-index: 100;
+    background: #fff;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    min-width: 140px;
+    overflow: hidden;
+    transform: translate(4px, 4px); /* slight offset from cursor */
+  }
+
+  .popup-item {
+    padding: 9px 16px;
+    font-size: 13px;
+    color: #222;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .popup-item:hover {
+    background: #f0f5ff;
+    color: #1a6ec7;
+  }
+
+  .popup-item + .popup-item {
+    border-top: 1px solid #f0f0f0;
   }
 </style>

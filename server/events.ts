@@ -34,6 +34,7 @@ export interface ClickEvent {
   type: 'node' | 'edge' | 'timeout'
   id: string
   label: string
+  action: string | null
 }
 
 // At most one pending waitForClick() at a time.
@@ -56,7 +57,7 @@ export function signalClick(event: ClickEvent): void {
 export function waitForClick(): Promise<ClickEvent> {
   // Cancel any existing listener.
   if (clickResolve) {
-    clickResolve({ type: 'timeout', id: '', label: '' })
+    clickResolve({ type: 'timeout', id: '', label: '', action: null })
     clickResolve = null
   }
   if (clickTimer) { clearTimeout(clickTimer); clickTimer = null }
@@ -66,7 +67,7 @@ export function waitForClick(): Promise<ClickEvent> {
     clickTimer = setTimeout(() => {
       clickResolve = null
       clickTimer = null
-      resolve({ type: 'timeout', id: '', label: '' })
+      resolve({ type: 'timeout', id: '', label: '', action: null })
     }, WAIT_TIMEOUT_MS)
   })
 }
@@ -74,7 +75,7 @@ export function waitForClick(): Promise<ClickEvent> {
 /** Reset click state — for use in tests only. */
 export function resetClick(): void {
   if (clickResolve) {
-    clickResolve({ type: 'timeout', id: '', label: '' })
+    clickResolve({ type: 'timeout', id: '', label: '', action: null })
     clickResolve = null
   }
   if (clickTimer) { clearTimeout(clickTimer); clickTimer = null }

@@ -263,7 +263,7 @@ export function createApp(): Hono {
   // ── Node / edge click events (Phase 2 — Sprint 12) ───────────────────────────
 
   app.post("/node-click", async (c) => {
-    const body = await c.req.json<{ type?: string; id?: string; label?: string }>();
+    const body = await c.req.json<{ type?: string; id?: string; label?: string; action?: string }>();
     if (body.type !== "node" && body.type !== "edge") {
       return c.json({ ok: false, error: 'type must be "node" or "edge"' }, 400);
     }
@@ -271,6 +271,7 @@ export function createApp(): Hono {
       type: body.type,
       id: body.id ?? "",
       label: body.label ?? "",
+      action: body.action ?? null,
     };
     signalClick(event); // no-op if no wait_click() is pending
     return c.json({ ok: true });
