@@ -113,13 +113,15 @@ Block until the user clicks the **Done** button in the browser tab, then return.
 
 **Returns:** `{ "ok": true }`
 
-### `wait_click()`
+### `wait_click([node_actions])`
 
 Arm the browser for a single node or edge click on the current Mermaid diagram. Nodes are highlighted with a blue outline and pointer cursor. Applies reliably to `graph`/`flowchart` diagrams; other types are best-effort.
 
+`node_actions` (optional) — a map of node ID → string array. When provided, clicking a mapped node shows an inline popup menu listing the action strings; the selected item is returned in the `action` field. Nodes not in the map produce a plain click (`action: null`). Edge clicks are always plain.
+
 Only one `wait_click()` may be pending at a time — a second call cancels the first. Times out after 10 minutes.
 
-**Returns:** `{ "ok": true, "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": null }` on click, or `{ "ok": true, "type": "timeout" }` on timeout.
+**Returns:** `{ "ok": true, "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<selected>" | null }` on click (`action` is the chosen menu item string, or `null` for a plain click), or `{ "ok": true, "type": "timeout" }` on timeout.
 
 ## Step-frames payload shape
 
@@ -161,7 +163,7 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `POST /user-done` | — (simulates the Done button click) |
 | `POST /wait-done` | — (long-polls until Done is signalled) |
 | `POST /node-click` | `{ "type": "node"\|"edge", "id": "...", "label": "..." }` (sent by browser) |
-| `POST /wait-click` | — (long-polls until a node/edge click is signalled) |
+| `POST /wait-click` | `{ "node_actions": { "<id>": ["action1", ...] } }` (optional; long-polls until a node/edge click is signalled) |
 
 All endpoints return the same JSON shapes as the MCP tools.
 
@@ -170,7 +172,7 @@ All endpoints return the same JSON shapes as the MCP tools.
 Exercises every renderer via a server-side slideshow (requires `npm run dev` running):
 
 ```bash
-node manualtests/showcase.js
+node tests/human_driven/showcase.js
 ```
 
 Options:
