@@ -601,6 +601,12 @@ async function runInteractiveDemo() {
 
   console.log(`   ✓ click: type=${click.type}  id=${click.id}  label="${click.label}"  action=${JSON.stringify(click.action)}`);
 
+  if (click.type === "edge") {
+    console.log(`   ℹ edge clicked (id="${click.id}" label="${click.label}") — drill-down is node-only in this demo`);
+    console.log("   tip: click one of the three nodes (FE, BE, DB) to see a drill-down diagram");
+    return;
+  }
+
   const detail = DRILLDOWN[click.id];
   if (!detail) {
     console.log(`   (no drill-down defined for "${click.id}" — expected FE, BE, or DB)`);
@@ -723,3 +729,8 @@ if (values.edge) {
 }
 
 console.log("\n✅  Showcase complete.\n");
+console.log("   Interactive sections (not shown above — run separately):");
+console.log("     --interactive (-i)  Section 9:  node click drill-down + Done button");
+console.log("     --popup       (-u)  Section 10: node_actions popup menu (simulated)");
+console.log("     --edge        (-e)  Section 11: edge click demo");
+console.log("");
