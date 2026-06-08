@@ -13,6 +13,7 @@ Phase: discovery and requirements definition. No code yet.
 4. These are living documents — update earlier docs when later ones reveal conflicts
 5. Mark uncertain content with `> ⚠️ ASSUMPTION:` blockquotes
 6. When a document is updated, state explicitly what changed and why
+7. Sprint-close protocol: after all sprint tasks pass automated tests, collect human-driven test feedback before merging. If green: merge → inspect existing tags → propose next semver tag → update CHANGELOG.md + commit → create annotated tag → push commit and tag.
 
 ## Document map
 | File                             | Purpose                                        | Status  |

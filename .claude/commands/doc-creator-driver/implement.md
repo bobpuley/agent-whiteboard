@@ -27,10 +27,23 @@ Do not change requirements or architecture.
       * Implement the code
       * Run the tests
       * Iterate implementation until tests pass
-      * Merge git branch into master
       * Update the `Dev Plan` in 05_dev-plan.md
       * (TaskUpdate completed)
-   6. Go to "1. Analyze the documents"
+   6. Sprint completion gate (runs once, after ALL tasks pass):
+      * AskUserQuestion: "Please run your manual / human-driven tests and report the results. All green?"
+        - If issues found → stay on branch, fix them, go back to step 5 for the affected tasks
+        - If all green → continue
+      * Merge git branch into master (same commit message format as existing merges)
+      * Run: `git tag --list --sort=v:refname` to inspect existing tags
+        - No tags exist → propose `0.1.0`
+        - Tags exist → increment the patch segment of the highest tag (e.g. `0.1.3` → `0.1.4`)
+      * AskUserQuestion: "Proposed tag is <tag>. Confirm or provide an override."
+      * Update/create CHANGELOG.md:
+        - Prepend a new section header `## <tag> — <YYYY-MM-DD>` followed by bullet points summarising the sprint changes (derive from branch commits via `git log`)
+        - `git add CHANGELOG.md && git commit -m "chore: update changelog for <tag>"`
+      * Create annotated tag: `git tag -a <tag> -m "<tag>"`
+      * Push commit and tag: `git push && git push --tags`
+   7. Go to "1. Analyze the documents"
 
 # Required skills
 typescript-expert/SKILL.md
