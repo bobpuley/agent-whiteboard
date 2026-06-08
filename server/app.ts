@@ -71,6 +71,13 @@ async function validatePayload(type: string, payload: string): Promise<string | 
   return null;
 }
 
+function isNodeActionsValid(v: unknown): v is Record<string, string[]> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v as object).every(
+    (arr) => Array.isArray(arr) && (arr as unknown[]).every((s) => typeof s === "string")
+  );
+}
+
 export function createApp(): Hono {
   const app = new Hono();
 
@@ -278,7 +285,22 @@ export function createApp(): Hono {
   });
 
   app.post("/wait-click", async (c) => {
-    broadcast({ action: "set_node_actions", node_actions: {}, enabled: true });
+    let nodeActions: Record<string, string[]> = {};
+    try {
+      const body = await c.req.json<{ node_actions?: unknown }>();
+      if (body.node_actions !== undefined) {
+        if (!isNodeActionsValid(body.node_actions)) {
+          return c.json(
+            { ok: false, error: "node_actions must be a map of node ID → string[]" },
+            400
+          );
+        }
+        nodeActions = body.node_actions as Record<string, string[]>;
+      }
+    } catch {
+      // No body or non-JSON body — treat as plain click (node_actions stays {}).
+    }
+    broadcast({ action: "set_node_actions", node_actions: nodeActions, enabled: true });
     const event = await waitForClick();
     broadcast({ action: "set_node_actions", enabled: false });
     return c.json({ ok: true, ...event });

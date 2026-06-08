@@ -350,7 +350,7 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 - Menu dismisses cleanly on outside click; browser returns to normal (non-clickable) state after resolution.
 - `action` field is always present in `wait_click()` responses (null or string).
 
-> **Implementation note:** `POST /wait-click` (REST) remains plain-click only — it does not accept `node_actions` body even in Sprint 14. REST endpoints are `curl`-friendly fallbacks for debugging; popup menus are an MCP-exclusive feature requiring browser-side coordination. Use the MCP `wait_click(node_actions)` tool for popup menu support.
+> **Implementation note:** `POST /wait-click` (REST) was extended post-Sprint 14 to accept an optional `node_actions` body — popup menus now work via both the MCP tool and the REST endpoint. See `03` F4 and `04` REST fallback section.
 
 ---
 

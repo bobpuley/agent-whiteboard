@@ -789,6 +789,38 @@ describe("POST /node-click", () => {
     expect(await res.json()).toEqual({ ok: true, type: "timeout", id: "", label: "", action: null });
     vi.useRealTimers();
   });
+
+  it("/wait-click with node_actions body broadcasts the map and returns action from node-click", async () => {
+    const nodeActions = { B: ["Explain", "Drill down"] };
+    const waitPromise = app.request("/wait-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ node_actions: nodeActions }),
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "B", label: "Server", action: "Drill down" }),
+    });
+
+    const res = await waitPromise;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, type: "node", id: "B", label: "Server", action: "Drill down" });
+  });
+
+  it("/wait-click rejects invalid node_actions with 400", async () => {
+    const res = await app.request("/wait-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ node_actions: { B: "not-an-array" } }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/node_actions/);
+  });
 });
 
 describe("POST /slideshow/stop", () => {

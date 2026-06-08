@@ -630,16 +630,12 @@ if (RUN_INTERACTIVE) {
   await runInteractiveDemo();
 }
 
-// ── Section 10 — node_actions popup menu (Sprint 14) ─────────────────────────
+// ── Section 10 — node_actions popup menu ─────────────────────────────────────
 //
-// Demonstrates the node_actions round-trip:
-//   render diagram → arm /wait-click → simulate browser popup selection
-//   via POST /node-click with action field → log returned action.
-//
-// NOTE: POST /wait-click (REST) is plain-click only — it does not accept a
-// node_actions body.  The popup menu is an MCP-exclusive feature: use the MCP
-// wait_click(node_actions={...}) tool from Claude Code for the real experience.
-// This section simulates what the browser fires after the user picks an item.
+// Full end-to-end popup demo:
+//   render diagram → arm /wait-click with node_actions map → browser shows
+//   popup when user clicks a registered node → user picks an action →
+//   server returns { type, id, label, action } to this script.
 
 async function runPopupDemo() {
   const diagram = `graph TD
@@ -648,29 +644,49 @@ async function runPopupDemo() {
   DB -->|Result| Server
   Server -->|Response| Client`;
 
+  const nodeActions = {
+    Client: ["Explain", "Show internals"],
+    Server: ["Explain", "Show internals", "Change request"],
+    DB:     ["Explain", "Show schema"],
+  };
+
   const r = await post("/render", {
     type: "mermaid",
     payload: diagram,
-    options: { title: "10 — node_actions popup demo (simulated)" },
+    options: { title: "10 — Click a node to see its popup menu" },
   });
   if (!r.ok) { console.error(`   ✗ render failed: ${r.error}`); return; }
-  console.log("   ✓ diagram rendered");
+  console.log("   ✓ diagram rendered — open the browser tab and click a node:");
+  console.log("       Client → Explain | Show internals");
+  console.log("       Server → Explain | Show internals | Change request");
+  console.log("       DB     → Explain | Show schema");
 
-  // Arm wait-click in background.
-  const waitPromise = fetch(`${BASE}/wait-click`, { method: "POST" }).then((r2) => r2.json());
-  await new Promise((res) => setTimeout(res, 100));
+  const click = await fetch(`${BASE}/wait-click`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ node_actions: nodeActions }),
+  }).then((r2) => r2.json());
 
-  // Simulate: browser fires POST /node-click with action (as if popup was shown for node "Server").
-  console.log("   simulating popup selection: node=Server  action=\"Drill down\"");
-  await post("/node-click", { type: "node", id: "Server", label: "Server", action: "Drill down" });
+  if (click.type === "timeout") {
+    console.log("   timed out — no click received within 10 minutes");
+    return;
+  }
 
-  const click = await waitPromise;
-  console.log(`   ✓ wait_click resolved: type=${click.type}  id=${click.id}  label="${click.label}"  action=${JSON.stringify(click.action)}`);
-  console.log("   (for real popup, use MCP wait_click(node_actions={\"Server\":[\"Explain\",\"Drill down\"]}) from Claude Code)");
+  console.log(`\n   ✓ click received:`);
+  console.log(`       type   = ${click.type}`);
+  console.log(`       id     = ${click.id}`);
+  console.log(`       label  = "${click.label}"`);
+  console.log(`       action = ${JSON.stringify(click.action)}`);
+
+  if (click.action) {
+    console.log(`\n   Agent would now handle: "${click.action}" on node "${click.label}"`);
+  } else {
+    console.log(`\n   Plain click on unregistered node — no action selected`);
+  }
 }
 
 if (RUN_POPUP) {
-  console.log("\n── Section 10: node_actions popup menu (Sprint 14, simulated) ──");
+  console.log("\n── Section 10: node_actions popup menu ──");
   await runPopupDemo();
 }
 
