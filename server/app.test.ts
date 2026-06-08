@@ -739,7 +739,7 @@ describe("POST /node-click", () => {
 
     const res = await waitPromise;
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, type: "node", id: "B", label: "Server" });
+    expect(await res.json()).toEqual({ ok: true, type: "node", id: "B", label: "Server", action: null });
   });
 
   it("edge click resolves /wait-click with type=edge", async () => {
@@ -753,7 +753,7 @@ describe("POST /node-click", () => {
     });
 
     const res = await waitPromise;
-    expect(await res.json()).toEqual({ ok: true, type: "edge", id: "L_A_B_0", label: "HTTP" });
+    expect(await res.json()).toEqual({ ok: true, type: "edge", id: "L_A_B_0", label: "HTTP", action: null });
   });
 
   it("second /wait-click cancels the first (replaces listener)", async () => {
@@ -774,8 +774,8 @@ describe("POST /node-click", () => {
     const firstBody = await (await first).json<{ ok: boolean; type: string }>();
     const secondBody = await (await second).json<{ ok: boolean; type: string }>();
 
-    expect(firstBody).toEqual({ ok: true, type: "timeout", id: "", label: "" });
-    expect(secondBody).toEqual({ ok: true, type: "node", id: "X", label: "X" });
+    expect(firstBody).toEqual({ ok: true, type: "timeout", id: "", label: "", action: null });
+    expect(secondBody).toEqual({ ok: true, type: "node", id: "X", label: "X", action: null });
   });
 
   it("/wait-click resolves with timeout after timeout fires", async () => {
@@ -786,7 +786,7 @@ describe("POST /node-click", () => {
     await vi.runAllTimersAsync();
 
     const res = await waitPromise;
-    expect(await res.json()).toEqual({ ok: true, type: "timeout", id: "", label: "" });
+    expect(await res.json()).toEqual({ ok: true, type: "timeout", id: "", label: "", action: null });
     vi.useRealTimers();
   });
 });
@@ -915,7 +915,7 @@ describe("POST /seek", () => {
 // ── Sprint 13 — POST /wait-click bugfix: broadcasts set_node_actions ─────────
 
 describe("POST /wait-click — set_node_actions broadcast (Sprint 13 bugfix)", () => {
-  it("resolves a pending /wait-click and the request returns { ok: true, type, id, label }", async () => {
+  it("resolves a pending /wait-click and the request returns { ok: true, type, id, label, action }", async () => {
     // Baseline: wait-click round-trip still works after the bugfix.
     const waitPromise = app.request("/wait-click", { method: "POST" });
     await new Promise((r) => setTimeout(r, 0));
@@ -928,6 +928,63 @@ describe("POST /wait-click — set_node_actions broadcast (Sprint 13 bugfix)", (
 
     const res = await waitPromise;
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, type: "node", id: "FE", label: "Frontend" });
+    expect(await res.json()).toEqual({ ok: true, type: "node", id: "FE", label: "Frontend", action: null });
+  });
+});
+
+// ── Sprint 14 — node_actions: popup menu action returned in click event ───────
+
+describe("POST /node-click — Sprint 14: action field", () => {
+  it("node click with action resolves /wait-click with action string", async () => {
+    const waitPromise = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "B", label: "Server", action: "Drill down" }),
+    });
+
+    const res = await waitPromise;
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, type: "node", id: "B", label: "Server", action: "Drill down" });
+  });
+
+  it("node click without action resolves /wait-click with action: null", async () => {
+    const waitPromise = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "A", label: "Client" }),
+    });
+
+    const res = await waitPromise;
+    expect(await res.json()).toEqual({ ok: true, type: "node", id: "A", label: "Client", action: null });
+  });
+
+  it("edge click always returns action: null (edges do not support popup)", async () => {
+    const waitPromise = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "edge", id: "L_A_B_0", label: "HTTP" }),
+    });
+
+    const res = await waitPromise;
+    expect(await res.json()).toEqual({ ok: true, type: "edge", id: "L_A_B_0", label: "HTTP", action: null });
+  });
+
+  it("node-click with action resolves even when no /wait-click is pending (no-op)", async () => {
+    const res = await app.request("/node-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "node", id: "B", label: "Server", action: "Explain" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 });
