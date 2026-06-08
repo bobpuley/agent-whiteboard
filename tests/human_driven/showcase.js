@@ -13,6 +13,7 @@ const { values } = parseArgs({
     type:        { type: "string",  short: "t", default: ""      },
     interactive: { type: "boolean", short: "i", default: false   },
     popup:       { type: "boolean", short: "u", default: false   },
+    edge:        { type: "boolean", short: "e", default: false   },
     help:        { type: "boolean", short: "h", default: false   },
   },
   strict: true,
@@ -37,6 +38,11 @@ Options:
                         a browser popup selection via POST /node-click with
                         an action field. Logs the action returned.
                         (Real popup requires MCP wait_click(node_actions=...) from Claude Code.)
+  -e, --edge            Run Section 11: edge click demo.
+                        Renders a diagram with labeled edges, arms /wait-click,
+                        and waits for you to click an edge in the browser.
+                        Logs the returned { type, id, label } — confirms edge
+                        click returns type="edge" and action=null.
   -h, --help            Show this help
 `);
   process.exit(0);
@@ -660,6 +666,60 @@ async function runPopupDemo() {
 if (values.popup) {
   console.log("\n── Section 10: node_actions popup menu (Sprint 14, simulated) ──");
   await runPopupDemo();
+}
+
+// ── Section 11 — Edge click demo (Sprint 14) ──────────────────────────────────
+//
+// Renders a diagram with clearly labeled edges, arms /wait-click, and waits for
+// the user to click an edge in the browser.  Confirms that:
+//   • edge clicks return { type: "edge", id, label, action: null }
+//   • action is always null for edges (no popup support)
+//
+// Edge IDs in Mermaid SVG are drawn from the parent group of the .edgeLabel
+// element — typically "L_<source>_<target>_<N>".  The label is the text
+// content of the edge label element.
+
+async function runEdgeDemo() {
+  const diagram = `graph LR
+  Client[Client] -->|REST API| Server[Server]
+  Server -->|SQL query| DB[(Database)]
+  DB -->|Result set| Server
+  Server -->|JSON response| Client`;
+
+  const r = await post("/render", {
+    type: "mermaid",
+    payload: diagram,
+    options: { title: "11 — Edge click demo: click any labeled arrow" },
+  });
+  if (!r.ok) { console.error(`   ✗ render failed: ${r.error}`); return; }
+  console.log("   ✓ diagram rendered — open the browser tab and click one of the labeled arrows:");
+  console.log("       REST API  |  SQL query  |  Result set  |  JSON response");
+
+  const waitPromise = fetch(`${BASE}/wait-click`, { method: "POST" }).then((r2) => r2.json());
+
+  const click = await waitPromise;
+
+  if (click.type === "timeout") {
+    console.log("   timed out — no click received within 10 minutes");
+    return;
+  }
+
+  console.log(`\n   ✓ click received:`);
+  console.log(`       type   = ${click.type}`);
+  console.log(`       id     = ${click.id}`);
+  console.log(`       label  = "${click.label}"`);
+  console.log(`       action = ${JSON.stringify(click.action)}`);
+
+  if (click.type === "edge") {
+    console.log("   ✓ confirmed: edge click returns type=\"edge\" and action=null");
+  } else {
+    console.log(`   ℹ node was clicked instead (id="${click.id}") — try clicking a labeled arrow`);
+  }
+}
+
+if (values.edge) {
+  console.log("\n── Section 11: edge click demo (Sprint 14) ──");
+  await runEdgeDemo();
 }
 
 console.log("\n✅  Showcase complete.\n");
