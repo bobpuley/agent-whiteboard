@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Manual showcase — exercises every renderer via a server-side slideshow.
-// Usage: node manualtests/showcase.js [-p <port>] [-d <delay_ms>] [-t <type,...>] [-h]
+// Manual showcase — exercises every renderer and interactive feature.
+// Usage: node tests/human_driven/showcase.js [-p <port>] [-d <delay_ms>] [SECTIONS] [-h]
 
 import { parseArgs } from "node:util";
 
@@ -11,9 +11,11 @@ const { values } = parseArgs({
     port:        { type: "string",  short: "p", default: "3000"  },
     delay:       { type: "string",  short: "d", default: "5000"  },
     type:        { type: "string",  short: "t", default: ""      },
+    standard:    { type: "boolean", short: "s", default: false   },
     interactive: { type: "boolean", short: "i", default: false   },
     popup:       { type: "boolean", short: "u", default: false   },
     edge:        { type: "boolean", short: "e", default: false   },
+    all:         { type: "boolean", short: "a", default: false   },
     help:        { type: "boolean", short: "h", default: false   },
   },
   strict: true,
@@ -21,32 +23,32 @@ const { values } = parseArgs({
 
 if (values.help) {
   console.log(`
-Usage: node manualtests/showcase.js [OPTIONS]
+Usage: node tests/human_driven/showcase.js [OPTIONS]
 
-Options:
+Section flags (combinable, e.g. -ie runs Sections 9+11 only):
+  -s, --standard        Sections 1–8: renderer slideshow + seek demo (default when no flags given)
+  -i, --interactive     Section 9:  node click drill-down + Done button
+  -u, --popup           Section 10: node_actions popup menu (simulated)
+  -e, --edge            Section 11: edge click demo
+  -a, --all             All sections (equivalent to -siue)
+
+Other options:
   -p, --port <port>     Server port (default: 3000)
   -d, --delay <ms>      Delay between slides in ms (default: 5000)
-  -t, --type <types>    Comma-separated types to include
-                        (mermaid, svg, html, katex, vega-lite, step-frames)
-                        Omit to show all slides.
-  -i, --interactive     Run Section 9: interactive drill-down demo.
-                        Requires a browser — renders an overview, waits for
-                        a node click, dispatches a hardcoded detail diagram,
-                        then waits for the Done button before finishing.
-  -u, --popup           Run Section 10: node_actions popup menu demo.
-                        Renders a diagram, arms /wait-click, then simulates
-                        a browser popup selection via POST /node-click with
-                        an action field. Logs the action returned.
-                        (Real popup requires MCP wait_click(node_actions=...) from Claude Code.)
-  -e, --edge            Run Section 11: edge click demo.
-                        Renders a diagram with labeled edges, arms /wait-click,
-                        and waits for you to click an edge in the browser.
-                        Logs the returned { type, id, label } — confirms edge
-                        click returns type="edge" and action=null.
+  -t, --type <types>    Comma-separated renderer types to include in Section 1–6 slideshow
+                        (mermaid, svg, html, katex, vega-lite, step-frames). Omit for all.
   -h, --help            Show this help
 `);
   process.exit(0);
 }
+
+// ── Section selection ─────────────────────────────────────────────────────────
+// No section flags → behave as -s (backwards-compatible default).
+const anySection = values.standard || values.interactive || values.popup || values.edge || values.all;
+const RUN_STANDARD    = !anySection || values.standard    || values.all;
+const RUN_INTERACTIVE = values.interactive || values.all;
+const RUN_POPUP       = values.popup       || values.all;
+const RUN_EDGE        = values.edge        || values.all;
 
 const TYPE_FILTER = values.type
   ? new Set(values.type.split(",").map((t) => t.trim()).filter(Boolean))
@@ -236,17 +238,7 @@ e^{i\pi} + 1 = 0`,
   },
 ];
 
-// ── Apply type filter ─────────────────────────────────────────────────────────
-
-const activeSlides = TYPE_FILTER ? slides.filter((s) => TYPE_FILTER.has(s.type)) : slides;
-
-if (activeSlides.length === 0) {
-  console.error(`✗ No slides match type filter: ${[...TYPE_FILTER].join(", ")}`);
-  console.error(`  Available types: ${[...new Set(slides.map((s) => s.type))].join(", ")}`);
-  process.exit(1);
-}
-
-// ── Run slideshow ─────────────────────────────────────────────────────────────
+// ── Sections 1–8 (standard) ───────────────────────────────────────────────────
 
 // Count the actual number of timer ticks the server will fire.
 // step-frames slides expand into one tick per frame (server-side B2 behaviour);
@@ -260,27 +252,34 @@ function countTicks(slideList) {
   }, 0);
 }
 
-const totalTicks = countTicks(activeSlides);
-const totalMs = totalTicks * DELAY_MS;
+if (RUN_STANDARD) {
+  const activeSlides = TYPE_FILTER ? slides.filter((s) => TYPE_FILTER.has(s.type)) : slides;
 
-if (TYPE_FILTER) {
-  console.log(`   Filter: ${[...TYPE_FILTER].join(", ")} (${activeSlides.length} of ${slides.length} slides)`);
-}
-const tickNote = totalTicks !== activeSlides.length ? ` (${totalTicks} ticks after step-frames expansion)` : "";
-console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total${tickNote})…`);
+  if (activeSlides.length === 0) {
+    console.error(`✗ No slides match type filter: ${[...TYPE_FILTER].join(", ")}`);
+    console.error(`  Available types: ${[...new Set(slides.map((s) => s.type))].join(", ")}`);
+    process.exit(1);
+  }
 
-const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS });
-if (!result.ok) {
-  console.error("✗ slideshow failed:", result.error);
-  process.exit(1);
-}
-console.log(`   ✓ slideshow started — slides advance every ${DELAY_MS / 1000}s`);
+  const totalTicks = countTicks(activeSlides);
+  const totalMs = totalTicks * DELAY_MS;
 
-// Wait for all slides to be shown, then stop.
-await new Promise((r) => setTimeout(r, totalMs));
+  if (TYPE_FILTER) {
+    console.log(`   Filter: ${[...TYPE_FILTER].join(", ")} (${activeSlides.length} of ${slides.length} slides)`);
+  }
+  const tickNote = totalTicks !== activeSlides.length ? ` (${totalTicks} ticks after step-frames expansion)` : "";
+  console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total${tickNote})…`);
 
-await post("/slideshow/stop", {});
-console.log("   ✓ server slideshow done");
+  const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS });
+  if (!result.ok) {
+    console.error("✗ slideshow failed:", result.error);
+    process.exit(1);
+  }
+  console.log(`   ✓ slideshow started — slides advance every ${DELAY_MS / 1000}s`);
+
+  await new Promise((r) => setTimeout(r, totalMs));
+  await post("/slideshow/stop", {});
+  console.log("   ✓ server slideshow done");
 
 // ── Section 7 — Client-managed slideshow ──────────────────────────────────────
 //
@@ -428,16 +427,16 @@ async function runClientSlideshow(slideList) {
   }
 }
 
-const totalClientMs = clientSlides.reduce((acc, s) => {
-  if (s.type === "step-frames") {
-    const frames = JSON.parse(s.payload).frames.length;
-    return acc + frames * (s.frame_delay_ms ?? DELAY_MS);
-  }
-  return acc + (s.delay_ms ?? DELAY_MS);
-}, 0);
+  const totalClientMs = clientSlides.reduce((acc, s) => {
+    if (s.type === "step-frames") {
+      const frames = JSON.parse(s.payload).frames.length;
+      return acc + frames * (s.frame_delay_ms ?? DELAY_MS);
+    }
+    return acc + (s.delay_ms ?? DELAY_MS);
+  }, 0);
 
-console.log(`\n── Section 7: client-managed slideshow (${totalClientMs / 1000}s total) ──`);
-await runClientSlideshow(clientSlides);
+  console.log(`\n── Section 7: client-managed slideshow (${totalClientMs / 1000}s total) ──`);
+  await runClientSlideshow(clientSlides);
 
 // ── Section 8 — seek() random-access navigation ───────────────────────────────
 //
@@ -526,8 +525,9 @@ async function runSeekDemo() {
   await new Promise((r) => setTimeout(r, PAUSE));
 }
 
-console.log("\n── Section 8: seek() random-access frame navigation ──");
-await runSeekDemo();
+  console.log("\n── Section 8: seek() random-access frame navigation ──");
+  await runSeekDemo();
+} // end RUN_STANDARD
 
 // ── Section 9 — Interactive drill-down (wait_click + wait_done) ──────────────
 //
@@ -625,7 +625,7 @@ async function runInteractiveDemo() {
   console.log("   ✓ Done received");
 }
 
-if (values.interactive) {
+if (RUN_INTERACTIVE) {
   console.log("\n── Section 9: interactive drill-down (wait_click + wait_done) ──");
   await runInteractiveDemo();
 }
@@ -669,7 +669,7 @@ async function runPopupDemo() {
   console.log("   (for real popup, use MCP wait_click(node_actions={\"Server\":[\"Explain\",\"Drill down\"]}) from Claude Code)");
 }
 
-if (values.popup) {
+if (RUN_POPUP) {
   console.log("\n── Section 10: node_actions popup menu (Sprint 14, simulated) ──");
   await runPopupDemo();
 }
@@ -723,14 +723,21 @@ async function runEdgeDemo() {
   }
 }
 
-if (values.edge) {
+if (RUN_EDGE) {
   console.log("\n── Section 11: edge click demo (Sprint 14) ──");
   await runEdgeDemo();
 }
 
 console.log("\n✅  Showcase complete.\n");
-console.log("   Interactive sections (not shown above — run separately):");
-console.log("     --interactive (-i)  Section 9:  node click drill-down + Done button");
-console.log("     --popup       (-u)  Section 10: node_actions popup menu (simulated)");
-console.log("     --edge        (-e)  Section 11: edge click demo");
-console.log("");
+
+const skipped = [
+  !RUN_INTERACTIVE && "  -i  Section 9:  node click drill-down + Done button",
+  !RUN_POPUP       && "  -u  Section 10: node_actions popup menu (simulated)",
+  !RUN_EDGE        && "  -e  Section 11: edge click demo",
+].filter(Boolean);
+
+if (skipped.length) {
+  console.log("   Sections not run (add flags to include):");
+  skipped.forEach((s) => console.log(`   ${s}`));
+  console.log("   (use -a / --all to run everything)\n");
+}
