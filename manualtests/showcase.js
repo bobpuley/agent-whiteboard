@@ -12,6 +12,7 @@ const { values } = parseArgs({
     delay:       { type: "string",  short: "d", default: "5000"  },
     type:        { type: "string",  short: "t", default: ""      },
     interactive: { type: "boolean", short: "i", default: false   },
+    popup:       { type: "boolean", short: "u", default: false   },
     help:        { type: "boolean", short: "h", default: false   },
   },
   strict: true,
@@ -31,6 +32,11 @@ Options:
                         Requires a browser — renders an overview, waits for
                         a node click, dispatches a hardcoded detail diagram,
                         then waits for the Done button before finishing.
+  -u, --popup           Run Section 10: node_actions popup menu demo.
+                        Renders a diagram, arms /wait-click, then simulates
+                        a browser popup selection via POST /node-click with
+                        an action field. Logs the action returned.
+                        (Real popup requires MCP wait_click(node_actions=...) from Claude Code.)
   -h, --help            Show this help
 `);
   process.exit(0);
@@ -587,7 +593,7 @@ async function runInteractiveDemo() {
     return;
   }
 
-  console.log(`   ✓ click: type=${click.type}  id=${click.id}  label="${click.label}"`);
+  console.log(`   ✓ click: type=${click.type}  id=${click.id}  label="${click.label}"  action=${JSON.stringify(click.action)}`);
 
   const detail = DRILLDOWN[click.id];
   if (!detail) {
@@ -610,6 +616,50 @@ async function runInteractiveDemo() {
 if (values.interactive) {
   console.log("\n── Section 9: interactive drill-down (wait_click + wait_done) ──");
   await runInteractiveDemo();
+}
+
+// ── Section 10 — node_actions popup menu (Sprint 14) ─────────────────────────
+//
+// Demonstrates the node_actions round-trip:
+//   render diagram → arm /wait-click → simulate browser popup selection
+//   via POST /node-click with action field → log returned action.
+//
+// NOTE: POST /wait-click (REST) is plain-click only — it does not accept a
+// node_actions body.  The popup menu is an MCP-exclusive feature: use the MCP
+// wait_click(node_actions={...}) tool from Claude Code for the real experience.
+// This section simulates what the browser fires after the user picks an item.
+
+async function runPopupDemo() {
+  const diagram = `graph TD
+  Client[Client] -->|HTTP| Server[Server]
+  Server -->|Query| DB[(Database)]
+  DB -->|Result| Server
+  Server -->|Response| Client`;
+
+  const r = await post("/render", {
+    type: "mermaid",
+    payload: diagram,
+    options: { title: "10 — node_actions popup demo (simulated)" },
+  });
+  if (!r.ok) { console.error(`   ✗ render failed: ${r.error}`); return; }
+  console.log("   ✓ diagram rendered");
+
+  // Arm wait-click in background.
+  const waitPromise = fetch(`${BASE}/wait-click`, { method: "POST" }).then((r2) => r2.json());
+  await new Promise((res) => setTimeout(res, 100));
+
+  // Simulate: browser fires POST /node-click with action (as if popup was shown for node "Server").
+  console.log("   simulating popup selection: node=Server  action=\"Drill down\"");
+  await post("/node-click", { type: "node", id: "Server", label: "Server", action: "Drill down" });
+
+  const click = await waitPromise;
+  console.log(`   ✓ wait_click resolved: type=${click.type}  id=${click.id}  label="${click.label}"  action=${JSON.stringify(click.action)}`);
+  console.log("   (for real popup, use MCP wait_click(node_actions={\"Server\":[\"Explain\",\"Drill down\"]}) from Claude Code)");
+}
+
+if (values.popup) {
+  console.log("\n── Section 10: node_actions popup menu (Sprint 14, simulated) ──");
+  await runPopupDemo();
 }
 
 console.log("\n✅  Showcase complete.\n");
