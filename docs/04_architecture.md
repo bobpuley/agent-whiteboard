@@ -65,10 +65,11 @@
 - `wait_click()` tool (plain click, no popup) + `POST /node-click` endpoint — Sprint 12 ✅. Browser arms click listeners on Mermaid SVG nodes/edges; `signalClick()`/`waitForClick()` EventEmitter bus in `server/events.ts`. See §3 and §4.
 
 **Remaining Phase 2 / Phase 3:**
-- `wait_click()` — `node_actions` popup menu + edge support (Sprint 14)
-- `POST /wait-click` REST fallback does not yet arm the browser (bug fix, Sprint 13)
-- `seek(frame)` MCP tool + `POST /seek` REST endpoint — client-controlled frame navigation (Sprint 13)
-- `options.node_to_frame` on `render()` — declarative node→frame map for autonomous browser navigation (Sprint 13)
+- `wait_click()` — `node_actions` popup menu + edge support (Sprint 14) ✅
+- `POST /wait-click` REST fallback does not yet arm the browser (bug fix, Sprint 13) ✅
+- `seek(frame)` MCP tool + `POST /seek` REST endpoint — client-controlled frame navigation (Sprint 13) ✅
+- `options.node_to_frame` on `render()` — declarative node→frame map for autonomous browser navigation (Sprint 13) ✅
+- **Render snapshot persistence** (`server/snapshot.ts`) — Sprint 16 (see F10 in `03`)
 - Multi-panel / named tabs
 - Binary export (PNG/SVG/PDF)
 - `options.theme` and action-variant options for `render()`
@@ -164,6 +165,33 @@ agent calls render(type="mermaid", payload="graph TD; A-->B")
   → browser receives, hands off to Mermaid.js renderer
   → diagram appears in browser tab
   → MCP tool returns { ok: true }
+```
+
+### Render Snapshot (Phase 2 — Sprint 16)
+
+```
+agent calls render(type="mermaid", payload="graph TD; A-->B", options={title:"..."})
+  → MCP server validates payload  (hard gate — see §3)
+  → IF validation passes:
+      → stores as current canvas state (in-memory)
+      → pushes render command over WebSocket to browser
+      → calls saveSnapshot(type, payload, options)  [snapshot.ts]
+          → resolves workspace: WHITEBOARD_WORKSPACE env || basename(process.cwd())
+          → resolves dir: WHITEBOARD_SNAPSHOTS_DIR env || ~/.agent-whiteboard/
+          → path: <dir>/<workspace>/<yyyyMMdd_HHmmss>_screen.json
+          → creates directory if absent (mkdirSync recursive)
+          → writes JSON: { timestamp, workspace, type, payload, options }
+          → if write fails: logs warning to stderr, does NOT propagate error
+  → IF validation fails: returns { ok: false, error: "..." } — no snapshot written
+```
+
+Snapshot directory layout:
+```
+~/.agent-whiteboard/
+└── agent-whiteboard/          ← workspace (basename of project dir)
+    ├── 20260609_143000_screen.json
+    ├── 20260609_143215_screen.json
+    └── …
 ```
 
 ### Clear Command
@@ -342,13 +370,13 @@ agent-whiteboard/
 ├── server/
 │   ├── index.ts          # entry point — starts HTTP + WebSocket + MCP
 │   ├── app.ts            # Hono app + REST endpoints (testable, no startup side effects)
-│   ├── app.test.ts       # Vitest integration tests (47 tests)
 │   ├── mcp.ts            # MCP tool definitions and handlers
 │   ├── session.ts        # in-memory canvas state
 │   ├── slideshow.ts      # slideshow timer logic
 │   ├── events.ts         # signalDone/waitForDone + signalClick/waitForClick EventEmitter bus
 │   ├── validate.ts       # Mermaid keyword + parse validation
 │   ├── ws.ts             # WebSocket push to browser
+│   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/

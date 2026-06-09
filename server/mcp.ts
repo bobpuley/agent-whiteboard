@@ -9,6 +9,7 @@ import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
+import { saveSnapshot } from "./snapshot.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -165,6 +166,7 @@ export function createMcpServer(): McpServer {
           ...(title !== undefined ? { title } : {}),
           ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
         });
+        try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame }); } catch { /* non-fatal */ }
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
         };
@@ -173,6 +175,7 @@ export function createMcpServer(): McpServer {
       cancelSlideshow();
       setCanvas(type, payload, title);
       broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
+      try { saveSnapshot(type, payload, { title }); } catch { /* non-fatal */ }
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
