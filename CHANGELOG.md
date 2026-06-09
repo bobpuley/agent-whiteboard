@@ -1,3 +1,14 @@
+## 0.1.2 — 2026-06-09
+
+- Added render snapshot persistence: every successful `render()` call writes a JSON snapshot to `~/.agent-whiteboard/<workspace>/<timestamp>_screen.json`
+- Snapshot schema: `{ timestamp, workspace, type, payload, options }` — captures all renderer types including step-frames
+- Workspace name defaults to `basename(process.cwd())`; overridable via `WHITEBOARD_WORKSPACE` env var
+- Snapshots root defaults to `~/.agent-whiteboard/`; overridable via `WHITEBOARD_SNAPSHOTS_DIR` env var (used by tests to avoid touching the real home directory)
+- Write failures are non-fatal: error logged to stderr, `render()` still returns `{ ok: true }`
+- Invalid renders (validation failure) produce no snapshot file
+- New module `server/snapshot.ts`; hooks in both `server/app.ts` (REST) and `server/mcp.ts` (MCP tool)
+- 6 new unit tests via `vi.mock`; 72 tests total, all passing
+
 ## 0.1.1 — 2026-06-08
 
 - Extended `POST /wait-click` to accept an optional `node_actions` body (`Record<string, string[]>`), enabling popup menus from REST callers (previously MCP-only)
