@@ -6,6 +6,7 @@
   import HtmlRenderer from "./renderers/Html.svelte";
   import KatexRenderer from "./renderers/Katex.svelte";
   import VegaLiteRenderer from "./renderers/VegaLite.svelte";
+  import HistoryPanel from "./HistoryPanel.svelte";
 
   type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
 
@@ -82,6 +83,8 @@
     });
   }
 
+  let historyOpen = false;
+
   // Done button — signals Claude Code via the channel server that the user finished exploring.
   let doneSent = false;
   let doneTimer: ReturnType<typeof setTimeout> | null = null;
@@ -94,6 +97,8 @@
     doneTimer = setTimeout(() => { doneSent = false; }, 2000);
   }
 </script>
+
+<HistoryPanel bind:open={historyOpen} on:close={() => { historyOpen = false; }} />
 
 <main>
   {#if disconnected}
@@ -143,6 +148,9 @@
   {/if}
 
   <div class="done-bar">
+    <button class="history-btn" on:click={() => { historyOpen = !historyOpen; }} aria-label="Toggle history panel" aria-pressed={historyOpen}>
+      &#128337;
+    </button>
     <button class="done-btn" on:click={handleDone} disabled={doneSent}>
       {doneSent ? "Sent ✓" : "Done"}
     </button>
@@ -253,8 +261,30 @@
 
   .done-bar {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     padding: 8px 16px 4px;
+  }
+
+  .history-btn {
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    color: #555;
+    transition: background 0.1s;
+  }
+
+  .history-btn:hover {
+    background: #f0f0f0;
+  }
+
+  .history-btn[aria-pressed="true"] {
+    background: #e8f4fd;
+    border-color: #2980b9;
+    color: #2980b9;
   }
 
   .done-btn {

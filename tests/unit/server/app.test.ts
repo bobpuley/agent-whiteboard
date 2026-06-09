@@ -8,6 +8,11 @@ vi.mock("../../../server/snapshot.js", () => ({
   saveSnapshot: vi.fn(),
 }));
 
+vi.mock("../../../server/snapshot-reader.js", () => ({
+  listSnapshots: vi.fn(),
+  loadSnapshotContent: vi.fn(),
+}));
+
 // Use a fresh app instance per suite; session state is reset between each test.
 const app = createApp();
 
@@ -1028,6 +1033,7 @@ describe("POST /node-click — Sprint 14: action field", () => {
 // ── Sprint 16 — render snapshot persistence ───────────────────────────────────
 
 import * as snapshotModule from "../../../server/snapshot.js";
+import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
 
 describe("POST /render — snapshot persistence (Sprint 16)", () => {
   beforeEach(() => {
@@ -1106,5 +1112,243 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
+// ── Sprint 17 — GET /snapshots ────────────────────────────────────────────────
+
+describe("GET /snapshots", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotReaderModule.listSnapshots).mockClear();
+  });
+
+  it("returns { ok: true, snapshots: [] } when directory is empty", async () => {
+    vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([]);
+    const res = await app.request("/snapshots");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, snapshots: [] });
+  });
+
+  it("returns sorted snapshot list from listSnapshots", async () => {
+    const entries = [
+      { filename: "20260609_150000_screen.json", timestamp: "2026-06-09T15:00:00.000Z", type: "mermaid", title: "Diagram 2" },
+      { filename: "20260609_140000_screen.json", timestamp: "2026-06-09T14:00:00.000Z", type: "html" },
+    ];
+    vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue(entries);
+    const res = await app.request("/snapshots");
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; snapshots: typeof entries }>();
+    expect(body.ok).toBe(true);
+    expect(body.snapshots).toHaveLength(2);
+    expect(body.snapshots[0].filename).toBe("20260609_150000_screen.json");
+    expect(body.snapshots[0].title).toBe("Diagram 2");
+    expect(body.snapshots[1].filename).toBe("20260609_140000_screen.json");
+    expect(body.snapshots[1].title).toBeUndefined();
+  });
+
+  it("calls listSnapshots (delegating file skipping logic to snapshot-reader)", async () => {
+    vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([
+      { filename: "20260609_143000_screen.json", timestamp: "2026-06-09T14:30:00.000Z", type: "svg" },
+    ]);
+    const res = await app.request("/snapshots");
+    expect(snapshotReaderModule.listSnapshots).toHaveBeenCalledOnce();
+    expect(res.status).toBe(200);
+  });
+});
+
+// ── Sprint 17 — POST /snapshots/load ─────────────────────────────────────────
+
+const VALID_SNAPSHOT_JSON = JSON.stringify({
+  timestamp: "2026-06-09T14:30:00.000Z",
+  workspace: "agent-whiteboard",
+  type: "mermaid",
+  payload: "graph TD; A --> B",
+  options: { title: "Loaded diagram" },
+});
+
+const VALID_SVG_SNAPSHOT_JSON = JSON.stringify({
+  timestamp: "2026-06-09T14:31:00.000Z",
+  workspace: "agent-whiteboard",
+  type: "svg",
+  payload: "<svg><circle r='5'/></svg>",
+});
+
+const VALID_STEP_FRAMES_SNAPSHOT_JSON = JSON.stringify({
+  timestamp: "2026-06-09T14:32:00.000Z",
+  workspace: "agent-whiteboard",
+  type: "step-frames",
+  payload: THREE_FRAME_SEQUENCE,
+});
+
+describe("POST /snapshots/load", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockClear();
+    vi.mocked(snapshotModule.saveSnapshot).mockClear();
+  });
+
+  it("loads a valid mermaid snapshot, updates canvas, does NOT call saveSnapshot", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SNAPSHOT_JSON);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
+
+    // Canvas state should now reflect the loaded snapshot.
+    const exportRes = await app.request("/export");
+    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe("graph TD; A --> B");
+  });
+
+  it("loads a valid svg snapshot without title", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SVG_SNAPSHOT_JSON);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143100_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const exportRes = await app.request("/export");
+    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe("<svg><circle r='5'/></svg>");
+  });
+
+  it("loads a valid step-frames snapshot and leaves session in step-frames state", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_STEP_FRAMES_SNAPSHOT_JSON);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143200_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    // /step should work after loading step-frames snapshot.
+    const stepRes = await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+    expect((await stepRes.json<{ ok: boolean }>()).ok).toBe(true);
+  });
+
+  it("returns { ok: false, error } when file is not found", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(null);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "missing_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/not found/);
+  });
+
+  it("rejects path traversal with ../ in filename", async () => {
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "../etc/passwd_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/path traversal/);
+    expect(snapshotReaderModule.loadSnapshotContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects filename with a slash", async () => {
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "subdir/20260609_143000_screen.json" }),
+    });
+
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/path traversal/);
+    expect(snapshotReaderModule.loadSnapshotContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects filename that does not end with _screen.json", async () => {
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_other.json" }),
+    });
+
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+  });
+
+  it("returns { ok: false, error } for malformed JSON in snapshot file", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue("{ not valid json");
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
+    });
+
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/malformed/);
+  });
+
+  it("returns { ok: false, error } when snapshot payload fails validation", async () => {
+    const invalidSnapshot = JSON.stringify({
+      timestamp: "2026-06-09T14:30:00.000Z",
+      workspace: "agent-whiteboard",
+      type: "mermaid",
+      payload: "not a valid mermaid diagram",
+    });
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(invalidSnapshot);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
+    });
+
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/diagram keyword/);
+  });
+
+  it("does NOT call saveSnapshot even when load succeeds", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SVG_SNAPSHOT_JSON);
+
+    await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143100_screen.json" }),
+    });
+
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when filename is not a string", async () => {
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: 42 }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean }>();
+    expect(body.ok).toBe(false);
   });
 });
