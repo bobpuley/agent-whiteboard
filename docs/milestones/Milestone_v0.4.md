@@ -1,6 +1,6 @@
 # Milestone v0.4 — History Navigator (Sprint 17)
 
-**Status:** planned
+**Status:** released
 
 ### Sprint 17 — History navigator
 
