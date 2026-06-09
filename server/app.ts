@@ -1,6 +1,8 @@
 // Pure Hono application — no startup side effects.
 // Exported so tests can import it without spinning up a real server.
 
+import { homedir } from "os";
+import { basename, join } from "path";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
 import type { ClickEvent } from "./events.js";
@@ -11,6 +13,7 @@ import { hasMermaidKeyword, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { saveSnapshot } from "./snapshot.js";
+import { listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -311,6 +314,82 @@ export function createApp(): Hono {
 
   app.get("/export", (c) => {
     return c.json({ ok: true, data: exportCanvas() });
+  });
+
+  // ── History navigator (v0.4 — Sprint 17) ──────────────────────────────────────
+
+  app.get("/snapshots", (c) => {
+    const workspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+    const snapshots = listSnapshots(workspace, root);
+    return c.json({ ok: true, snapshots });
+  });
+
+  app.post("/snapshots/load", async (c) => {
+    const body = await c.req.json<{ filename?: unknown }>();
+    const filename = body.filename;
+
+    if (typeof filename !== "string") {
+      return c.json({ ok: false, error: "filename must be a string" }, 400);
+    }
+
+    // Path safety: filename must end with _screen.json and contain no / or ..
+    if (!/^[^/]+_screen\.json$/.test(filename) || filename.includes("..")) {
+      return c.json({ ok: false, error: "invalid filename: path traversal not allowed" });
+    }
+
+    const workspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+
+    const raw = loadSnapshotContent(workspace, root, filename);
+    if (raw === null) {
+      return c.json({ ok: false, error: `snapshot not found: ${filename}` });
+    }
+
+    let snapshot: { type?: unknown; payload?: unknown; options?: { title?: string; node_to_frame?: Record<string, number> } };
+    try {
+      snapshot = JSON.parse(raw) as typeof snapshot;
+    } catch {
+      return c.json({ ok: false, error: "snapshot file is malformed JSON" });
+    }
+
+    if (typeof snapshot.type !== "string" || typeof snapshot.payload !== "string") {
+      return c.json({ ok: false, error: "snapshot file is missing required fields" });
+    }
+
+    const type = snapshot.type;
+    const payload = snapshot.payload;
+    const options = snapshot.options;
+
+    const validationError = await validatePayload(type, payload);
+    if (validationError) {
+      return c.json({ ok: false, error: validationError });
+    }
+
+    // Broadcast to browser and update in-memory state — write-silent (no saveSnapshot).
+    const title = options?.title;
+    const nodeToFrame = options?.node_to_frame;
+
+    if (type === "step-frames") {
+      const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
+      setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame);
+      broadcast({
+        action: "replace",
+        type: spec.frame_type,
+        payload: spec.frames[0].payload,
+        frameLabel: spec.frames[0].label,
+        stepFrames: true,
+        currentFrame: 0,
+        totalFrames: spec.frames.length,
+        ...(title !== undefined ? { title } : {}),
+        ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
+      });
+    } else {
+      setCanvas(type as CanvasType, payload, title);
+      broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
+    }
+
+    return c.json({ ok: true });
   });
 
   return app;

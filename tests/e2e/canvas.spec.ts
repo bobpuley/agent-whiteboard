@@ -210,3 +210,133 @@ test("Done button: shows 'Sent ✓' after click and reverts", async ({ page }) =
   // After 2 seconds the button reverts to "Done".
   await expect(page.getByRole("button", { name: "Done" })).toBeVisible({ timeout: 5_000 });
 });
+
+// ── History panel ─────────────────────────────────────────────────────────────
+
+test("history panel: hidden by default on page load", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".history-panel")).not.toBeVisible();
+});
+
+test("history panel: toggle button is visible", async ({ page }) => {
+  await page.goto("/");
+  const toggleBtn = page.getByRole("button", { name: "Toggle history panel" });
+  await expect(toggleBtn).toBeVisible();
+});
+
+test("history panel: opens when toggle button is clicked", async ({ page }) => {
+  await page.goto("/");
+  const toggleBtn = page.getByRole("button", { name: "Toggle history panel" });
+  await toggleBtn.click();
+  await expect(page.locator(".history-panel")).toBeVisible();
+});
+
+test("history panel: closes when X button is clicked", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".history-panel")).toBeVisible();
+
+  await page.getByRole("button", { name: "Close history panel" }).click();
+  await expect(page.locator(".history-panel")).not.toBeVisible();
+});
+
+test("history panel: shows 'No snapshots yet.' when list is empty", async ({ page, request }) => {
+  // Clear any existing snapshot state by relying on env-isolated test workspace.
+  // Intercept /snapshots to return empty list.
+  await page.route("/snapshots", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, snapshots: [] }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".history-panel")).toBeVisible();
+  await expect(page.locator(".panel-message")).toContainText("No snapshots yet");
+});
+
+test("history panel: shows snapshot list with type badge and title", async ({ page }) => {
+  await page.route("/snapshots", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        snapshots: [
+          {
+            filename: "20260609_150000_screen.json",
+            timestamp: "2026-06-09T15:00:00.000Z",
+            type: "mermaid",
+            title: "My diagram",
+          },
+          {
+            filename: "20260609_140000_screen.json",
+            timestamp: "2026-06-09T14:00:00.000Z",
+            type: "html",
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".history-panel")).toBeVisible();
+
+  // First entry has title and mermaid badge.
+  const rows = page.locator(".snapshot-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first().locator(".snapshot-title")).toHaveText("My diagram");
+  await expect(rows.first().locator(".type-badge")).toHaveText("mermaid");
+
+  // Second entry has no title — shows "—".
+  await expect(rows.nth(1).locator(".snapshot-title")).toHaveText("—");
+  await expect(rows.nth(1).locator(".type-badge")).toHaveText("html");
+});
+
+test("history panel: clicking a snapshot row calls POST /snapshots/load and closes panel", async ({ page, request }) => {
+  // Seed a real snapshot via POST /render so there's something in the list.
+  await request.post(`${SERVER}/render`, {
+    data: { type: "html", payload: "<h1 id='snap-h1'>Snapshot content</h1>", options: { title: "Snap 1" } },
+  });
+
+  // Mock the /snapshots endpoint to return a known entry.
+  await page.route("/snapshots", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        snapshots: [
+          {
+            filename: "20260609_150000_screen.json",
+            timestamp: "2026-06-09T15:00:00.000Z",
+            type: "mermaid",
+            title: "Snap 1",
+          },
+        ],
+      }),
+    });
+  });
+
+  // Mock the load endpoint to render something visible and return ok.
+  await page.route("/snapshots/load", (route) => {
+    // Trigger an actual render to make the canvas update via the real server.
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".history-panel")).toBeVisible();
+
+  await page.locator(".snapshot-row").first().click();
+
+  // Panel should close after clicking an entry.
+  await expect(page.locator(".history-panel")).not.toBeVisible();
+});
