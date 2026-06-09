@@ -144,6 +144,26 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 
 ## F. Project Infrastructure
 
+**G1 — `~/.agent-whiteboard/` is writable**
+> ⚠️ ASSUMPTION: The server assumes the user's home directory is writable and that creating `~/.agent-whiteboard/<workspace>/` will succeed silently on first run.
+- Risk: restricted home directory configurations or permission issues cause a silent write failure or a startup crash.
+- Mitigation (proposed): catch the error, log a warning, and continue — snapshot persistence failure must never block rendering.
+
+**G2 — Workspace name derived from `basename(process.cwd())`**
+> ⚠️ ASSUMPTION: The workspace name is the final path component of the directory where the server is started (e.g. `/Users/bob/workspaces/my-project` → `my-project`).
+- Risk: if the server is started from a parent or sibling directory, snapshots land in an unexpected workspace folder.
+- Mitigation: expose a `WHITEBOARD_WORKSPACE` environment variable override; document the default in the README.
+
+**G3 — No snapshot cleanup policy in v1**
+> ⚠️ ASSUMPTION: Files accumulate indefinitely. No TTL, quota, or rotation is defined.
+- Risk: unbounded disk growth over long-lived projects.
+
+**G4 — Snapshot payloads may contain sensitive content**
+> ⚠️ ASSUMPTION: The user is responsible for the security of `~/.agent-whiteboard/`. No encryption or access control beyond standard file permissions.
+- Risk: diagram payloads stored to disk may contain credentials, internal architecture diagrams, or PII.
+
+---
+
 **F1 — Test folder restructure (Sprint 15)**
 
 > ⚠️ ASSUMPTION: `tests/unit/client/` is a placeholder only — no Svelte component unit tests exist today. Creating the directory structure signals intent but adds no immediate test coverage.

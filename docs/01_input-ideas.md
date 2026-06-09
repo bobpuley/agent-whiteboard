@@ -261,6 +261,17 @@ Motivation: all test-related code lives in one top-level `tests/` directory; cle
 
 ---
 
+## Feature Requests
+
+**FR1 — Render snapshot persistence ("memory")**
+When `render()` is called (a visual is received), the server stores a snapshot of the rendered content to disk at `~/.agent-whiteboard/<workspace-name>/<timestamp>_screen.<ext>`.
+- Workspace name defaults to the Claude project folder name (basename of the server's working directory at startup). Overridable via env var.
+- File schema and format: TBD — brainstorm required (see open question in `03`).
+- Trigger scope: at minimum on every `render()` call; unclear whether `step()`/`seek()` (frame navigation) should also trigger saves.
+- No read/resume in v1 of this feature — write-only. The value is auditability and replay.
+
+---
+
 ## Bug Reports
 
 **B1 — Slideshow step-frames slide renders nothing (Sprint 9)**

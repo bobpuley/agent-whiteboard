@@ -1,8 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../server/app.js";
 import { resetCanvas } from "../../../server/session.js";
 import { cancelSlideshow } from "../../../server/slideshow.js";
 import { resetClick } from "../../../server/events.js";
+
+vi.mock("../../../server/snapshot.js", () => ({
+  saveSnapshot: vi.fn(),
+}));
 
 // Use a fresh app instance per suite; session state is reset between each test.
 const app = createApp();
@@ -1016,6 +1020,90 @@ describe("POST /node-click — Sprint 14: action field", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "node", id: "B", label: "Server", action: "Explain" }),
     });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
+// ── Sprint 16 — render snapshot persistence ───────────────────────────────────
+
+import * as snapshotModule from "../../../server/snapshot.js";
+
+describe("POST /render — snapshot persistence (Sprint 16)", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotModule.saveSnapshot).mockClear();
+  });
+
+  it("calls saveSnapshot with correct args after a valid mermaid render", async () => {
+    const payload = "graph TD; A --> B";
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload }),
+    });
+
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined });
+  });
+
+  it("calls saveSnapshot with title when options.title is provided", async () => {
+    const payload = "graph TD; A --> B";
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload, options: { title: "My diagram" } }),
+    });
+
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: "My diagram" });
+  });
+
+  it("does NOT call saveSnapshot when render payload is invalid", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "bogus" }),
+    });
+
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("does NOT call saveSnapshot on invalid mermaid syntax (Sprint 6 gate)", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A -->" }),
+    });
+
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("calls saveSnapshot with type=step-frames for a valid step-frames render", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+    });
+
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
+      "step-frames",
+      THREE_FRAME_SEQUENCE,
+      { title: undefined, node_to_frame: undefined }
+    );
+  });
+
+  it("render still returns { ok: true } when saveSnapshot throws", async () => {
+    vi.mocked(snapshotModule.saveSnapshot).mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "svg", payload: "<svg/>" }),
+    });
+
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });

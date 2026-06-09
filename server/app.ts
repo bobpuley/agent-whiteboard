@@ -10,6 +10,7 @@ import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
+import { saveSnapshot } from "./snapshot.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -123,12 +124,14 @@ export function createApp(): Hono {
         ...(title !== undefined ? { title } : {}),
         ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
       });
+      try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame }); } catch { /* non-fatal */ }
       return c.json({ ok: true });
     }
 
     // svg, html, katex, mermaid, vega-lite
     setCanvas(type as CanvasType, payload, title);
     broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
+    try { saveSnapshot(type, payload, { title }); } catch { /* non-fatal */ }
     return c.json({ ok: true });
   });
 

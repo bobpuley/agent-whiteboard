@@ -380,6 +380,26 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
+### Sprint 16 — Render snapshot persistence ✅
+
+**Goal:** every successful `render()` call leaves a JSON record on disk so the user can audit, replay, or diff visuals across sessions.
+
+**Scope:**
+
+- [x] **`server/snapshot.ts`** (new): `saveSnapshot(type, payload, options)` — resolves workspace and dir, creates directory if absent, writes `{ timestamp, workspace, type, payload, options }` as JSON. Workspace: `WHITEBOARD_WORKSPACE` env || `basename(process.cwd())`. Snapshots root: `WHITEBOARD_SNAPSHOTS_DIR` env || `~/.agent-whiteboard/`. Filename: `yyyyMMdd_HHmmss_screen.json` (local time; use `Date` formatted without colons for cross-platform compatibility). Write failure: catch, log to stderr, do not rethrow. Callers also wrap calls in try/catch for belt-and-suspenders.
+- [x] **`server/app.ts` — `POST /render`:** call `saveSnapshot()` after successful validation + WebSocket push. Must not call on validation failure.
+- [x] **`server/mcp.ts` — `render()` tool:** same — call `saveSnapshot()` after successful render (after `broadcastRender()`).
+- [x] **`step()`, `seek()`, `clear()`, `slideshow()`:** no changes — these do not trigger snapshot writes.
+- [x] **Tests:** `vi.mock("../../../server/snapshot.js")` in `tests/unit/server/app.test.ts` — 6 new tests: saveSnapshot called with correct args (plain render, with title, step-frames), not called on invalid render or bad syntax, render still returns `{ ok: true }` when saveSnapshot throws. 72 tests total, all passing.
+
+**DoD:** ✅
+- After `render(type="mermaid", payload="graph TD; A-->B", options={title:"Step 1"})`, a file exists at `~/.agent-whiteboard/<workspace>/<timestamp>_screen.json` with `{ "timestamp": "...", "workspace": "...", "type": "mermaid", "payload": "graph TD; A-->B", "options": { "title": "Step 1" } }`
+- An invalid render (e.g. bad Mermaid syntax) produces no snapshot file
+- A write failure (e.g. unwritable directory) prints a warning to stderr and `render()` still returns `{ ok: true }`
+- `npm test` passes (72/72)
+
+---
+
 ## Definition of Done — MVP
 - Agent can call `render(type="mermaid", payload)` and diagram appears in browser within 200ms
 - Agent can call `clear()` to reset the canvas
