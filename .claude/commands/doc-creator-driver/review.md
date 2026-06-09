@@ -1,4 +1,7 @@
 Read 02_assumptions-and-risks.md, 03_requirements.md, 04_architecture.md, 05_dev-plan.md in order.
+After reading 05_dev-plan.md, follow the milestone links:
+- Parse the Milestone Registry to find the milestone with the highest semver that has status **released** (compare version numbers, e.g. v0.3 > v0.2 > v0.1) and read its file
+- If a milestone has status **in progress**, read its file too
 Produce a structured audit with three sections:
 1. Contradictions — places where documents conflict with each other
 2. Unresolved assumptions — anything marked ⚠️ ASSUMPTION or left implicit

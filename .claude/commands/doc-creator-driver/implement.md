@@ -5,6 +5,11 @@ Read in order:
 2. docs/04_architecture.md
 3. docs/05_dev-plan.md
 
+Then find the active milestone:
+- From the Milestone Registry in `05_dev-plan.md`, find the single milestone with status **in progress** and follow its link to read the milestone file.
+- If no milestone is **in progress**: halt — "No in-progress milestone found. Mark one as **in progress** in docs/05_dev-plan.md to begin."
+- If multiple milestones are **in progress**: halt — "Multiple in-progress milestones found. Exactly one must be **in progress** at a time."
+
 Generate executable code
 Generate unit tests
 
@@ -13,9 +18,11 @@ Do not change requirements or architecture.
 # Workflow
 
 1. Analyze the documents
-2. In 05_dev-plan.md check for the next pending implementations in the `Dev Plan` section
-3. If no pending implementations, stop
-4. otherwise:
+2. In the in-progress milestone file, check for the next pending implementations (`- [ ]` items)
+3. If no pending implementations:
+   - Update the Milestone Registry in `05_dev-plan.md`: change this milestone's status from **in progress** to **released**
+   - Stop — "Milestone complete and marked released. Promote the next planned milestone to **in progress** when ready."
+4. Otherwise:
    1. Pick the next implementation
    2. Create a git branch (name rules: between ~5 and ~30 chars, common naming best practices)
    3. Think about how to properly integrate it in the existing codebase
@@ -27,7 +34,7 @@ Do not change requirements or architecture.
       * Implement the code
       * Run the tests
       * Iterate implementation until tests pass
-      * Update the `Dev Plan` in 05_dev-plan.md
+      * Update the sprint task in the in-progress milestone file (mark `- [x]`)
       * (TaskUpdate completed)
    6. Sprint completion gate (runs once, after ALL tasks pass):
       * AskUserQuestion: "Please run your manual / human-driven tests and report the results. All green?"

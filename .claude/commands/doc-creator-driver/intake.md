@@ -34,17 +34,18 @@ Use AskUserQuestion to ask:
    - If yes: add them with `> ⚠️ ASSUMPTION:` markers
    - Use AskUserQuestion if a risk is ambiguous
 3. **`03_requirements.md`** — Translate the idea into one or more requirements.
-   - Ask: which milestone does this belong to? Read the milestone registry table at the top of `05_dev-plan.md` and present the open (unreleased) milestones as options, plus "new milestone". If exactly one open milestone exists, suggest it as the default.
+   - Ask: which milestone does this belong to? Read the Milestone Registry in `05_dev-plan.md` and present the open (unreleased) milestones as options, plus "new milestone". If exactly one open milestone exists, suggest it as the default.
    - Use AskUserQuestion to clarify scope, priority, or acceptance criteria if unclear
    - Update existing requirements if the idea changes them
 4. **`04_architecture.md`** — Ask: does this require an architecture change?
    - If yes: update stack decisions, system diagram, tool contracts, data flows, or project structure as needed
    - Use AskUserQuestion for any trade-off that needs a decision
    - If no change needed: explicitly note "no architecture impact" and move on
-5. **`05_dev-plan.md`** — Add one or more sprint tasks for this feature.
-   - Place in the correct milestone section; if this is a new milestone, add it to the milestone registry table at the top (status: **planned**) and create a new `## Milestone vX.Y — <Name> (Sprint N)` section
-   - Write a clear DoD for each new task
-   - Create a task list entry (TaskCreate) for each new sprint item
+5. **Milestone file** — Add one or more sprint tasks for this feature.
+   - Find the in-progress milestone from the registry in `05_dev-plan.md` and append the tasks to its file.
+   - If this belongs to a future milestone: add the milestone to the registry in `05_dev-plan.md` (status: **planned**), create `docs/milestones/Milestone_vX.Y.md` with a header and status stub, and add the task there. Update the File column in the registry row.
+   - Write a clear DoD for each new task.
+   - Create a task list entry (TaskCreate) for each new sprint item.
 6. State what changed across all files in one concise summary line per file.
 
 ### Type 3 — Bug report
@@ -59,7 +60,8 @@ Use AskUserQuestion to ask:
 3. **`04_architecture.md`** — Ask: does the fix require an architecture change?
    - If yes: update the relevant section
    - If no: skip
-4. **`05_dev-plan.md`** — Add a bug-fix task to the appropriate sprint.
+4. **In-progress milestone file** — Add a bug-fix task to the appropriate sprint.
+   - Find the in-progress milestone from the registry in `05_dev-plan.md` and append the fix there.
    - Label it clearly as a fix (e.g. `fix: <short description>`)
    - Write a DoD that describes the corrected behaviour
    - Create a task list entry (TaskCreate) for the fix
@@ -74,5 +76,5 @@ Use AskUserQuestion to ask:
 - Never skip a propagation step — even a "no change" is a deliberate check
 - Never update a later document without first checking the earlier ones
 - Use AskUserQuestion for any decision, trade-off, or ambiguity — do not guess
-- Use TaskCreate for every new sprint item added to 05_dev-plan.md
+- Use TaskCreate for every new sprint item added to a milestone file
 - After all files are updated, ask the user: "Anything else to add, or shall we continue?"
