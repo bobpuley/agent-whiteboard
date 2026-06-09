@@ -1,3 +1,13 @@
+## 0.4.0 — 2026-06-09
+
+- Added history navigator: clock toggle button in the browser UI opens a slide-in panel showing past render snapshots
+- `GET /snapshots` endpoint: returns workspace snapshot list sorted newest-first (`{ ok, snapshots: [{ filename, timestamp, type, title? }] }`)
+- `POST /snapshots/load` endpoint: loads a named snapshot onto the canvas without writing a new snapshot file; path traversal protected; same payload hard-gate as `POST /render`
+- `server/snapshot-reader.ts`: new module with `listSnapshots()` (directory scan, malformed-file skipping) and `loadSnapshotContent()` (safe file read)
+- `client/src/HistoryPanel.svelte`: new Svelte component — fetches list on open, shows type badge + title + human-friendly timestamp per row, clicking a row loads the snapshot and closes the panel
+- `client/vite.config.ts`: added `/snapshots` proxy entry so the Vite dev server forwards both `GET /snapshots` and `POST /snapshots/load` to the Node server
+- 22 new unit tests; 7 new e2e tests; 86 unit tests total, all passing
+
 ## 0.1.2 — 2026-06-09
 
 - Added render snapshot persistence: every successful `render()` call writes a JSON snapshot to `~/.agent-whiteboard/<workspace>/<timestamp>_screen.json`
