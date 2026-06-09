@@ -50,6 +50,7 @@
     │  • export() returns last render() payload as text (all types)
     │  • Auto-opens on server start
     │  • Done button → POST /user-done → signalDone() → wakes wait_done() tool
+    │  • History panel (v0.4): toggle button → GET /snapshots → list; click entry → POST /snapshots/load → canvas updated
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -69,7 +70,8 @@
 - `POST /wait-click` REST fallback does not yet arm the browser (bug fix, Sprint 13) ✅
 - `seek(frame)` MCP tool + `POST /seek` REST endpoint — client-controlled frame navigation (Sprint 13) ✅
 - `options.node_to_frame` on `render()` — declarative node→frame map for autonomous browser navigation (Sprint 13) ✅
-- **Render snapshot persistence** (`server/snapshot.ts`) — Sprint 16 (see F10 in `03`)
+- **Render snapshot persistence** (`server/snapshot.ts`) — Sprint 16 (see F10 in `03`) ✅
+- **History navigator** (`GET /snapshots`, `POST /snapshots/load`, `client/src/HistoryPanel.svelte`) — Sprint 17 (see F11–F12, U7 in `03`)
 - Multi-panel / named tabs
 - Binary export (PNG/SVG/PDF)
 - `options.theme` and action-variant options for `render()`
@@ -148,6 +150,10 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 `POST /seek` — Phase 2 (Sprint 13). Body: `{ "frame": N }`. Calls `seekStepFrame(N)`, broadcasts the target frame to the browser. Returns the same shape as the MCP `seek()` response: `{ "ok": true, "current_frame": N, "total_frames": M }`. Error if no step-frames sequence is loaded or frame is out of range.
 
 `POST /slideshow` failure behavior: If validation fails for any slide in the playlist, the server returns `{ ok: false, error: "..." }`. No timer is started, and the canvas state is unchanged (remains as the last successful `render()` or `clear()`). If a slideshow is already running and a new `POST /slideshow` request fails, the running slideshow continues unaffected (error returned, new request rejected).
+
+`GET /snapshots` — v0.4 (Sprint 17). No body. Reads `<WHITEBOARD_SNAPSHOTS_DIR>/<WHITEBOARD_WORKSPACE>/` and returns `{ ok: true, snapshots: [{ filename, timestamp, type, title? }] }` sorted newest-first. Empty array if directory absent. Unreadable/malformed files silently skipped (warning to stderr).
+
+`POST /snapshots/load` — v0.4 (Sprint 17). Body: `{ "filename": "…" }`. Safety check: filename must match `*_screen.json` and contain no `/` or `..`. Reads the snapshot, validates its payload (same hard gate as `POST /render`), broadcasts to browser via WebSocket, updates in-memory canvas state. **Write-silent:** does NOT call `saveSnapshot()`. Returns `{ ok: true }` or `{ ok: false, error: "…" }` (file not found, path-safety failure, or invalid payload).
 
 ---
 
@@ -245,6 +251,34 @@ agent calls slideshow(slides=[...], delay_ms=1000)
   → after last slide, slideshow stops (no loop in v1)
   → MCP tool returns { ok: true }
 ```
+
+### History Load (v0.4 — Sprint 17)
+
+```
+user opens history panel in browser
+  → browser fetches GET /snapshots
+  → server calls listSnapshots()  [snapshot-reader.ts]
+      → reads <WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/ directory
+      → parses each *_screen.json file: extracts filename, timestamp, type, title
+      → returns list sorted newest-first
+  → browser renders list in HistoryPanel
+
+user clicks a snapshot entry
+  → browser fires POST /snapshots/load: { filename: "20260609_143000_screen.json" }
+  → server validates filename (no path traversal)
+  → server reads snapshot from disk
+  → server validates payload (same hard gate as POST /render)
+  → IF valid:
+      → server updates in-memory canvas state
+      → server broadcasts render command to browser via WebSocket (same format as render())
+      → does NOT call saveSnapshot()
+      → returns { ok: true }
+  → IF invalid:
+      → returns { ok: false, error: "..." }
+  → browser closes panel; canvas displays loaded snapshot
+```
+
+**Interaction with pending wait_click() / wait_done():** loading a history entry replaces the canvas but does NOT cancel any pending tool calls. Both continue waiting until their 10-minute timeout elapses or the user signals them through normal channels (Done button / node click). See assumption H2.
 
 **Slideshow cancellation:** `POST /render`, `POST /clear`, or a new `POST /slideshow` call cancels any running slideshow. `POST /slideshow/stop` also cancels. `POST /step` and `POST /seek` do not cancel.
 
@@ -377,11 +411,13 @@ agent-whiteboard/
 │   ├── validate.ts       # Mermaid keyword + parse validation
 │   ├── ws.ts             # WebSocket push to browser
 │   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
+│   ├── snapshot-reader.ts # snapshot list reader for GET /snapshots (v0.4 — Sprint 17)
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/
 │   │   ├── App.svelte
 │   │   ├── ws.ts         # WebSocket client
+│   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17)
 │   │   └── renderers/    # one file per content type
 │   │       ├── Mermaid.svelte
 │   │       ├── Html.svelte

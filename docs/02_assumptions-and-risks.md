@@ -174,3 +174,22 @@ Risks from moving the three test roots:
 - `package.json` scripts that reference `manualtests/` (e.g. `node manualtests/showcase.js`) must be updated; any external runbooks or docs referencing old paths will silently break
 - `test-results/` is a Playwright artifact output directory (controlled by `playwright.config.ts` `outputDir`); it is not a source folder and is not included in the `tests/` hierarchy — leaving it at root is correct, or it can be redirected to `tests/test-results/` via config without moving any source files
 - **Decision:** `test-results/` stays at root (default Playwright behavior) unless the user decides otherwise
+
+---
+
+## H. History Navigation
+
+**H1 — History load is write-silent**
+> ⚠️ ASSUMPTION: `POST /snapshots/load` calls the render pipeline but does NOT call `saveSnapshot()`. Only agent-initiated `render()` calls write snapshot files; user-initiated history navigation does not.
+- Risk: if this invariant is violated, loading from history would cascade into infinite snapshot writes.
+- Mitigation: `POST /snapshots/load` renders via a dedicated code path that bypasses `snapshot.ts`.
+
+**H2 — Agent is unaware of history navigation**
+> ⚠️ ASSUMPTION: When the user loads a past snapshot from the history panel, the canvas is updated but the agent is not notified. Any pending `wait_click()` or `wait_done()` calls continue waiting unaffected.
+- Risk: if the agent has called `wait_click()` and is waiting for a click on diagram X, the user may navigate to a history entry and replace the canvas with diagram Y. The agent will not receive the expected click and will time out.
+- Mitigation: document this as expected behavior; the agent recovers via normal 10-minute timeout handling.
+
+**H3 — options.title is the history label**
+> ⚠️ ASSUMPTION: The history navigator uses `options.title` (already stored in the snapshot `options` field) as the human-readable label for each entry. If absent or empty, the UI falls back to `type + timestamp`.
+- No schema change needed — `options` (including `title`) is already persisted by `snapshot.ts`.
+- Risk: snapshots written before FR2 may have no title, making those history entries less descriptive.

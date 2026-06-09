@@ -35,7 +35,7 @@ The MCP server exposes tools to the agent.
 | V3b | Diagrams | D2 | planned (requires server-side render process) |
 | V4 | Export — binary | PNG / SVG / PDF download | planned |
 | V5 | Step-through frames | Ordered frame arrays; agent-driven transitions via `step()` | v0.1 |
-| V6 | Visual history | Navigable snapshots (timeline or thumbnails) | planned |
+| V6 | History navigator | Toggleable browser panel listing past snapshots for the current workspace. Each entry: timestamp, type, and title (from `options.title`; falls back to `type + timestamp` if absent). Clicking an entry loads that snapshot onto the canvas (see F11–F12). Panel hidden by default; no snapshot written on load. | v0.4 |
 
 ---
 
@@ -80,6 +80,8 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | F9 | Done signal: `POST /user-done` (browser button) wakes all pending `wait_done()` MCP tool calls via an in-process EventEmitter. `POST /wait-done` (REST) long-polls until the signal fires or the 10-minute timeout elapses. Multiple concurrent `wait_done()` calls are all resolved simultaneously by a single click. | v0.2 ✅ |
 | F6 | HTML/SVG payloads must be sanitized with DOMPurify in the browser before render; sanitization is silent (cleaned output rendered, no error state). No server-side hard gate for HTML/SVG — the `type` field is validated but the payload is passed through. | v0.1 |
 | F10 | **Render snapshot persistence:** after every successful `render()` call (i.e. payload passes validation), the server writes a JSON snapshot file to `<snapshots_dir>/<workspace>/<timestamp>_screen.json`. Snapshot schema: `{ "timestamp": "<ISO 8601>", "workspace": "<name>", "type": "<renderer type>", "payload": "<verbatim payload>", "options": { … } }`. `options` is the options object passed to `render()`; omitted if absent. `step()`, `seek()`, `clear()`, and failed `render()` calls do not produce snapshot files. Snapshot directory root defaults to `~/.agent-whiteboard/`; overridable via `WHITEBOARD_SNAPSHOTS_DIR` env var (for testing and custom setups). Workspace name defaults to `basename(process.cwd())`; overridable via `WHITEBOARD_WORKSPACE` env var. Directory is created if it does not exist (`mkdir -p` semantics). A write failure must never block rendering — the server logs a warning to stderr and continues. No read/resume API in v1 of this feature (write-only). | v0.3 |
+| F11 | **Snapshot list endpoint:** `GET /snapshots` — returns the list of snapshot files for the current workspace, sorted by timestamp descending. Response: `{ ok: true, snapshots: [{ filename, timestamp, type, title? }] }`. `title` is included only if `options.title` was present and non-empty in the snapshot file. Returns an empty array if no snapshots exist or the snapshot directory is absent. Respects the same `WHITEBOARD_SNAPSHOTS_DIR` and `WHITEBOARD_WORKSPACE` env vars as F10. Unreadable or malformed snapshot files are skipped with a warning to stderr. | v0.4 |
+| F12 | **Snapshot load endpoint:** `POST /snapshots/load` — body: `{ "filename": "…" }`. Server validates no path traversal (filename must match `*_screen.json` and contain no `/` or `..`), reads the snapshot file from disk, validates its payload (same hard gate as `POST /render`), broadcasts it to the browser via WebSocket, and updates in-memory canvas state. **Write-silent:** does NOT call `saveSnapshot()`. Returns `{ ok: true }` on success; `{ ok: false, error: "…" }` if the file is not found, the filename fails the path-safety check, or payload validation fails. | v0.4 |
 
 ### Rendering & Visualization
 
@@ -110,6 +112,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 | U4e | Autonomous frame navigation (`node_to_frame`): when `render(type="step-frames", options.node_to_frame={...})` is called, browser attaches click listeners automatically; clicking a mapped node jumps directly to its frame via `POST /seek` without agent involvement. `wait_click()` disables `node_to_frame` for the duration of its call; after `wait_click()` resolves or times out, `node_to_frame` is **not** automatically restored — the agent must call `render()` again with the map to re-enable autonomous navigation. | v0.2 ✅ |
 | U5 | Structured input widgets (quiz, sliders, drag-to-order); events returned to agent | planned |
 | U6 | Theme control: agent sets theme via `options.theme` in `render()`; user can also toggle it in the browser UI | planned |
+| U7 | History panel: hidden by default; toggled via a history icon button in the browser UI. When open: shows a scrollable list of past snapshots sorted newest-first (each row: human-friendly timestamp, type badge, title or "—" if absent). Clicking a row calls `POST /snapshots/load`, closes the panel, and renders the selected snapshot on the canvas. Panel must not obscure the canvas when closed. | v0.4 |
 
 ### Non-Functional
 
@@ -155,7 +158,7 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 - Terminal ASCII fallback: planned (browser always assumed available in v1)
 - Node/edge click interactions (`wait_click()`): shipped in v0.2 (Sprints 12–14). Basic "user is done" signal (`wait_done()` + Done button) shipped in Sprint 10.
 - Slider/quiz widgets → agent: planned (after node clicks).
-- Cross-session persistence / history across restarts: planned
+- Cross-session persistence / history across restarts: write-only snapshot persistence shipped in v0.3 (F10); user-facing history browser (read/navigate) shipping in v0.4 (F11–F12, U7). Agent-facing history query (MCP tool to list or reload past sessions) remains planned.
 - Binary export (PNG/SVG/PDF): planned
 - D2 renderer: planned (requires server-side render process)
 - Concurrent browser connections / multi-tab state sync: planned (second tab starts blank in v1)
