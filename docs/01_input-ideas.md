@@ -270,6 +270,10 @@ When `render()` is called (a visual is received), the server stores a snapshot o
 - Trigger scope: at minimum on every `render()` call; unclear whether `step()`/`seek()` (frame navigation) should also trigger saves.
 - No read/resume in v1 of this feature — write-only. The value is auditability and replay.
 
+**FR2 user/memory interaction**
+Now we have memory, I'd like to make the user able to see and navigate it. The functionality must not pollute the view, the focus is the whiteboard. In order to make the navigation  
+UI meaningful it can be relevant to provide a very concise description of the graph, probably as part of the contract with the agent and then with the storage schema
+
 ---
 
 ## Bug Reports

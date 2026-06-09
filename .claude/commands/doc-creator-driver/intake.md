@@ -34,7 +34,7 @@ Use AskUserQuestion to ask:
    - If yes: add them with `> ⚠️ ASSUMPTION:` markers
    - Use AskUserQuestion if a risk is ambiguous
 3. **`03_requirements.md`** — Translate the idea into one or more requirements.
-   - Ask: is this MVP or Phase 2?
+   - Ask: which milestone does this belong to? Read the milestone registry table at the top of `05_dev-plan.md` and present the open (unreleased) milestones as options, plus "new milestone". If exactly one open milestone exists, suggest it as the default.
    - Use AskUserQuestion to clarify scope, priority, or acceptance criteria if unclear
    - Update existing requirements if the idea changes them
 4. **`04_architecture.md`** — Ask: does this require an architecture change?
@@ -42,7 +42,7 @@ Use AskUserQuestion to ask:
    - Use AskUserQuestion for any trade-off that needs a decision
    - If no change needed: explicitly note "no architecture impact" and move on
 5. **`05_dev-plan.md`** — Add one or more sprint tasks for this feature.
-   - Place in the correct sprint (MVP vs Phase 2)
+   - Place in the correct milestone section; if this is a new milestone, add it to the milestone registry table at the top (status: **planned**) and create a new `## Milestone vX.Y — <Name> (Sprint N)` section
    - Write a clear DoD for each new task
    - Create a task list entry (TaskCreate) for each new sprint item
 6. State what changed across all files in one concise summary line per file.

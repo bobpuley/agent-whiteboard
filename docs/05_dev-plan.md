@@ -1,10 +1,18 @@
 # Dev Plan
 
-> Phase tags: **MVP** = v1 scope; **Phase 2** = planned, not v1.
+## Milestone Registry
+
+| Milestone | Name | Sprints | Status |
+|-----------|------|---------|--------|
+| v0.1 | Core Whiteboard | 0–8 | released |
+| v0.2 | Bidirectionality | 9–14 | released |
+| v0.3 | Observability & Infrastructure | 15–16 | released |
+
+> Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
 
 ---
 
-## MVP Sprints (Sprints 0–8)
+## Milestone v0.1 — Core Whiteboard (Sprints 0–8)
 
 ### Sprint 0 — Scaffold ✅
 - [x] Init Node.js project (`package.json`, TypeScript config)
@@ -118,7 +126,7 @@ Add an optional `title` parameter to `render()` that displays a label above the 
 
 ---
 
-## Phase 2 Sprint Plan
+## Milestone v0.2 — Bidirectionality (Sprints 9–14)
 
 ### Sprint 9 — Slideshow / Auto-play ✅
 
@@ -222,7 +230,7 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ### Sprint 11 — Playwright e2e tests ✅
 
-**Goal:** add end-to-end browser tests for the full interactive surface, now that `wait_done()` / Done button completes the bidirectional MVP.
+**Goal:** add end-to-end browser tests for the full interactive surface, now that `wait_done()` / Done button completes the v0.2 bidirectionality foundation.
 
 **Setup:**
 - [x] Install `@playwright/test`; use system Chrome (`channel: "chrome"`) — no Playwright browser download needed
@@ -290,7 +298,7 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 > **Dependency:** Sprint 13 must complete before Sprint 14. The `POST /wait-click` bugfix (broadcasting `set_node_actions enabled:true` on the REST path) is a prerequisite for the REST endpoint to work correctly with `node_actions` in Sprint 14.
 
-**Goal:** Complete bidirectional feature set for Phase 2 — let the agent control frame navigation via `seek()`, and optionally attach a node→frame map to render so the browser navigates autonomously via node clicks.
+**Goal:** Complete bidirectional feature set for v0.2 — let the agent control frame navigation via `seek()`, and optionally attach a node→frame map to render so the browser navigates autonomously via node clicks.
 
 **Bug fix — `POST /wait-click` does not arm the browser:**
 - [x] **`server/app.ts` — `POST /wait-click`:** broadcast `{ action: "set_node_actions", enabled: true }` before `waitForClick()`; broadcast `{ action: "set_node_actions", enabled: false }` after it resolves (or times out).
@@ -356,6 +364,8 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
+## Milestone v0.3 — Observability & Infrastructure (Sprints 15–16)
+
 ### Sprint 15 — Test folder restructure
 
 **Goal:** consolidate all test-related files under a single `tests/` root with clear sub-directories by test kind. No new tests; no behavior changes.
@@ -400,7 +410,7 @@ wait_done()   // ← blocks here; returns { ok: true } when user clicks Done
 
 ---
 
-## Definition of Done — MVP
+## Definition of Done — v0.1 (Core Whiteboard)
 - Agent can call `render(type="mermaid", payload)` and diagram appears in browser within 200ms
 - Agent can call `clear()` to reset the canvas
 - Agent can call `export()` to retrieve the current canvas source as text (verbatim last `render()` payload, any type)
