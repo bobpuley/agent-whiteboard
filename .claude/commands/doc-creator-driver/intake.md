@@ -78,3 +78,6 @@ Use AskUserQuestion to ask:
 - Use AskUserQuestion for any decision, trade-off, or ambiguity — do not guess
 - Use TaskCreate for every new sprint item added to a milestone file
 - After all files are updated, ask the user: "Anything else to add, or shall we continue?"
+
+## Required skills
+- /grill-me
