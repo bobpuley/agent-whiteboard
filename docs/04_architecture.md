@@ -51,6 +51,7 @@
     │  • Auto-opens on server start
     │  • Done button → POST /user-done → signalDone() → wakes wait_done() tool
     │  • History panel (v0.4): toggle button → GET /snapshots → list; click entry → POST /snapshots/load → canvas updated
+    │  • History panel workspace accordion (v0.5): toggle button → GET /snapshots/all → accordion grouped by workspace (current auto-expanded); click entry → POST /snapshots/load { workspace, filename } → canvas updated
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -153,7 +154,9 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `GET /snapshots` — v0.4 (Sprint 17). No body. Reads `<WHITEBOARD_SNAPSHOTS_DIR>/<WHITEBOARD_WORKSPACE>/` and returns `{ ok: true, snapshots: [{ filename, timestamp, type, title? }] }` sorted newest-first. Empty array if directory absent. Unreadable/malformed files silently skipped (warning to stderr).
 
-`POST /snapshots/load` — v0.4 (Sprint 17). Body: `{ "filename": "…" }`. Safety check: filename must match `*_screen.json` and contain no `/` or `..`. Reads the snapshot, validates its payload (same hard gate as `POST /render`), broadcasts to browser via WebSocket, updates in-memory canvas state. **Write-silent:** does NOT call `saveSnapshot()`. Returns `{ ok: true }` or `{ ok: false, error: "…" }` (file not found, path-safety failure, or invalid payload).
+`GET /snapshots/all` — v0.5 (Sprint 18). No body. Scans all subdirectories of `WHITEBOARD_SNAPSHOTS_DIR`, reads each workspace's `*_screen.json` files, and returns them grouped. Response: `{ ok: true, workspaces: [{ name, isCurrent, snapshots: [{ filename, timestamp, type, title? }] }] }`. Each workspace's list sorted newest-first. `isCurrent: true` for the workspace matching `WHITEBOARD_WORKSPACE`. Workspaces with no readable snapshots omitted. Returns `{ ok: true, workspaces: [] }` if root absent.
+
+`POST /snapshots/load` — v0.4 (Sprint 17), extended in v0.5 (Sprint 18). Body: `{ "filename": "…" }` (current workspace) or `{ "filename": "…", "workspace": "…" }` (explicit workspace). Filename safety: must match `*_screen.json`, no `/` or `..`. Workspace safety (when provided): plain directory name only — no path separators, no `..`, no null bytes; must exist under `WHITEBOARD_SNAPSHOTS_DIR`. Reads the snapshot, validates its payload (same hard gate as `POST /render`), broadcasts to browser via WebSocket, updates in-memory canvas state. **Write-silent:** does NOT call `saveSnapshot()`. Returns `{ ok: true }` or `{ ok: false, error: "…" }` (file not found, path-safety failure, or invalid payload).
 
 ---
 
@@ -252,21 +255,30 @@ agent calls slideshow(slides=[...], delay_ms=1000)
   → MCP tool returns { ok: true }
 ```
 
-### History Load (v0.4 — Sprint 17)
+### History Load (v0.4 — Sprint 17; extended v0.5 — Sprint 18)
 
 ```
-user opens history panel in browser
+[v0.4] user opens history panel in browser
   → browser fetches GET /snapshots
-  → server calls listSnapshots()  [snapshot-reader.ts]
-      → reads <WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/ directory
-      → parses each *_screen.json file: extracts filename, timestamp, type, title
-      → returns list sorted newest-first
-  → browser renders list in HistoryPanel
+  → server reads <WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/ directory
+  → returns list sorted newest-first
+  → browser renders flat list in HistoryPanel
 
-user clicks a snapshot entry
-  → browser fires POST /snapshots/load: { filename: "20260609_143000_screen.json" }
+[v0.5] user opens history panel in browser
+  → browser fetches GET /snapshots/all
+  → server calls listAllSnapshots()  [snapshot-reader.ts]
+      → scans all subdirectories under WHITEBOARD_SNAPSHOTS_DIR
+      → for each workspace dir: reads *_screen.json files, returns { name, isCurrent, snapshots }
+      → workspaces with no readable snapshots are omitted
+  → browser renders accordion in HistoryPanel:
+      → current workspace section auto-expanded
+      → all other workspace sections collapsed
+
+user clicks a snapshot entry (any workspace)
+  → browser fires POST /snapshots/load: { workspace: "…", filename: "20260609_143000_screen.json" }
+  → server validates workspace name (safe-name pattern, exists under snapshots root)
   → server validates filename (no path traversal)
-  → server reads snapshot from disk
+  → server reads snapshot from disk at <root>/<workspace>/<filename>
   → server validates payload (same hard gate as POST /render)
   → IF valid:
       → server updates in-memory canvas state
@@ -411,7 +423,7 @@ agent-whiteboard/
 │   ├── validate.ts       # Mermaid keyword + parse validation
 │   ├── ws.ts             # WebSocket push to browser
 │   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
-│   ├── snapshot-reader.ts # snapshot list reader for GET /snapshots (v0.4 — Sprint 17)
+│   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18)
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/

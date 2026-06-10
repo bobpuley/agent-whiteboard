@@ -10,7 +10,13 @@
     title?: string;
   }
 
-  let snapshots: SnapshotEntry[] = [];
+  interface WorkspaceGroup {
+    name: string;
+    isCurrent: boolean;
+    snapshots: SnapshotEntry[];
+  }
+
+  let workspaces: WorkspaceGroup[] = [];
   let loading = false;
   let error = "";
 
@@ -20,10 +26,10 @@
     loading = true;
     error = "";
     try {
-      const res = await fetch("/snapshots");
-      const data = await res.json<{ ok: boolean; snapshots: SnapshotEntry[]; error?: string }>();
+      const res = await fetch("/snapshots/all");
+      const data = await res.json<{ ok: boolean; workspaces: WorkspaceGroup[]; error?: string }>();
       if (data.ok) {
-        snapshots = data.snapshots;
+        workspaces = data.workspaces;
       } else {
         error = data.error ?? "Failed to load snapshots";
       }
@@ -34,12 +40,12 @@
     }
   }
 
-  async function loadSnapshot(filename: string) {
+  async function loadSnapshot(workspace: string, filename: string) {
     try {
       await fetch("/snapshots/load", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename }),
+        body: JSON.stringify({ workspace, filename }),
       });
     } catch {
       // Silently ignore — canvas will update via WebSocket if successful
@@ -63,6 +69,8 @@
       return iso;
     }
   }
+
+  $: hasAnySnapshot = workspaces.some((g) => g.snapshots.length > 0);
 </script>
 
 {#if open}
@@ -77,22 +85,32 @@
         <p class="panel-message">Loading…</p>
       {:else if error}
         <p class="panel-message panel-error">{error}</p>
-      {:else if snapshots.length === 0}
+      {:else if !hasAnySnapshot}
         <p class="panel-message">No snapshots yet.</p>
       {:else}
-        <ul class="snapshot-list">
-          {#each snapshots as entry (entry.filename)}
-            <li>
-              <button class="snapshot-row" on:click={() => loadSnapshot(entry.filename)}>
-                <span class="snapshot-title">{entry.title ?? "—"}</span>
-                <span class="snapshot-meta">
-                  <span class="type-badge">{entry.type}</span>
-                  <span class="snapshot-time">{formatTimestamp(entry.timestamp)}</span>
-                </span>
-              </button>
-            </li>
-          {/each}
-        </ul>
+        {#each workspaces as group (group.name)}
+          <details class="workspace-group" open={group.isCurrent}>
+            <summary class="workspace-summary">
+              <span class="workspace-name">{group.name}</span>
+              {#if group.isCurrent}
+                <span class="current-badge">current</span>
+              {/if}
+            </summary>
+            <ul class="snapshot-list">
+              {#each group.snapshots as entry (group.name + "/" + entry.filename)}
+                <li>
+                  <button class="snapshot-row" on:click={() => loadSnapshot(group.name, entry.filename)}>
+                    <span class="snapshot-title">{entry.title ?? "—"}</span>
+                    <span class="snapshot-meta">
+                      <span class="type-badge">{entry.type}</span>
+                      <span class="snapshot-time">{formatTimestamp(entry.timestamp)}</span>
+                    </span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          </details>
+        {/each}
       {/if}
     </div>
   </div>
@@ -163,6 +181,65 @@
     color: #c0392b;
   }
 
+  .workspace-group {
+    border-bottom: 1px solid #ececec;
+  }
+
+  .workspace-group:last-child {
+    border-bottom: none;
+  }
+
+  .workspace-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    background: #fafafa;
+    list-style: none;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+  }
+
+  .workspace-summary:hover {
+    background: #f0f0f0;
+  }
+
+  .workspace-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .workspace-summary::before {
+    content: "▶";
+    font-size: 9px;
+    color: #999;
+    transition: transform 0.15s;
+    display: inline-block;
+  }
+
+  details[open] > .workspace-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .workspace-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .current-badge {
+    font-size: 10px;
+    background: #e8f4fd;
+    color: #2980b9;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
   .snapshot-list {
     list-style: none;
     margin: 0;
@@ -174,7 +251,7 @@
     flex-direction: column;
     gap: 2px;
     width: 100%;
-    padding: 10px 16px;
+    padding: 10px 16px 10px 28px;
     border: none;
     background: none;
     cursor: pointer;

@@ -274,6 +274,9 @@ When `render()` is called (a visual is received), the server stores a snapshot o
 Now we have memory, I'd like to make the user able to see and navigate it. The functionality must not pollute the view, the focus is the whiteboard. In order to make the navigation  
 UI meaningful it can be relevant to provide a very concise description of the graph, probably as part of the contract with the agent and then with the storage schema
 
+**FR3 — History panel: workspace-grouped accordion**
+The history panel (FR2) should group snapshots by workspace using an accordion UI. When the panel opens, the section for the current workspace is automatically expanded; all other workspaces are shown collapsed. Clicking any snapshot — regardless of which workspace it belongs to — loads it onto the canvas.
+
 ---
 
 ## Bug Reports

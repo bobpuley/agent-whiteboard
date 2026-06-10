@@ -1,6 +1,12 @@
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 
+export interface WorkspaceGroup {
+  name: string;
+  isCurrent: boolean;
+  snapshots: SnapshotEntry[];
+}
+
 export interface SnapshotEntry {
   filename: string;
   timestamp: string;
@@ -58,6 +64,33 @@ export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
   entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
   return entries;
+}
+
+/**
+ * Scan every workspace subdirectory under `dir` and return their snapshots grouped.
+ * Workspaces with no readable snapshots are omitted from the result.
+ */
+export function listAllSnapshots(dir: string, currentWorkspace: string): WorkspaceGroup[] {
+  let entries: string[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return [];
+  }
+
+  const groups: WorkspaceGroup[] = [];
+
+  for (const name of entries) {
+    const snapshots = listSnapshots(name, dir);
+    if (snapshots.length === 0) continue;
+    groups.push({ name, isCurrent: name === currentWorkspace, snapshots });
+  }
+
+  groups.sort((a, b) => a.name.localeCompare(b.name));
+
+  return groups;
 }
 
 /**

@@ -10,6 +10,7 @@ vi.mock("../../../server/snapshot.js", () => ({
 
 vi.mock("../../../server/snapshot-reader.js", () => ({
   listSnapshots: vi.fn(),
+  listAllSnapshots: vi.fn(),
   loadSnapshotContent: vi.fn(),
 }));
 
@@ -1350,5 +1351,149 @@ describe("POST /snapshots/load", () => {
     expect(res.status).toBe(400);
     const body = await res.json<{ ok: boolean }>();
     expect(body.ok).toBe(false);
+  });
+});
+
+// ── Sprint 18 — GET /snapshots/all ───────────────────────────────────────────
+
+describe("GET /snapshots/all", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotReaderModule.listAllSnapshots).mockClear();
+  });
+
+  it("returns { ok: true, workspaces: [] } when root directory is absent", async () => {
+    vi.mocked(snapshotReaderModule.listAllSnapshots).mockReturnValue([]);
+    const res = await app.request("/snapshots/all");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, workspaces: [] });
+  });
+
+  it("returns grouped workspaces with isCurrent flag", async () => {
+    const groups = [
+      {
+        name: "project-a",
+        isCurrent: false,
+        snapshots: [
+          { filename: "20260609_140000_screen.json", timestamp: "2026-06-09T14:00:00.000Z", type: "html" },
+        ],
+      },
+      {
+        name: "project-b",
+        isCurrent: true,
+        snapshots: [
+          { filename: "20260609_150000_screen.json", timestamp: "2026-06-09T15:00:00.000Z", type: "mermaid", title: "Diagram B" },
+        ],
+      },
+    ];
+    vi.mocked(snapshotReaderModule.listAllSnapshots).mockReturnValue(groups);
+
+    const res = await app.request("/snapshots/all");
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; workspaces: typeof groups }>();
+    expect(body.ok).toBe(true);
+    expect(body.workspaces).toHaveLength(2);
+    expect(body.workspaces[0].name).toBe("project-a");
+    expect(body.workspaces[0].isCurrent).toBe(false);
+    expect(body.workspaces[1].name).toBe("project-b");
+    expect(body.workspaces[1].isCurrent).toBe(true);
+    expect(body.workspaces[1].snapshots[0].title).toBe("Diagram B");
+  });
+
+  it("calls listAllSnapshots (delegating file-skipping and sorting to snapshot-reader)", async () => {
+    vi.mocked(snapshotReaderModule.listAllSnapshots).mockReturnValue([]);
+    await app.request("/snapshots/all");
+    expect(snapshotReaderModule.listAllSnapshots).toHaveBeenCalledOnce();
+  });
+});
+
+// ── Sprint 18 — POST /snapshots/load workspace field ─────────────────────────
+
+describe("POST /snapshots/load — workspace field (Sprint 18)", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockClear();
+    vi.mocked(snapshotModule.saveSnapshot).mockClear();
+  });
+
+  it("loads a snapshot from an explicit workspace", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SNAPSHOT_JSON);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "other-project", filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(snapshotReaderModule.loadSnapshotContent).toHaveBeenCalledWith(
+      "other-project",
+      expect.any(String),
+      "20260609_143000_screen.json"
+    );
+  });
+
+  it("defaults to current workspace when workspace field is absent", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SVG_SNAPSHOT_JSON);
+
+    await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143100_screen.json" }),
+    });
+
+    const [calledWorkspace] = vi.mocked(snapshotReaderModule.loadSnapshotContent).mock.calls[0];
+    expect(typeof calledWorkspace).toBe("string");
+    expect(calledWorkspace.length).toBeGreaterThan(0);
+  });
+
+  it("rejects workspace containing a forward slash", async () => {
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "some/path", filename: "20260609_143000_screen.json" }),
+    });
+
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/path traversal/);
+    expect(snapshotReaderModule.loadSnapshotContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects workspace that is bare '..'", async () => {
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "..", filename: "20260609_143000_screen.json" }),
+    });
+
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/path traversal/);
+    expect(snapshotReaderModule.loadSnapshotContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects workspace that is an empty string", async () => {
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "", filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean }>();
+    expect(body.ok).toBe(false);
+  });
+
+  it("accepts workspace with dots and hyphens (e.g. my-project.v2)", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SNAPSHOT_JSON);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "my-project.v2", filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
   });
 });

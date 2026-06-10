@@ -13,7 +13,7 @@ import { hasMermaidKeyword, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { saveSnapshot } from "./snapshot.js";
-import { listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
+import { listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -325,8 +325,17 @@ export function createApp(): Hono {
     return c.json({ ok: true, snapshots });
   });
 
+  // ── Sprint 18 — GET /snapshots/all (v0.5) ────────────────────────────────────
+
+  app.get("/snapshots/all", (c) => {
+    const workspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+    const workspaces = listAllSnapshots(root, workspace);
+    return c.json({ ok: true, workspaces });
+  });
+
   app.post("/snapshots/load", async (c) => {
-    const body = await c.req.json<{ filename?: unknown }>();
+    const body = await c.req.json<{ filename?: unknown; workspace?: unknown }>();
     const filename = body.filename;
 
     if (typeof filename !== "string") {
@@ -338,8 +347,24 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "invalid filename: path traversal not allowed" });
     }
 
-    const workspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const currentWorkspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+
+    // Optional workspace override (v0.5 cross-workspace load).
+    let workspace: string;
+    if (body.workspace !== undefined) {
+      if (typeof body.workspace !== "string" || body.workspace.length === 0) {
+        return c.json({ ok: false, error: "workspace must be a non-empty string" }, 400);
+      }
+      const ws = body.workspace;
+      // Safety: no path separators, no null bytes, not bare ".."
+      if (ws.includes("/") || ws.includes("\\") || ws.includes("\0") || ws === "..") {
+        return c.json({ ok: false, error: "invalid workspace: path traversal not allowed" });
+      }
+      workspace = ws;
+    } else {
+      workspace = currentWorkspace;
+    }
 
     const raw = loadSnapshotContent(workspace, root, filename);
     if (raw === null) {

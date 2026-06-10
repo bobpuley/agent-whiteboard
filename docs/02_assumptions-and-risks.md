@@ -193,3 +193,13 @@ Risks from moving the three test roots:
 > ⚠️ ASSUMPTION: The history navigator uses `options.title` (already stored in the snapshot `options` field) as the human-readable label for each entry. If absent or empty, the UI falls back to `type + timestamp`.
 - No schema change needed — `options` (including `title`) is already persisted by `snapshot.ts`.
 - Risk: snapshots written before FR2 may have no title, making those history entries less descriptive.
+
+**H4 — All workspaces' snapshots are visible in the history panel**
+> ⚠️ ASSUMPTION: `GET /snapshots/all` scans every subdirectory of `~/.agent-whiteboard/` and returns their contents grouped by workspace. The user is assumed to be the sole operator of this machine — snapshots from all projects are shown without isolation.
+- Risk: if multiple users share a machine, one user could browse another's diagram history via the browser panel.
+- Mitigation: the server is localhost-only by default (see A1); this risk is accepted within the local-only deployment scope.
+
+**H5 — Cross-workspace snapshot load is safe with a workspace name safety check**
+> ⚠️ ASSUMPTION: `POST /snapshots/load` accepts an optional `workspace` field. The server validates that the value is a plain directory name — no path separators, no `..`, no null bytes — before constructing the file path.
+- Risk: a crafted `workspace` value could attempt to escape the snapshots root directory.
+- Mitigation: server validates `workspace` against a safe-name pattern (alphanumeric, dashes, underscores, dots, spaces only) before resolving the path. Directory must exist under `WHITEBOARD_SNAPSHOTS_DIR`.

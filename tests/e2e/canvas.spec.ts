@@ -240,14 +240,12 @@ test("history panel: closes when X button is clicked", async ({ page }) => {
   await expect(page.locator(".history-panel")).not.toBeVisible();
 });
 
-test("history panel: shows 'No snapshots yet.' when list is empty", async ({ page, request }) => {
-  // Clear any existing snapshot state by relying on env-isolated test workspace.
-  // Intercept /snapshots to return empty list.
-  await page.route("/snapshots", (route) => {
+test("history panel: shows 'No snapshots yet.' when list is empty", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ ok: true, snapshots: [] }),
+      body: JSON.stringify({ ok: true, workspaces: [] }),
     });
   });
 
@@ -258,23 +256,29 @@ test("history panel: shows 'No snapshots yet.' when list is empty", async ({ pag
 });
 
 test("history panel: shows snapshot list with type badge and title", async ({ page }) => {
-  await page.route("/snapshots", (route) => {
+  await page.route("/snapshots/all", (route) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         ok: true,
-        snapshots: [
+        workspaces: [
           {
-            filename: "20260609_150000_screen.json",
-            timestamp: "2026-06-09T15:00:00.000Z",
-            type: "mermaid",
-            title: "My diagram",
-          },
-          {
-            filename: "20260609_140000_screen.json",
-            timestamp: "2026-06-09T14:00:00.000Z",
-            type: "html",
+            name: "my-project",
+            isCurrent: true,
+            snapshots: [
+              {
+                filename: "20260609_150000_screen.json",
+                timestamp: "2026-06-09T15:00:00.000Z",
+                type: "mermaid",
+                title: "My diagram",
+              },
+              {
+                filename: "20260609_140000_screen.json",
+                timestamp: "2026-06-09T14:00:00.000Z",
+                type: "html",
+              },
+            ],
           },
         ],
       }),
@@ -296,34 +300,38 @@ test("history panel: shows snapshot list with type badge and title", async ({ pa
   await expect(rows.nth(1).locator(".type-badge")).toHaveText("html");
 });
 
-test("history panel: clicking a snapshot row calls POST /snapshots/load and closes panel", async ({ page, request }) => {
-  // Seed a real snapshot via POST /render so there's something in the list.
+test("history panel: clicking a snapshot row calls POST /snapshots/load with workspace+filename and closes panel", async ({ page, request }) => {
   await request.post(`${SERVER}/render`, {
     data: { type: "html", payload: "<h1 id='snap-h1'>Snapshot content</h1>", options: { title: "Snap 1" } },
   });
 
-  // Mock the /snapshots endpoint to return a known entry.
-  await page.route("/snapshots", (route) => {
+  await page.route("/snapshots/all", (route) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         ok: true,
-        snapshots: [
+        workspaces: [
           {
-            filename: "20260609_150000_screen.json",
-            timestamp: "2026-06-09T15:00:00.000Z",
-            type: "mermaid",
-            title: "Snap 1",
+            name: "my-project",
+            isCurrent: true,
+            snapshots: [
+              {
+                filename: "20260609_150000_screen.json",
+                timestamp: "2026-06-09T15:00:00.000Z",
+                type: "mermaid",
+                title: "Snap 1",
+              },
+            ],
           },
         ],
       }),
     });
   });
 
-  // Mock the load endpoint to render something visible and return ok.
-  await page.route("/snapshots/load", (route) => {
-    // Trigger an actual render to make the canvas update via the real server.
+  let loadBody: unknown;
+  await page.route("/snapshots/load", async (route) => {
+    loadBody = JSON.parse(route.request().postData() ?? "{}");
     route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -337,6 +345,137 @@ test("history panel: clicking a snapshot row calls POST /snapshots/load and clos
 
   await page.locator(".snapshot-row").first().click();
 
-  // Panel should close after clicking an entry.
   await expect(page.locator(".history-panel")).not.toBeVisible();
+  expect(loadBody).toMatchObject({ workspace: "my-project", filename: "20260609_150000_screen.json" });
+});
+
+// ── Sprint 18 — workspace accordion ──────────────────────────────────────────
+
+test("history panel: accordion renders one section per workspace", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        workspaces: [
+          {
+            name: "project-a",
+            isCurrent: false,
+            snapshots: [{ filename: "20260609_140000_screen.json", timestamp: "2026-06-09T14:00:00.000Z", type: "html" }],
+          },
+          {
+            name: "project-b",
+            isCurrent: true,
+            snapshots: [{ filename: "20260609_150000_screen.json", timestamp: "2026-06-09T15:00:00.000Z", type: "mermaid", title: "B diagram" }],
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".history-panel")).toBeVisible();
+
+  await expect(page.locator(".workspace-group")).toHaveCount(2);
+  await expect(page.locator(".workspace-name").first()).toHaveText("project-a");
+  await expect(page.locator(".workspace-name").nth(1)).toHaveText("project-b");
+});
+
+test("history panel: current workspace section is open, others are closed", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        workspaces: [
+          {
+            name: "other-project",
+            isCurrent: false,
+            snapshots: [{ filename: "20260609_140000_screen.json", timestamp: "2026-06-09T14:00:00.000Z", type: "svg" }],
+          },
+          {
+            name: "current-project",
+            isCurrent: true,
+            snapshots: [{ filename: "20260609_150000_screen.json", timestamp: "2026-06-09T15:00:00.000Z", type: "mermaid" }],
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".history-panel")).toBeVisible();
+
+  const groups = page.locator(".workspace-group");
+  // other-project (isCurrent=false) must be closed.
+  await expect(groups.first()).not.toHaveAttribute("open");
+  // current-project (isCurrent=true) must be open.
+  await expect(groups.nth(1)).toHaveAttribute("open");
+});
+
+test("history panel: current workspace shows 'current' badge", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        workspaces: [
+          {
+            name: "my-workspace",
+            isCurrent: true,
+            snapshots: [{ filename: "20260609_150000_screen.json", timestamp: "2026-06-09T15:00:00.000Z", type: "mermaid" }],
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".current-badge")).toBeVisible();
+  await expect(page.locator(".current-badge")).toHaveText("current");
+});
+
+test("history panel: cross-workspace load sends correct workspace in POST body", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        workspaces: [
+          {
+            name: "other-workspace",
+            isCurrent: false,
+            snapshots: [{ filename: "20260609_140000_screen.json", timestamp: "2026-06-09T14:00:00.000Z", type: "mermaid", title: "Remote" }],
+          },
+          {
+            name: "current-workspace",
+            isCurrent: true,
+            snapshots: [{ filename: "20260609_150000_screen.json", timestamp: "2026-06-09T15:00:00.000Z", type: "mermaid" }],
+          },
+        ],
+      }),
+    });
+  });
+
+  let loadBody: unknown;
+  await page.route("/snapshots/load", async (route) => {
+    loadBody = JSON.parse(route.request().postData() ?? "{}");
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+
+  // Expand other-workspace and click its snapshot.
+  await page.locator(".workspace-group").first().locator(".workspace-summary").click();
+  await page.locator(".workspace-group").first().locator(".snapshot-row").click();
+
+  expect(loadBody).toMatchObject({ workspace: "other-workspace", filename: "20260609_140000_screen.json" });
 });
