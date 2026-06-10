@@ -1,3 +1,12 @@
+## 0.5.0 — 2026-06-10
+
+- History panel now groups snapshots by workspace in a `<details>` accordion; the current workspace section is auto-expanded on open, all others are collapsed
+- `GET /snapshots/all` endpoint: scans all workspace subdirectories under the snapshots root and returns grouped results (`{ ok, workspaces: [{ name, isCurrent, snapshots }] }`)
+- `POST /snapshots/load` extended with optional `workspace` field for cross-workspace loading; workspace name safety check (no path separators, no bare `..`, no null bytes); omitting the field defaults to the current workspace (backward-compatible)
+- `server/snapshot-reader.ts`: new `listAllSnapshots(dir, currentWorkspace)` function; workspaces with no readable snapshots are omitted from the result
+- `client/src/HistoryPanel.svelte`: switched from `GET /snapshots` to `GET /snapshots/all`; accordion UI with `<details>`/`<summary>` elements; "current" badge on the active workspace; snapshot rows pass `{ workspace, filename }` to the load endpoint
+- 11 new unit tests (3 for `GET /snapshots/all`, 6 for the workspace field on `POST /snapshots/load`, 2 backward-compat); 11 new e2e tests; 95 unit tests, 27 e2e tests — all passing
+
 ## 0.4.0 — 2026-06-09
 
 - Added history navigator: clock toggle button in the browser UI opens a slide-in panel showing past render snapshots
