@@ -1,6 +1,6 @@
 # Milestone v0.5 — History: Workspace Groups (Sprint 18)
 
-**Status:** in progress
+**Status:** released
 
 ### Sprint 18 — Workspace-grouped history accordion
 
