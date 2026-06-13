@@ -47,6 +47,16 @@ export async function parseMermaid(payload: string): Promise<void> {
 }
 
 /**
+ * Validates a workspace name for snapshot routing.
+ * Accepts alphanumeric characters, dashes, underscores, dots, and spaces.
+ * Rejects path separators, null bytes, and the bare ".." sequence.
+ */
+export function isValidWorkspaceName(name: string): boolean {
+  if (!name || name === "..") return false;
+  return /^[a-zA-Z0-9_\-. ]+$/.test(name);
+}
+
+/**
  * Returns true if the error originates from a missing DOM API in Node.js,
  * not from invalid Mermaid syntax.
  */
