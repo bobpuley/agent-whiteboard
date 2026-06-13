@@ -1,3 +1,12 @@
+## 0.6.0 — 2026-06-13
+
+- `render()` MCP tool and `POST /render` REST endpoint now accept `options.workspace` — an optional string that overrides the snapshot workspace for that call only (precedence: per-call > `WHITEBOARD_WORKSPACE` env var > `basename(cwd())`)
+- Enables per-session snapshot routing without restarting the server (e.g. one machine, multiple courses each passing their own workspace name)
+- Workspace name validation: alphanumeric, dashes, underscores, dots, spaces only — path separators and `..` are rejected with `{ ok: false, error: "..." }`; canvas render proceeds only after validation passes
+- `saveSnapshot()` updated to accept explicit workspace parameter; snapshot files land in `~/.agent-whiteboard/<workspace>/` as usual; history panel scope is unaffected (still uses env var / default)
+- `isValidWorkspaceName()` helper exported from `server/validate.ts` and shared by MCP tool and REST handler
+- 37 new unit tests (workspace validation, snapshot routing, invalid name rejection, step-frames workspace override); 109 unit tests total — all passing
+
 ## 0.5.0 — 2026-06-10
 
 - History panel now groups snapshots by workspace in a `<details>` accordion; the current workspace section is auto-expanded on open, all others are collapsed
