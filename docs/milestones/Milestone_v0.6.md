@@ -1,6 +1,6 @@
 # Milestone v0.6 — Dynamic Workspace Routing
 
-> Sprint 19. Planned.
+> Sprint 19. Released 2026-06-13.
 > Objective: Enable per-session workspace routing without env var setup or server restart.
 
 ---
