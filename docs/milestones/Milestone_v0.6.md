@@ -38,15 +38,11 @@ FR0 enables the agent to specify the workspace name directly in `render()` calls
 
 ## Tasks
 
-| Task | Description | DoD |
-|------|-------------|-----|
-| F14.1 | Update `render()` MCP tool signature and validation | Accepts `options.workspace?: string`; validates alphanumeric + dash/underscore/dot/space; rejects path separators and `..`; returns `{ ok: false, error: "..." }` on invalid name; PR merged |
-| F14.2 | Update `snapshot.ts` — workspace parameter handling | `saveSnapshot()` function accepts optional explicit `workspace` parameter; precedence: explicit param > env var > default; snapshot file routed to correct workspace folder; PR merged |
-| F14.3 | Update `POST /render` REST endpoint | Body accepts optional `workspace` field; same validation and routing as MCP tool; returns error if invalid; PR merged |
-| F14.4 | Test: workspace name validation | Unit test for safe-name pattern; rejects `..`, `/`, null bytes; accepts dashes/underscores/dots/spaces; test passes |
-| F14.5 | Test: snapshot routing — per-call workspace | Integration test: render with `options.workspace="course_1"` writes snapshot to `~/.agent-whiteboard/course_1/`; history panel still uses env var workspace; test passes |
-| F14.6 | Update requirements & docs — v0.6 → `03_requirements.md` | F14 requirement updated from "planned" to "v0.6"; MCP tool description updated; PR merged |
-| F14.7 | Documentation: README or inline help | Document `options.workspace` parameter, precedence order, use case (multi-course on one machine); add example: `render({ type: "mermaid", payload: "...", options: { workspace: "course_2" } })` |
+- [x] **F14.1** — Update `render()` MCP tool signature and validation: accepts `options.workspace?: string`; validates alphanumeric + dash/underscore/dot/space; rejects path separators and `..`; returns `{ ok: false, error: "..." }` on invalid name
+- [x] **F14.2** — Update `snapshot.ts`: `saveSnapshot()` accepts optional explicit `workspace` param; precedence: explicit param > env var > default; snapshot routed to correct workspace folder
+- [x] **F14.3** — Update `POST /render` REST endpoint: body accepts optional `workspace` field; same validation and routing as MCP tool; returns error if invalid
+- [x] **F14.4** — Test: workspace name validation — unit tests for safe-name pattern; rejects `..`, `/`, null bytes; accepts dashes/underscores/dots/spaces
+- [x] **F14.5** — Test: snapshot routing — integration test: render with `options.workspace="course_1"` writes snapshot to correct folder; history panel still uses env var workspace
 
 ---
 

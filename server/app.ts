@@ -9,7 +9,7 @@ import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, setCanvas, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
-import { hasMermaidKeyword, parseMermaid } from "./validate.js";
+import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { saveSnapshot } from "./snapshot.js";
@@ -86,7 +86,7 @@ export function createApp(): Hono {
   const app = new Hono();
 
   app.post("/render", async (c) => {
-    const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; node_to_frame?: Record<string, number> } }>();
+    const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; node_to_frame?: Record<string, number>; workspace?: string } }>();
 
     if (typeof body.payload !== "string") {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
@@ -103,6 +103,14 @@ export function createApp(): Hono {
     const { payload } = body;
     const title = body.options?.title;
     const nodeToFrame = body.options?.node_to_frame;
+    const workspaceOverride = body.options?.workspace;
+
+    if (workspaceOverride !== undefined && !isValidWorkspaceName(workspaceOverride)) {
+      return c.json({
+        ok: false,
+        error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
+      }, 400);
+    }
 
     const validationError = await validatePayload(type, payload);
     if (validationError) {
@@ -127,14 +135,14 @@ export function createApp(): Hono {
         ...(title !== undefined ? { title } : {}),
         ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
       });
-      try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame }); } catch { /* non-fatal */ }
+      try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace: workspaceOverride }); } catch { /* non-fatal */ }
       return c.json({ ok: true });
     }
 
     // svg, html, katex, mermaid, vega-lite
     setCanvas(type as CanvasType, payload, title);
     broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
-    try { saveSnapshot(type, payload, { title }); } catch { /* non-fatal */ }
+    try { saveSnapshot(type, payload, { title, workspace: workspaceOverride }); } catch { /* non-fatal */ }
     return c.json({ ok: true });
   });
 

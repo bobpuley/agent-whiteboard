@@ -1035,6 +1035,7 @@ describe("POST /node-click — Sprint 14: action field", () => {
 
 import * as snapshotModule from "../../../server/snapshot.js";
 import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
+import { isValidWorkspaceName } from "../../../server/validate.js";
 
 describe("POST /render — snapshot persistence (Sprint 16)", () => {
   beforeEach(() => {
@@ -1495,5 +1496,147 @@ describe("POST /snapshots/load — workspace field (Sprint 18)", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
+// ── Sprint 19 — F14.4: isValidWorkspaceName unit tests ───────────────────────
+
+describe("isValidWorkspaceName", () => {
+  it("accepts simple alphanumeric names", () => {
+    expect(isValidWorkspaceName("course1")).toBe(true);
+    expect(isValidWorkspaceName("MyProject")).toBe(true);
+    expect(isValidWorkspaceName("abc123")).toBe(true);
+  });
+
+  it("accepts names with dashes, underscores, dots, and spaces", () => {
+    expect(isValidWorkspaceName("course-1")).toBe(true);
+    expect(isValidWorkspaceName("course_1")).toBe(true);
+    expect(isValidWorkspaceName("my.project")).toBe(true);
+    expect(isValidWorkspaceName("my project")).toBe(true);
+    expect(isValidWorkspaceName("course-1_v2.0")).toBe(true);
+  });
+
+  it("rejects empty string", () => {
+    expect(isValidWorkspaceName("")).toBe(false);
+  });
+
+  it("rejects bare '..'", () => {
+    expect(isValidWorkspaceName("..")).toBe(false);
+  });
+
+  it("rejects names containing a forward slash", () => {
+    expect(isValidWorkspaceName("some/path")).toBe(false);
+    expect(isValidWorkspaceName("/absolute")).toBe(false);
+  });
+
+  it("rejects names containing a backslash", () => {
+    expect(isValidWorkspaceName("some\\path")).toBe(false);
+  });
+
+  it("rejects names containing null bytes", () => {
+    expect(isValidWorkspaceName("bad\0name")).toBe(false);
+  });
+
+  it("rejects names with special shell characters", () => {
+    expect(isValidWorkspaceName("bad!name")).toBe(false);
+    expect(isValidWorkspaceName("bad@name")).toBe(false);
+    expect(isValidWorkspaceName("bad#name")).toBe(false);
+  });
+});
+
+// ── Sprint 19 — F14.5: POST /render — per-call workspace routing ─────────────
+
+describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotModule.saveSnapshot).mockClear();
+  });
+
+  it("passes options.workspace to saveSnapshot when valid", async () => {
+    const payload = "graph TD; A-->B";
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload, options: { workspace: "course_1" } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, {
+      title: undefined,
+      workspace: "course_1",
+    });
+  });
+
+  it("passes both title and workspace to saveSnapshot", async () => {
+    const payload = "graph TD; A-->B";
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload, options: { title: "Lesson 1", workspace: "course_2" } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, {
+      title: "Lesson 1",
+      workspace: "course_2",
+    });
+  });
+
+  it("rejects an invalid workspace name (path separator)", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A-->B", options: { workspace: "../evil" } }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/invalid workspace/);
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("rejects '..' as workspace name", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A-->B", options: { workspace: ".." } }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("omitting options.workspace calls saveSnapshot without workspace (uses env/default)", async () => {
+    const payload = "graph TD; X-->Y";
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload }),
+    });
+
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined });
+  });
+
+  it("passes workspace to saveSnapshot for step-frames renders", async () => {
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [{ label: "A", payload: "graph TD; A" }, { label: "B", payload: "graph TD; B" }],
+    });
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: "course_3" } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("step-frames", payload, {
+      title: undefined,
+      node_to_frame: undefined,
+      workspace: "course_3",
+    });
   });
 });
