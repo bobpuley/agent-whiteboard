@@ -152,7 +152,14 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 **G2 — Workspace name derived from `basename(process.cwd())`**
 > ⚠️ ASSUMPTION: The workspace name is the final path component of the directory where the server is started (e.g. `/Users/bob/workspaces/my-project` → `my-project`).
 - Risk: if the server is started from a parent or sibling directory, snapshots land in an unexpected workspace folder.
-- Mitigation: expose a `WHITEBOARD_WORKSPACE` environment variable override; document the default in the README.
+- Mitigation (current): expose a `WHITEBOARD_WORKSPACE` environment variable override; document the default in the README.
+- Mitigation (FR0, planned): allow the agent to pass `options.workspace` in `render()` calls to override the workspace dynamically per-call, without server restart or env var setup.
+
+**G2b — Workspace override precedence (FR0)**
+> ⚠️ ASSUMPTION: Per-call `options.workspace` overrides `WHITEBOARD_WORKSPACE` env var, which overrides `basename(process.cwd())`.
+- Precedence order: `options.workspace` (highest) → `WHITEBOARD_WORKSPACE` env var → `basename(process.cwd())` (default, lowest)
+- Risk: unclear whether a per-call workspace should also affect the browser's history panel scope, or only the snapshot file path. Currently history is scoped to a single workspace at a time (`WHITEBOARD_WORKSPACE` or default).
+- Mitigation: clarify whether history panel should remain locked to the env-var workspace, or follow the per-call workspace. Recommend: per-call workspace is snapshot-routing only; history panel remains locked to the current workspace to avoid confusion.
 
 **G3 — No snapshot cleanup policy in v1**
 > ⚠️ ASSUMPTION: Files accumulate indefinitely. No TTL, quota, or rotation is defined.

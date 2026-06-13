@@ -263,6 +263,12 @@ Motivation: all test-related code lives in one top-level `tests/` directory; cle
 
 ## Feature Requests
 
+**FR0 — Dynamic workspace parameter in render tool**
+Allow the agent to pass the `workspace` name directly in the `render()` tool call, instead of relying solely on the `WHITEBOARD_WORKSPACE` env var. This enables each Claude session to send snapshots to a workspace-specific folder without server restart or environment setup.
+- Proposed: add optional `options.workspace` parameter to `render()` (and `slideshow()` for consistency)
+- Overrides `WHITEBOARD_WORKSPACE` env var when provided; env var is used as default
+- Enables per-session workspace routing for teaching scenarios where one dev machine runs multiple courses/projects
+
 **FR1 — Render snapshot persistence ("memory")**
 When `render()` is called (a visual is received), the server stores a snapshot of the rendered content to disk at `~/.agent-whiteboard/<workspace-name>/<timestamp>_screen.<ext>`.
 - Workspace name defaults to the Claude project folder name (basename of the server's working directory at startup). Overridable via env var.
