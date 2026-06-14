@@ -1,3 +1,12 @@
+## 0.7.0 — 2026-06-15
+
+- **Breaking change:** `options.workspace` is now required in both the `render()` MCP tool and `POST /render` REST endpoint; omitting it returns `{ ok: false, error: "workspace is required" }` with HTTP 400 before any render or snapshot write
+- Removed the three-level fallback chain (`options.workspace` → `WHITEBOARD_WORKSPACE` env var → `basename(cwd())`); workspace must always be supplied explicitly by the agent
+- `WHITEBOARD_WORKSPACE` environment variable is no longer read anywhere in the server codebase (deprecated and removed)
+- Server tracks `lastWorkspace` in-memory (updated on every successful `render()` call); `GET /snapshots/all` uses it to determine `isCurrent`, replacing the former env var lookup
+- `RenderOptions.workspace` in `snapshot.ts` changed from optional to required; no fallback inside `saveSnapshot()`
+- All 109 unit tests updated to pass `options.workspace` explicitly; new tests cover the missing-workspace error path and env-var removal
+
 ## 0.6.0 — 2026-06-13
 
 - `render()` MCP tool and `POST /render` REST endpoint now accept `options.workspace` — an optional string that overrides the snapshot workspace for that call only (precedence: per-call > `WHITEBOARD_WORKSPACE` env var > `basename(cwd())`)
