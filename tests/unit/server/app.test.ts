@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../server/app.js";
-import { resetCanvas } from "../../../server/session.js";
+import { resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 import { cancelSlideshow } from "../../../server/slideshow.js";
 import { resetClick } from "../../../server/events.js";
+
+const WORKSPACE = "test-workspace";
 
 vi.mock("../../../server/snapshot.js", () => ({
   saveSnapshot: vi.fn(),
@@ -20,6 +22,7 @@ const app = createApp();
 afterEach(() => {
   cancelSlideshow();
   resetCanvas();
+  resetLastWorkspace();
   resetClick();
 });
 
@@ -30,7 +33,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B" }),
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WORKSPACE } }),
     });
 
     expect(res.status).toBe(200);
@@ -41,7 +44,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "invalid stuff" }),
+      body: JSON.stringify({ type: "mermaid", payload: "invalid stuff", options: { workspace: WORKSPACE } }),
     });
 
     expect(res.status).toBe(200);
@@ -54,7 +57,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "d2", payload: "x -> y" }),
+      body: JSON.stringify({ type: "d2", payload: "x -> y", options: { workspace: WORKSPACE } }),
     });
 
     expect(res.status).toBe(400);
@@ -66,7 +69,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "svg", payload: "<svg><circle r='5'/></svg>" }),
+      body: JSON.stringify({ type: "svg", payload: "<svg><circle r='5'/></svg>", options: { workspace: WORKSPACE } }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -76,7 +79,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "html", payload: "<h1>Hello</h1>" }),
+      body: JSON.stringify({ type: "html", payload: "<h1>Hello</h1>", options: { workspace: WORKSPACE } }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -86,7 +89,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "katex", payload: "E = mc^2" }),
+      body: JSON.stringify({ type: "katex", payload: "E = mc^2", options: { workspace: WORKSPACE } }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -97,7 +100,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "vega-lite", payload: spec }),
+      body: JSON.stringify({ type: "vega-lite", payload: spec, options: { workspace: WORKSPACE } }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -107,7 +110,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "vega-lite", payload: "not valid json {" }),
+      body: JSON.stringify({ type: "vega-lite", payload: "not valid json {", options: { workspace: WORKSPACE } }),
     });
     expect(res.status).toBe(200);
     const body = await res.json<{ ok: boolean; error: string }>();
@@ -120,7 +123,7 @@ describe("POST /render", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "bogus" }),
+      body: JSON.stringify({ type: "mermaid", payload: "bogus", options: { workspace: WORKSPACE } }),
     });
 
     const exportRes = await app.request("/export");
@@ -131,7 +134,7 @@ describe("POST /render", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A -->" }),
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A -->", options: { workspace: WORKSPACE } }),
     });
 
     expect(res.status).toBe(200);
@@ -144,7 +147,7 @@ describe("POST /render", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A -->" }),
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A -->", options: { workspace: WORKSPACE } }),
     });
 
     const exportRes = await app.request("/export");
@@ -168,7 +171,7 @@ describe("POST /render", () => {
       const res = await app.request("/render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "mermaid", payload }),
+        body: JSON.stringify({ type: "mermaid", payload, options: { workspace: WORKSPACE } }),
       });
       expect(res.status, `failed for payload starting with '${payload.split(/\s/)[0]}'`).toBe(200);
       expect((await res.json<{ ok: boolean }>()).ok).toBe(true);
@@ -191,7 +194,7 @@ describe("GET /export", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload }),
+      body: JSON.stringify({ type: "mermaid", payload, options: { workspace: WORKSPACE } }),
     });
 
     const res = await app.request("/export");
@@ -205,7 +208,7 @@ describe("GET /export", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "svg", payload }),
+      body: JSON.stringify({ type: "svg", payload, options: { workspace: WORKSPACE } }),
     });
 
     const res = await app.request("/export");
@@ -218,7 +221,7 @@ describe("GET /export", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "vega-lite", payload }),
+      body: JSON.stringify({ type: "vega-lite", payload, options: { workspace: WORKSPACE } }),
     });
 
     const res = await app.request("/export");
@@ -240,7 +243,7 @@ describe("POST /clear", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B" }),
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WORKSPACE } }),
     });
 
     await app.request("/clear", { method: "POST" });
@@ -260,7 +263,7 @@ describe("POST /render — options.title", () => {
       body: JSON.stringify({
         type: "mermaid",
         payload: "graph TD; A --> B",
-        options: { title: "My diagram" },
+        options: { workspace: WORKSPACE, title: "My diagram" },
       }),
     });
     expect(res.status).toBe(200);
@@ -272,17 +275,17 @@ describe("POST /render — options.title", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload, options: { title: "My diagram" } }),
+      body: JSON.stringify({ type: "mermaid", payload, options: { workspace: WORKSPACE, title: "My diagram" } }),
     });
     const res = await app.request("/export");
     expect(await res.json()).toEqual({ ok: true, data: payload });
   });
 
-  it("render without options still returns { ok: true }", async () => {
+  it("render with only workspace in options (no title) returns { ok: true }", async () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B" }),
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WORKSPACE } }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -305,7 +308,7 @@ describe("POST /render (step-frames)", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -315,7 +318,7 @@ describe("POST /render (step-frames)", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: "not json {" }),
+      body: JSON.stringify({ type: "step-frames", payload: "not json {", options: { workspace: WORKSPACE } }),
     });
     const body = await res.json<{ ok: boolean; error: string }>();
     expect(body.ok).toBe(false);
@@ -326,7 +329,7 @@ describe("POST /render (step-frames)", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: JSON.stringify({ frame_type: "mermaid" }) }),
+      body: JSON.stringify({ type: "step-frames", payload: JSON.stringify({ frame_type: "mermaid" }), options: { workspace: WORKSPACE } }),
     });
     const body = await res.json<{ ok: boolean; error: string }>();
     expect(body.ok).toBe(false);
@@ -336,7 +339,7 @@ describe("POST /render (step-frames)", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
     const res = await app.request("/export");
     expect(await res.json()).toEqual({ ok: true, data: THREE_FRAME_SEQUENCE });
@@ -359,7 +362,7 @@ describe("POST /step", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
 
     const res = await app.request("/step", {
@@ -375,7 +378,7 @@ describe("POST /step", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
 
     await app.request("/step", {
@@ -395,7 +398,7 @@ describe("POST /step", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
 
     // Step to the end.
@@ -429,7 +432,7 @@ describe("POST /step", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
 
     await app.request("/clear", { method: "POST" });
@@ -576,7 +579,7 @@ describe("POST /slideshow", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "katex", payload: "E=mc^2" }),
+      body: JSON.stringify({ type: "katex", payload: "E=mc^2", options: { workspace: WORKSPACE } }),
     });
     // Timer fires — but slideshow was cancelled, so canvas stays at katex payload.
     vi.advanceTimersByTime(1000);
@@ -874,7 +877,7 @@ describe("POST /seek", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
     const res = await app.request("/seek", {
       method: "POST",
@@ -890,7 +893,7 @@ describe("POST /seek", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
     const res = await app.request("/seek", {
       method: "POST",
@@ -905,7 +908,7 @@ describe("POST /seek", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
     const res = await app.request("/seek", {
       method: "POST",
@@ -920,7 +923,7 @@ describe("POST /seek", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
     // Advance to frame 2.
     await app.request("/step", {
@@ -1047,11 +1050,11 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload }),
+      body: JSON.stringify({ type: "mermaid", payload, options: { workspace: WORKSPACE } }),
     });
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined });
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined, workspace: WORKSPACE });
   });
 
   it("calls saveSnapshot with title when options.title is provided", async () => {
@@ -1059,18 +1062,18 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload, options: { title: "My diagram" } }),
+      body: JSON.stringify({ type: "mermaid", payload, options: { workspace: WORKSPACE, title: "My diagram" } }),
     });
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: "My diagram" });
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { workspace: WORKSPACE, title: "My diagram" });
   });
 
   it("does NOT call saveSnapshot when render payload is invalid", async () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "bogus" }),
+      body: JSON.stringify({ type: "mermaid", payload: "bogus", options: { workspace: WORKSPACE } }),
     });
 
     expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
@@ -1080,7 +1083,7 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A -->" }),
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A -->", options: { workspace: WORKSPACE } }),
     });
 
     expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
@@ -1090,14 +1093,14 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE }),
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
       "step-frames",
       THREE_FRAME_SEQUENCE,
-      { title: undefined, node_to_frame: undefined }
+      { title: undefined, node_to_frame: undefined, workspace: WORKSPACE }
     );
   });
 
@@ -1109,7 +1112,7 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "svg", payload: "<svg/>" }),
+      body: JSON.stringify({ type: "svg", payload: "<svg/>", options: { workspace: WORKSPACE } }),
     });
 
     expect(res.status).toBe(200);
@@ -1433,7 +1436,13 @@ describe("POST /snapshots/load — workspace field (Sprint 18)", () => {
     );
   });
 
-  it("defaults to current workspace when workspace field is absent", async () => {
+  it("defaults to lastWorkspace from last render() when workspace field is absent", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "svg", payload: "<svg/>", options: { workspace: "my-project" } }),
+    });
+
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SVG_SNAPSHOT_JSON);
 
     await app.request("/snapshots/load", {
@@ -1443,8 +1452,7 @@ describe("POST /snapshots/load — workspace field (Sprint 18)", () => {
     });
 
     const [calledWorkspace] = vi.mocked(snapshotReaderModule.loadSnapshotContent).mock.calls[0];
-    expect(typeof calledWorkspace).toBe("string");
-    expect(calledWorkspace.length).toBeGreaterThan(0);
+    expect(calledWorkspace).toBe("my-project");
   });
 
   it("rejects workspace containing a forward slash", async () => {
@@ -1610,15 +1618,18 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
     expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
   });
 
-  it("omitting options.workspace calls saveSnapshot without workspace (uses env/default)", async () => {
-    const payload = "graph TD; X-->Y";
-    await app.request("/render", {
+  it("returns { ok: false, error } when workspace is absent", async () => {
+    const res = await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload }),
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; X-->Y" }),
     });
 
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/workspace is required/);
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
   });
 
   it("passes workspace to saveSnapshot for step-frames renders", async () => {

@@ -1,4 +1,5 @@
 // In-memory canvas state — single canvas, no persistence in v1.
+// Also tracks the workspace from the most recent render() call (used by history endpoints).
 
 export type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
 
@@ -13,9 +14,18 @@ export type CanvasState =
   | { type: "empty" };
 
 let canvas: CanvasState = { type: "empty" };
+let lastWorkspace = "";
 
 export function getCanvas(): CanvasState {
   return canvas;
+}
+
+export function getLastWorkspace(): string {
+  return lastWorkspace;
+}
+
+export function setLastWorkspace(workspace: string): void {
+  lastWorkspace = workspace;
 }
 
 export function setCanvas(type: CanvasType, payload: string, title?: string): void {
@@ -64,4 +74,9 @@ export function exportCanvas(): string {
 /** Reset canvas to empty — for use in tests only. */
 export function resetCanvas(): void {
   canvas = { type: "empty" };
+}
+
+/** Reset lastWorkspace to empty string — for use in tests only. */
+export function resetLastWorkspace(): void {
+  lastWorkspace = "";
 }

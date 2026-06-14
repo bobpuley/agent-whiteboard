@@ -157,11 +157,10 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 **G2b — Workspace override precedence (superseded by FR4)**
 > ✅ SUPERSEDED (FR4): The three-level precedence chain (`options.workspace` → `WHITEBOARD_WORKSPACE` → `basename(process.cwd())`) is collapsed. Only one level remains: the agent always supplies workspace explicitly in `options.workspace`.
 
-**G2c — History panel "current workspace" without env var**
-> ⚠️ ASSUMPTION: With `WHITEBOARD_WORKSPACE` removed, the server has no startup-time signal for which workspace is "current." The `isCurrent` field in `GET /snapshots/all` (F13) currently relies on this env var.
-- Open question: how should the server determine "current workspace" for the history panel accordion (auto-expand behaviour)?
-- Candidates: (a) drop `isCurrent` from the API — all workspaces shown collapsed; (b) track last used workspace from most recent `render()` call in-memory; (c) client-side: remember last loaded workspace in localStorage.
-- Decision: **deferred to v0.7 milestone implementation phase** — pick the simplest option that does not require a new config surface.
+**G2c — History panel "current workspace" tracked from last render() call**
+> ✅ DECISION (v0.7): Since workspace is now mandatory in every `render()` call, the server always knows the most recent workspace. A module-level `lastWorkspace` variable in `session.ts` is updated on every successful `render()`. The history panel endpoints (`GET /snapshots`, `GET /snapshots/all`, `POST /snapshots/load` default) use `lastWorkspace` instead of the removed `WHITEBOARD_WORKSPACE` env var.
+- `lastWorkspace` starts as an empty string; history endpoints return empty/no-isCurrent until the first `render()` call in a session.
+- No new config surface, no client changes needed.
 
 **G3 — No snapshot cleanup policy in v1**
 > ⚠️ ASSUMPTION: Files accumulate indefinitely. No TTL, quota, or rotation is defined.

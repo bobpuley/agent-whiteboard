@@ -2,11 +2,11 @@
 // Exported so tests can import it without spinning up a real server.
 
 import { homedir } from "os";
-import { basename, join } from "path";
+import { join } from "path";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
 import type { ClickEvent } from "./events.js";
-import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, setCanvas, setStepFrames, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validate.js";
@@ -88,6 +88,17 @@ export function createApp(): Hono {
   app.post("/render", async (c) => {
     const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; node_to_frame?: Record<string, number>; workspace?: string } }>();
 
+    const workspace = body.options?.workspace;
+    if (!workspace) {
+      return c.json({ ok: false, error: "workspace is required" }, 400);
+    }
+    if (!isValidWorkspaceName(workspace)) {
+      return c.json({
+        ok: false,
+        error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
+      }, 400);
+    }
+
     if (typeof body.payload !== "string") {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
     }
@@ -103,14 +114,6 @@ export function createApp(): Hono {
     const { payload } = body;
     const title = body.options?.title;
     const nodeToFrame = body.options?.node_to_frame;
-    const workspaceOverride = body.options?.workspace;
-
-    if (workspaceOverride !== undefined && !isValidWorkspaceName(workspaceOverride)) {
-      return c.json({
-        ok: false,
-        error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-      }, 400);
-    }
 
     const validationError = await validatePayload(type, payload);
     if (validationError) {
@@ -135,14 +138,16 @@ export function createApp(): Hono {
         ...(title !== undefined ? { title } : {}),
         ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
       });
-      try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace: workspaceOverride }); } catch { /* non-fatal */ }
+      setLastWorkspace(workspace);
+      try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
       return c.json({ ok: true });
     }
 
     // svg, html, katex, mermaid, vega-lite
     setCanvas(type as CanvasType, payload, title);
     broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
-    try { saveSnapshot(type, payload, { title, workspace: workspaceOverride }); } catch { /* non-fatal */ }
+    setLastWorkspace(workspace);
+    try { saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
     return c.json({ ok: true });
   });
 
@@ -327,7 +332,7 @@ export function createApp(): Hono {
   // ── History navigator (v0.4 — Sprint 17) ──────────────────────────────────────
 
   app.get("/snapshots", (c) => {
-    const workspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const workspace = getLastWorkspace();
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
     const snapshots = listSnapshots(workspace, root);
     return c.json({ ok: true, snapshots });
@@ -336,7 +341,7 @@ export function createApp(): Hono {
   // ── Sprint 18 — GET /snapshots/all (v0.5) ────────────────────────────────────
 
   app.get("/snapshots/all", (c) => {
-    const workspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const workspace = getLastWorkspace();
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
     const workspaces = listAllSnapshots(root, workspace);
     return c.json({ ok: true, workspaces });
@@ -355,7 +360,7 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "invalid filename: path traversal not allowed" });
     }
 
-    const currentWorkspace = process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const currentWorkspace = getLastWorkspace();
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
 
     // Optional workspace override (v0.5 cross-workspace load).

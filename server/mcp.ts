@@ -3,7 +3,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, setCanvas, setStepFrames, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validate.js";
@@ -30,9 +30,9 @@ export function createMcpServer(): McpServer {
         '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
         '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{\"$schema\":\"...\",\"mark\":\"bar\",...}" })\n' +
         '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate.\n' +
-        'options (optional): { "title": "My diagram" } — displays a label above the canvas; omit to show no title.\n' +
-        'options.workspace (optional): override the snapshot workspace for this call only. Precedence: options.workspace > WHITEBOARD_WORKSPACE env var > basename(cwd()). Useful for per-session routing without restarting the server (e.g. one machine, multiple courses). Must be alphanumeric with dashes, underscores, dots, or spaces — no path separators.\n' +
-        'Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { title: "System flow", workspace: "course_2" } })',
+        'options: { "workspace": "my-course", "title": "My diagram" }. workspace is REQUIRED — snapshot routing fails without it. title is optional.\n' +
+        'options.workspace: workspace name for snapshot routing. Must be alphanumeric with dashes, underscores, dots, or spaces — no path separators. No env var fallback: always pass explicitly.\n' +
+        'Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "course_2", title: "System flow" } })',
       inputSchema: z.object({
         type: z
           .enum(["mermaid", "svg", "html", "katex", "vega-lite", "step-frames"])
@@ -45,23 +45,30 @@ export function createMcpServer(): McpServer {
           ),
         options: z
           .object({
+            workspace: z.string().describe(
+              "REQUIRED. Workspace name for snapshot routing. " +
+              "Alphanumeric, dashes, underscores, dots, spaces — no path separators or '..'. " +
+              "Always pass explicitly — no env var fallback."
+            ),
             title: z.string().optional(),
             node_to_frame: z.record(z.string(), z.number()).optional(),
-            workspace: z.string().optional().describe(
-              "Override the snapshot workspace for this render call only. " +
-              "Alphanumeric, dashes, underscores, dots, spaces — no path separators or '..'. " +
-              "Affects snapshot file routing only; does not change history panel scope."
-            ),
           })
-          .optional()
-          .describe('Optional display options. title: label shown above the canvas. node_to_frame (step-frames only): map of node ID → frame index for autonomous browser navigation; clicking a mapped node jumps directly to its frame without wait_click(). workspace: per-call snapshot workspace override.'),
+          .describe('Required options object. workspace: snapshot destination (required). title: label above canvas (optional). node_to_frame: node→frame map for autonomous navigation on step-frames (optional).'),
       }),
     },
     async ({ type, payload, options }) => {
       const title = options?.title;
       const nodeToFrame = options?.node_to_frame;
-      const workspaceOverride = options?.workspace;
-      if (workspaceOverride !== undefined && !isValidWorkspaceName(workspaceOverride)) {
+      const workspace = options?.workspace;
+      if (!workspace) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({ ok: false, error: "workspace is required" }),
+          }],
+        };
+      }
+      if (!isValidWorkspaceName(workspace)) {
         return {
           content: [{
             type: "text",
@@ -185,7 +192,8 @@ export function createMcpServer(): McpServer {
           ...(title !== undefined ? { title } : {}),
           ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
         });
-        try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace: workspaceOverride }); } catch { /* non-fatal */ }
+        setLastWorkspace(workspace);
+        try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
         };
@@ -194,7 +202,8 @@ export function createMcpServer(): McpServer {
       cancelSlideshow();
       setCanvas(type, payload, title);
       broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
-      try { saveSnapshot(type, payload, { title, workspace: workspaceOverride }); } catch { /* non-fatal */ }
+      setLastWorkspace(workspace);
+      try { saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],

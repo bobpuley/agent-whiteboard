@@ -1,16 +1,16 @@
 import { mkdirSync, writeFileSync } from "fs";
 import { homedir } from "os";
-import { basename, join } from "path";
+import { join } from "path";
 
 export interface RenderOptions {
   title?: string;
   node_to_frame?: Record<string, number>;
-  workspace?: string;
+  workspace: string;
 }
 
-export function saveSnapshot(type: string, payload: string, options?: RenderOptions): void {
+export function saveSnapshot(type: string, payload: string, options: RenderOptions): void {
   try {
-    const workspace = options?.workspace ?? process.env.WHITEBOARD_WORKSPACE ?? basename(process.cwd());
+    const { workspace } = options;
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
     const dir = join(root, workspace);
     mkdirSync(dir, { recursive: true });
@@ -24,7 +24,7 @@ export function saveSnapshot(type: string, payload: string, options?: RenderOpti
       type,
       payload,
     };
-    if (options && (options.title !== undefined || options.node_to_frame !== undefined)) {
+    if (options.title !== undefined || options.node_to_frame !== undefined) {
       const cleanedOptions: Record<string, unknown> = {};
       if (options.title !== undefined) cleanedOptions.title = options.title;
       if (options.node_to_frame !== undefined) cleanedOptions.node_to_frame = options.node_to_frame;
