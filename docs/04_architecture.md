@@ -176,22 +176,24 @@ agent calls render(type="mermaid", payload="graph TD; A-->B")
   → MCP tool returns { ok: true }
 ```
 
-### Render Snapshot (Phase 2 — Sprint 16)
+### Render Snapshot (Phase 2 — Sprint 16; workspace mandatory from v0.7)
 
 ```
-agent calls render(type="mermaid", payload="graph TD; A-->B", options={title:"..."})
+agent calls render(type="mermaid", payload="graph TD; A-->B", options={workspace:"my-course", title:"..."})
+  → MCP server validates options.workspace is present and passes safety check
+  → IF workspace missing or invalid: returns { ok: false, error: "..." } — nothing written or pushed
   → MCP server validates payload  (hard gate — see §3)
-  → IF validation passes:
+  → IF payload validation passes:
       → stores as current canvas state (in-memory)
       → pushes render command over WebSocket to browser
       → calls saveSnapshot(type, payload, options)  [snapshot.ts]
-          → resolves workspace: WHITEBOARD_WORKSPACE env || basename(process.cwd())
+          → workspace: options.workspace (always present; no env var fallback)
           → resolves dir: WHITEBOARD_SNAPSHOTS_DIR env || ~/.agent-whiteboard/
           → path: <dir>/<workspace>/<yyyyMMdd_HHmmss>_screen.json
           → creates directory if absent (mkdirSync recursive)
           → writes JSON: { timestamp, workspace, type, payload, options }
           → if write fails: logs warning to stderr, does NOT propagate error
-  → IF validation fails: returns { ok: false, error: "..." } — no snapshot written
+  → IF payload validation fails: returns { ok: false, error: "..." } — no snapshot written
 ```
 
 Snapshot directory layout:
@@ -364,7 +366,7 @@ When `render(type="step-frames", options.node_to_frame={...})` is called, the br
 
 ### `options` parameter
 
-`render()` accepts an optional third argument `options`. `options.title` is MVP (Sprint 8 ✅). In Phase 2, `theme` is added:
+`render()` accepts a third argument `options` (required from v0.7 — `options.workspace` is mandatory). `options.title` is MVP (Sprint 8 ✅). In Phase 2, `theme` is added:
 
 ```json
 {
@@ -374,6 +376,7 @@ When `render(type="step-frames", options.node_to_frame={...})` is called, the br
 
 | Key     | Type                   | Phase | Default  | Description                              |
 |---------|------------------------|-------|----------|------------------------------------------|
+| `workspace`      | `string`                          | **required (v0.7)** | — | Workspace name for snapshot routing. Must be provided on every `render()` call. No fallback: absent or invalid value returns `{ ok: false, error: "..." }` before snapshot or render. Same safety check as F12 (alphanumeric, dashes, underscores, dots, spaces; no path separators or `..`). `WHITEBOARD_WORKSPACE` env var is deprecated and removed (v0.7). |
 | `title`          | `string`                          | MVP     | `""`    | Displays a label above the canvas for this render call. Hidden if absent or empty. Cleared by `clear()`. Not included in `export()` output. |
 | `theme`          | `"dark" \| "light"`              | Phase 2 | `"dark"` | Sets the canvas theme for this render call. Persists until next `render()` or explicit change. |
 | `node_to_frame`  | `Record<string, number>`          | Phase 2 (Sprint 13) | — | Only valid when `type="step-frames"`. Declares a node ID → frame index map; the browser attaches click listeners automatically and navigates to the mapped frame on click — no `wait_click()` call needed. `wait_click()` overrides `node_to_frame` for the duration of its call (see §4 Node Click Flow). |

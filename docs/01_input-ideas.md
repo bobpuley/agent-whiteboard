@@ -283,6 +283,9 @@ UI meaningful it can be relevant to provide a very concise description of the gr
 **FR3 — History panel: workspace-grouped accordion**
 The history panel (FR2) should group snapshots by workspace using an accordion UI. When the panel opens, the section for the current workspace is automatically expanded; all other workspaces are shown collapsed. Clicking any snapshot — regardless of which workspace it belongs to — loads it onto the canvas.
 
+**FR4 — Mandatory workspace parameter in render()**
+The `options.workspace` parameter in `render()` (currently optional, FR0/v0.6) is promoted to mandatory. The agent must always provide an explicit workspace name in every `render()` call. The implicit fallback chain (`options.workspace` → `WHITEBOARD_WORKSPACE` env var → `basename(process.cwd())`) is removed — no implicit workspace derivation at render time. Motivation: forces explicit session context at the call site, preventing accidental cross-workspace snapshot pollution and making workspace routing unambiguous.
+
 ---
 
 ## Bug Reports

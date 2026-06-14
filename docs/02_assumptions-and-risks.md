@@ -149,17 +149,19 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 - Risk: restricted home directory configurations or permission issues cause a silent write failure or a startup crash.
 - Mitigation (proposed): catch the error, log a warning, and continue — snapshot persistence failure must never block rendering.
 
-**G2 — Workspace name derived from `basename(process.cwd())`**
-> ⚠️ ASSUMPTION: The workspace name is the final path component of the directory where the server is started (e.g. `/Users/bob/workspaces/my-project` → `my-project`).
-- Risk: if the server is started from a parent or sibling directory, snapshots land in an unexpected workspace folder.
-- Mitigation (current): expose a `WHITEBOARD_WORKSPACE` environment variable override; document the default in the README.
-- Mitigation (FR0, planned): allow the agent to pass `options.workspace` in `render()` calls to override the workspace dynamically per-call, without server restart or env var setup.
+**G2 — Workspace is always supplied by the agent (FR4, v0.7)**
+> ✅ DECISION (FR4): `options.workspace` in `render()` is mandatory. The server never derives a workspace implicitly — no `basename(process.cwd())` fallback and no `WHITEBOARD_WORKSPACE` env var. The agent must pass an explicit workspace name on every `render()` call. If the parameter is absent, the server returns `{ ok: false, error: "workspace is required" }` and writes no snapshot.
+- `WHITEBOARD_WORKSPACE` env var: **deprecated and removed** (v0.7). The server no longer reads it.
+- `WHITEBOARD_SNAPSHOTS_DIR` env var: retained — sets the root directory for all snapshots (unrelated to workspace derivation).
 
-**G2b — Workspace override precedence (FR0)**
-> ⚠️ ASSUMPTION: Per-call `options.workspace` overrides `WHITEBOARD_WORKSPACE` env var, which overrides `basename(process.cwd())`.
-- Precedence order: `options.workspace` (highest) → `WHITEBOARD_WORKSPACE` env var → `basename(process.cwd())` (default, lowest)
-- Risk: unclear whether a per-call workspace should also affect the browser's history panel scope, or only the snapshot file path. Currently history is scoped to a single workspace at a time (`WHITEBOARD_WORKSPACE` or default).
-- Mitigation: clarify whether history panel should remain locked to the env-var workspace, or follow the per-call workspace. Recommend: per-call workspace is snapshot-routing only; history panel remains locked to the current workspace to avoid confusion.
+**G2b — Workspace override precedence (superseded by FR4)**
+> ✅ SUPERSEDED (FR4): The three-level precedence chain (`options.workspace` → `WHITEBOARD_WORKSPACE` → `basename(process.cwd())`) is collapsed. Only one level remains: the agent always supplies workspace explicitly in `options.workspace`.
+
+**G2c — History panel "current workspace" without env var**
+> ⚠️ ASSUMPTION: With `WHITEBOARD_WORKSPACE` removed, the server has no startup-time signal for which workspace is "current." The `isCurrent` field in `GET /snapshots/all` (F13) currently relies on this env var.
+- Open question: how should the server determine "current workspace" for the history panel accordion (auto-expand behaviour)?
+- Candidates: (a) drop `isCurrent` from the API — all workspaces shown collapsed; (b) track last used workspace from most recent `render()` call in-memory; (c) client-side: remember last loaded workspace in localStorage.
+- Decision: **deferred to v0.7 milestone implementation phase** — pick the simplest option that does not require a new config surface.
 
 **G3 — No snapshot cleanup policy in v1**
 > ⚠️ ASSUMPTION: Files accumulate indefinitely. No TTL, quota, or rotation is defined.
