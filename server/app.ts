@@ -9,11 +9,12 @@ import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast } from "./ws.js";
-import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validate.js";
+import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { saveSnapshot } from "./snapshot.js";
 import { listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
+import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -24,56 +25,6 @@ export function isValidMermaid(payload: string): boolean {
 const KNOWN_TYPES: readonly (CanvasType | "step-frames")[] = [
   "mermaid", "svg", "html", "katex", "vega-lite", "step-frames",
 ];
-
-/**
- * Validate a single slide/render payload.
- * Returns null on success; returns an error string on failure.
- * Async because Mermaid parse is async.
- */
-async function validatePayload(type: string, payload: string): Promise<string | null> {
-  if (!KNOWN_TYPES.includes(type as CanvasType)) {
-    return `type must be one of: ${KNOWN_TYPES.join(", ")}`;
-  }
-  if (type === "mermaid") {
-    if (!hasMermaidKeyword(payload)) {
-      return (
-        "invalid payload: mermaid source must begin with a diagram keyword " +
-        "(e.g. 'graph TD', 'sequenceDiagram', 'classDiagram', ...)"
-      );
-    }
-    try {
-      await parseMermaid(payload);
-    } catch (err) {
-      return `invalid mermaid syntax: ${err instanceof Error ? err.message : String(err)}`;
-    }
-  } else if (type === "vega-lite") {
-    try {
-      JSON.parse(payload);
-    } catch {
-      return "invalid payload: vega-lite payload must be valid JSON";
-    }
-  } else if (type === "step-frames") {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(payload);
-    } catch {
-      return "invalid payload: step-frames payload must be valid JSON";
-    }
-    const spec = parsed as { frame_type?: string; frames?: unknown[] };
-    if (
-      typeof spec.frame_type !== "string" ||
-      !Array.isArray(spec.frames) ||
-      spec.frames.length === 0
-    ) {
-      return 'invalid payload: step-frames must have "frame_type" (string) and "frames" (non-empty array)';
-    }
-    const frames = spec.frames as StepFrame[];
-    if (frames.some((f) => typeof f.payload !== "string")) {
-      return 'invalid payload: each frame must have a "payload" string';
-    }
-  }
-  return null;
-}
 
 function isNodeActionsValid(v: unknown): v is Record<string, string[]> {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
@@ -264,6 +215,80 @@ export function createApp(): Hono {
 
   app.post("/slideshow/stop", (c) => {
     cancelSlideshow();
+    return c.json({ ok: true });
+  });
+
+  // ── Incremental step-frames builder (v0.8) ───────────────────────────────────
+
+  app.post("/step-frames/init", async (c) => {
+    const body = await c.req.json<{ frame_type?: unknown; workspace?: unknown; title?: unknown }>();
+
+    const FRAME_TYPES = ["mermaid", "svg", "html", "katex", "vega-lite"] as const;
+    if (typeof body.frame_type !== "string" || !(FRAME_TYPES as readonly string[]).includes(body.frame_type)) {
+      return c.json({
+        ok: false,
+        error: `frame_type must be one of: ${FRAME_TYPES.join(", ")}`,
+      }, 400);
+    }
+    if (!body.workspace || typeof body.workspace !== "string") {
+      return c.json({ ok: false, error: "workspace is required" }, 400);
+    }
+    if (!isValidWorkspaceName(body.workspace)) {
+      return c.json({
+        ok: false,
+        error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
+      }, 400);
+    }
+    const title = typeof body.title === "string" ? body.title : undefined;
+    const id = createBuilder(body.frame_type, body.workspace, title);
+    broadcast({
+      action: "replace",
+      type: "step-frames-placeholder",
+      frameCount: 0,
+      ...(title !== undefined ? { title } : {}),
+    });
+    return c.json({ ok: true, id });
+  });
+
+  app.post("/step-frames/:id/frame", async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json<{ payload?: unknown; label?: unknown }>();
+
+    if (typeof body.payload !== "string") {
+      return c.json({ ok: false, error: "payload must be a string" }, 400);
+    }
+    const label = typeof body.label === "string" ? body.label : undefined;
+    const result = await appendFrame(id, body.payload, label);
+    if (!result.ok) {
+      return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
+    }
+    return c.json(result);
+  });
+
+  app.post("/step-frames/:id/commit", (c) => {
+    const id = c.req.param("id");
+    const result = commitBuilder(id);
+    if (!result.ok) {
+      return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
+    }
+    const { entry } = result;
+    const { frame_type, workspace, title, frames } = entry;
+    const assembledPayload = JSON.stringify({ frame_type, frames });
+
+    cancelSlideshow();
+    setStepFrames(frames, frame_type, assembledPayload, title);
+    broadcast({
+      action: "replace",
+      type: frame_type,
+      payload: frames[0].payload,
+      frameLabel: frames[0].label,
+      stepFrames: true,
+      currentFrame: 0,
+      totalFrames: frames.length,
+      ...(title !== undefined ? { title } : {}),
+    });
+    setLastWorkspace(workspace);
+    try { saveSnapshot("step-frames", assembledPayload, { title, workspace }); } catch { /* non-fatal */ }
     return c.json({ ok: true });
   });
 

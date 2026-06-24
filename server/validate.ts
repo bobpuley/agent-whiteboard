@@ -1,6 +1,7 @@
 // Server-side payload validation helpers.
 
 import mermaid from "mermaid";
+import type { StepFrame } from "./session.js";
 
 // Initialise once — no DOM side effects in parse-only mode.
 mermaid.initialize({ startOnLoad: false });
@@ -67,4 +68,60 @@ function isNodeEnvLimitation(msg: string): boolean {
     msg.includes("document is not defined") ||
     msg.includes("window is not defined")
   );
+}
+
+export const KNOWN_TYPES = [
+  "mermaid", "svg", "html", "katex", "vega-lite", "step-frames",
+] as const;
+
+export type KnownType = typeof KNOWN_TYPES[number];
+
+/**
+ * Validate a single render payload.
+ * Returns null on success; returns an error string on failure.
+ * Async because Mermaid parse is async.
+ */
+export async function validatePayload(type: string, payload: string): Promise<string | null> {
+  if (!(KNOWN_TYPES as readonly string[]).includes(type)) {
+    return `type must be one of: ${KNOWN_TYPES.join(", ")}`;
+  }
+  if (type === "mermaid") {
+    if (!hasMermaidKeyword(payload)) {
+      return (
+        "invalid payload: mermaid source must begin with a diagram keyword " +
+        "(e.g. 'graph TD', 'sequenceDiagram', 'classDiagram', ...)"
+      );
+    }
+    try {
+      await parseMermaid(payload);
+    } catch (err) {
+      return `invalid mermaid syntax: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  } else if (type === "vega-lite") {
+    try {
+      JSON.parse(payload);
+    } catch {
+      return "invalid payload: vega-lite payload must be valid JSON";
+    }
+  } else if (type === "step-frames") {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      return "invalid payload: step-frames payload must be valid JSON";
+    }
+    const spec = parsed as { frame_type?: string; frames?: unknown[] };
+    if (
+      typeof spec.frame_type !== "string" ||
+      !Array.isArray(spec.frames) ||
+      spec.frames.length === 0
+    ) {
+      return 'invalid payload: step-frames must have "frame_type" (string) and "frames" (non-empty array)';
+    }
+    const frames = spec.frames as StepFrame[];
+    if (frames.some((f) => typeof f.payload !== "string")) {
+      return 'invalid payload: each frame must have a "payload" string';
+    }
+  }
+  return null;
 }

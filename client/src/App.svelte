@@ -12,6 +12,7 @@
 
   type CanvasState =
     | { type: "empty" }
+    | { type: "step-frames-placeholder"; frameCount: number; title?: string }
     | {
         type: CanvasType;
         payload: string;
@@ -37,6 +38,9 @@
       canvas = { type: "empty" };
       clickable = false;
       nodeActions = undefined;
+      nodeToFrameEnabled = false;
+    } else if (cmd.action === "replace" && cmd.type === "step-frames-placeholder") {
+      canvas = { type: "step-frames-placeholder", frameCount: cmd.frameCount, title: cmd.title };
       nodeToFrameEnabled = false;
     } else if (cmd.action === "replace") {
       canvas = {
@@ -115,6 +119,8 @@
     <div class="canvas">
       {#if canvas.type === "empty"}
         <p class="placeholder">Waiting for content…</p>
+      {:else if canvas.type === "step-frames-placeholder"}
+        <p class="placeholder">Building step-frames… {canvas.frameCount} frames</p>
       {:else if canvas.type === "mermaid"}
         <MermaidRenderer source={canvas.payload} {clickable} {nodeActions} nodeToFrame={nodeToFrameEnabled ? canvas.nodeToFrame : undefined} />
       {:else if canvas.type === "svg" || canvas.type === "html"}

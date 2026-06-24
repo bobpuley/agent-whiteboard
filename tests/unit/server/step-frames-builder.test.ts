@@ -1,0 +1,173 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  appendFrame,
+  builderCount,
+  commitBuilder,
+  createBuilder,
+  resetBuilders,
+} from "../../../server/step-frames-builder.js";
+
+const FRAME_TYPE = "mermaid";
+const WORKSPACE = "test-ws";
+const PAYLOAD_A = "graph TD; A";
+const PAYLOAD_B = "graph TD; A --> B";
+
+afterEach(() => {
+  resetBuilders();
+  vi.useRealTimers();
+});
+
+describe("createBuilder", () => {
+  it("returns a non-empty UUID string", () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    expect(typeof id).toBe("string");
+    expect(id.length).toBeGreaterThan(0);
+  });
+
+  it("adds entry to the builder map", () => {
+    createBuilder(FRAME_TYPE, WORKSPACE);
+    expect(builderCount()).toBe(1);
+  });
+
+  it("each call produces a unique ID", () => {
+    const a = createBuilder(FRAME_TYPE, WORKSPACE);
+    const b = createBuilder(FRAME_TYPE, WORKSPACE);
+    expect(a).not.toBe(b);
+    expect(builderCount()).toBe(2);
+  });
+});
+
+describe("appendFrame", () => {
+  it("appends a frame and returns frame_count: 1", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    const result = await appendFrame(id, PAYLOAD_A);
+    expect(result).toEqual({ ok: true, frame_count: 1 });
+  });
+
+  it("appends multiple frames and increments frame_count", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    await appendFrame(id, PAYLOAD_A);
+    const result = await appendFrame(id, PAYLOAD_B, "Step 2");
+    expect(result).toEqual({ ok: true, frame_count: 2 });
+  });
+
+  it("stores the optional label with the frame", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    await appendFrame(id, PAYLOAD_A, "First step");
+    const commit = commitBuilder(id);
+    expect(commit.ok).toBe(true);
+    if (commit.ok) {
+      expect(commit.entry.frames[0].label).toBe("First step");
+    }
+  });
+
+  it("omits label key when not provided", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    await appendFrame(id, PAYLOAD_A);
+    const commit = commitBuilder(id);
+    expect(commit.ok).toBe(true);
+    if (commit.ok) {
+      expect("label" in commit.entry.frames[0]).toBe(false);
+    }
+  });
+
+  it("returns error for invalid mermaid payload and does not add frame", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    const result = await appendFrame(id, "not a diagram");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/diagram keyword/);
+    // Frame count should still be 0.
+    const commit = commitBuilder(id);
+    expect(commit.ok).toBe(false);
+    if (!commit.ok) expect(commit.error).toMatch(/empty/);
+  });
+
+  it("returns error for unknown ID", async () => {
+    const result = await appendFrame("does-not-exist", PAYLOAD_A);
+    expect(result).toEqual({
+      ok: false,
+      error: "step-frames session not found or expired",
+    });
+  });
+
+  it("returns error for expired ID and does not add frame", async () => {
+    vi.useFakeTimers();
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+    const result = await appendFrame(id, PAYLOAD_A);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/expired/);
+    }
+  });
+});
+
+describe("commitBuilder", () => {
+  it("returns the assembled entry and removes it from the map", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE, "My title");
+    await appendFrame(id, PAYLOAD_A, "Step 1");
+    await appendFrame(id, PAYLOAD_B, "Step 2");
+
+    const result = commitBuilder(id);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.entry.frame_type).toBe(FRAME_TYPE);
+      expect(result.entry.workspace).toBe(WORKSPACE);
+      expect(result.entry.title).toBe("My title");
+      expect(result.entry.frames).toHaveLength(2);
+      expect(result.entry.frames[0].payload).toBe(PAYLOAD_A);
+      expect(result.entry.frames[1].payload).toBe(PAYLOAD_B);
+    }
+    expect(builderCount()).toBe(0);
+  });
+
+  it("returns error for empty sequence", () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    const result = commitBuilder(id);
+    expect(result).toEqual({
+      ok: false,
+      error: "cannot commit empty step-frames sequence",
+    });
+    // Entry is still in the map (not deleted on empty-commit error).
+    expect(builderCount()).toBe(1);
+  });
+
+  it("returns error for unknown ID", () => {
+    const result = commitBuilder("does-not-exist");
+    expect(result).toEqual({
+      ok: false,
+      error: "step-frames session not found or expired",
+    });
+  });
+
+  it("returns error for expired ID", async () => {
+    vi.useFakeTimers();
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    await appendFrame(id, PAYLOAD_A);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+    const result = commitBuilder(id);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/expired/);
+  });
+});
+
+describe("TTL expiry", () => {
+  it("entry is silently removed after 30 minutes", () => {
+    vi.useFakeTimers();
+    createBuilder(FRAME_TYPE, WORKSPACE);
+    expect(builderCount()).toBe(1);
+    vi.advanceTimersByTime(31 * 60 * 1000);
+    expect(builderCount()).toBe(0);
+  });
+
+  it("appending a frame resets the TTL", async () => {
+    vi.useFakeTimers();
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    vi.advanceTimersByTime(25 * 60 * 1000); // 25 min — not expired yet
+    await appendFrame(id, PAYLOAD_A); // resets timer
+    vi.advanceTimersByTime(25 * 60 * 1000); // another 25 min — still alive
+    expect(builderCount()).toBe(1);
+    vi.advanceTimersByTime(6 * 60 * 1000); // now 31 min since last append
+    expect(builderCount()).toBe(0);
+  });
+});

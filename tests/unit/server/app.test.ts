@@ -3,6 +3,7 @@ import { createApp } from "../../../server/app.js";
 import { resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 import { cancelSlideshow } from "../../../server/slideshow.js";
 import { resetClick } from "../../../server/events.js";
+import { resetBuilders } from "../../../server/step-frames-builder.js";
 
 const WORKSPACE = "test-workspace";
 
@@ -24,6 +25,7 @@ afterEach(() => {
   resetCanvas();
   resetLastWorkspace();
   resetClick();
+  resetBuilders();
 });
 
 // ── POST /render ─────────────────────────────────────────────────────────────
@@ -1649,5 +1651,229 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
       node_to_frame: undefined,
       workspace: "course_3",
     });
+  });
+});
+
+// ── Incremental step-frames builder (v0.8) ────────────────────────────────────
+
+describe("POST /step-frames/init", () => {
+  it("creates a builder and returns { ok: true, id } with a non-empty id", async () => {
+    const res = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; id: string }>();
+    expect(body.ok).toBe(true);
+    expect(typeof body.id).toBe("string");
+    expect(body.id.length).toBeGreaterThan(0);
+  });
+
+  it("accepts an optional title", async () => {
+    const res = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE, title: "My sequence" }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(true);
+  });
+
+  it("rejects an unsupported frame_type", async () => {
+    const res = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "d2", workspace: WORKSPACE }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/frame_type/);
+  });
+
+  it("rejects missing workspace", async () => {
+    const res = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/workspace/);
+  });
+
+  it("rejects invalid workspace name", async () => {
+    const res = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: "../etc" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+  });
+});
+
+describe("POST /step-frames/:id/frame", () => {
+  async function initBuilder(title?: string) {
+    const res = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE, ...(title ? { title } : {}) }),
+    });
+    const body = await res.json<{ ok: boolean; id: string }>();
+    return body.id;
+  }
+
+  it("appends a valid frame and returns { ok: true, frame_count: 1 }", async () => {
+    const id = await initBuilder();
+    const res = await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, frame_count: 1 });
+  });
+
+  it("appends multiple frames and increments frame_count", async () => {
+    const id = await initBuilder();
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A" }),
+    });
+    const res = await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A --> B", label: "Step 2" }),
+    });
+    expect(await res.json()).toEqual({ ok: true, frame_count: 2 });
+  });
+
+  it("returns 404 for unknown id", async () => {
+    const res = await app.request("/step-frames/unknown-id/frame", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A" }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/not found or expired/);
+  });
+
+  it("returns 400 for invalid mermaid payload", async () => {
+    const id = await initBuilder();
+    const res = await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "not a diagram" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/diagram keyword/);
+  });
+
+  it("returns 400 when payload is not a string", async () => {
+    const id = await initBuilder();
+    const res = await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: 42 }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+});
+
+describe("POST /step-frames/:id/commit", () => {
+  async function initAndAppend(frameCount = 1) {
+    const initRes = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE }),
+    });
+    const { id } = await initRes.json<{ ok: boolean; id: string }>();
+    for (let i = 0; i < frameCount; i++) {
+      await app.request(`/step-frames/${id}/frame`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: `graph TD; A${i}`, label: `Step ${i + 1}` }),
+      });
+    }
+    return id;
+  }
+
+  it("commits a valid sequence and returns { ok: true }", async () => {
+    const id = await initAndAppend(2);
+    const res = await app.request(`/step-frames/${id}/commit`, { method: "POST" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("after commit, export returns the assembled step-frames JSON", async () => {
+    const id = await initAndAppend(2);
+    await app.request(`/step-frames/${id}/commit`, { method: "POST" });
+
+    const exportRes = await app.request("/export");
+    const body = await exportRes.json<{ ok: boolean; data: string }>();
+    expect(body.ok).toBe(true);
+    const parsed = JSON.parse(body.data) as { frame_type: string; frames: unknown[] };
+    expect(parsed.frame_type).toBe("mermaid");
+    expect(parsed.frames).toHaveLength(2);
+  });
+
+  it("after commit, step() works on the committed sequence", async () => {
+    const id = await initAndAppend(3);
+    await app.request(`/step-frames/${id}/commit`, { method: "POST" });
+
+    const stepRes = await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+    expect(await stepRes.json()).toEqual({ ok: true, current_frame: 1, total_frames: 3 });
+  });
+
+  it("returns 404 for unknown id", async () => {
+    const res = await app.request("/step-frames/unknown-id/commit", { method: "POST" });
+    expect(res.status).toBe(404);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/not found or expired/);
+  });
+
+  it("returns 400 for zero-frame sequence", async () => {
+    const initRes = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE }),
+    });
+    const { id } = await initRes.json<{ ok: boolean; id: string }>();
+    const res = await app.request(`/step-frames/${id}/commit`, { method: "POST" });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/empty/);
+  });
+
+  it("calls saveSnapshot with the assembled payload after commit", async () => {
+    const { saveSnapshot } = await import("../../../server/snapshot.js");
+    const snapshotSpy = vi.mocked(saveSnapshot);
+    snapshotSpy.mockClear();
+
+    const id = await initAndAppend(1);
+    await app.request(`/step-frames/${id}/commit`, { method: "POST" });
+
+    expect(snapshotSpy).toHaveBeenCalledOnce();
+    const [type, payload] = snapshotSpy.mock.calls[0];
+    expect(type).toBe("step-frames");
+    const parsed = JSON.parse(payload) as { frame_type: string; frames: unknown[] };
+    expect(parsed.frame_type).toBe("mermaid");
+    expect(parsed.frames).toHaveLength(1);
   });
 });
