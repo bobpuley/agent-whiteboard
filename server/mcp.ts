@@ -10,6 +10,7 @@ import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validat
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
 import { saveSnapshot } from "./snapshot.js";
+import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -493,6 +494,138 @@ export function createMcpServer(): McpServer {
     },
     async () => {
       await waitForDone();
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+      };
+    }
+  );
+
+  // init_step_frames(frame_type, workspace, title?) — begin an incremental step-frames build.
+  server.registerTool(
+    "init_step_frames",
+    {
+      description:
+        "Begin an incremental step-frames sequence. Use this when you want to build a step-through diagram one frame at a time.\n" +
+        "Creates an empty skeleton in server memory, pushes a 0-frame placeholder to the browser, and returns a unique ID.\n" +
+        "Protocol: init_step_frames() → append_frame() × N → commit_step_frames() → diagram appears in browser.\n" +
+        "frame_type: content type shared by all frames (e.g. 'mermaid'). workspace: same rules as render() — required.\n" +
+        "The ID expires after 30 minutes of inactivity (no append_frame or commit_step_frames call).\n" +
+        'Returns { "ok": true, "id": "<uuid>" }. Error if workspace is missing/invalid or frame_type is unsupported.\n' +
+        'Example: init_step_frames({ frame_type: "mermaid", workspace: "my-course", title: "TCP Handshake" })',
+      inputSchema: z.object({
+        frame_type: z
+          .enum(["mermaid", "svg", "html", "katex", "vega-lite"])
+          .describe("Content type shared by all frames."),
+        workspace: z
+          .string()
+          .describe(
+            "REQUIRED. Workspace name for snapshot routing. " +
+            "Alphanumeric, dashes, underscores, dots, spaces — no path separators or '..'."
+          ),
+        title: z.string().optional().describe("Optional label displayed above the canvas."),
+      }),
+    },
+    ({ frame_type, workspace, title }) => {
+      if (!workspace) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workspace is required" }) }],
+        };
+      }
+      if (!isValidWorkspaceName(workspace)) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: false,
+              error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
+            }),
+          }],
+        };
+      }
+      const id = createBuilder(frame_type, workspace, title);
+      broadcast({
+        action: "replace",
+        type: "step-frames-placeholder",
+        frameCount: 0,
+        ...(title !== undefined ? { title } : {}),
+      });
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true, id }) }],
+      };
+    }
+  );
+
+  // append_frame(id, payload, label?) — add one frame to an in-progress sequence.
+  server.registerTool(
+    "append_frame",
+    {
+      description:
+        "Append one frame to an in-progress step-frames sequence identified by id.\n" +
+        "payload is validated against the sequence's frame_type (same hard gate as render()).\n" +
+        "Does NOT update the browser — call commit_step_frames() when all frames are added.\n" +
+        "Invalid payloads are rejected; prior frames in the sequence are preserved — fix and retry the frame.\n" +
+        'Returns { "ok": true, "frame_count": N }. Error if id is unknown/expired or payload fails validation.\n' +
+        'Example: append_frame({ id: "<uuid>", payload: "graph TD; A --> B", label: "Step 1" })',
+      inputSchema: z.object({
+        id: z.string().describe("Builder ID returned by init_step_frames()."),
+        payload: z.string().describe("Frame content — validated against the sequence's frame_type."),
+        label: z.string().optional().describe("Optional display caption for this frame."),
+      }),
+    },
+    async ({ id, payload, label }) => {
+      const result = await appendFrame(id, payload, label);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result) }],
+      };
+    }
+  );
+
+  // commit_step_frames(id) — finalise and render the assembled sequence.
+  server.registerTool(
+    "commit_step_frames",
+    {
+      description:
+        "Finalise an in-progress step-frames sequence and render it to the browser.\n" +
+        "Assembles the full step-frames JSON from all appended frames, writes a snapshot, and broadcasts to the browser.\n" +
+        "Identical effect to render(type='step-frames', ...). Cancels any running slideshow.\n" +
+        "After commit, export() returns the assembled full step-frames JSON.\n" +
+        "The builder entry is deleted after commit — the ID cannot be reused.\n" +
+        'Returns { "ok": true }. Error if id is unknown/expired or the sequence has zero frames.\n' +
+        'Example: commit_step_frames({ id: "<uuid>" })',
+      inputSchema: z.object({
+        id: z.string().describe("Builder ID returned by init_step_frames()."),
+      }),
+    },
+    ({ id }) => {
+      const result = commitBuilder(id);
+      if (!result.ok) {
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+        };
+      }
+      const { entry } = result;
+      const { frame_type, workspace, title, frames } = entry;
+
+      // Assemble the full step-frames JSON.
+      const assembledPayload = JSON.stringify({ frame_type, frames });
+
+      cancelSlideshow();
+      setStepFrames(frames, frame_type, assembledPayload, title);
+      broadcast({
+        action: "replace",
+        type: frame_type,
+        payload: frames[0].payload,
+        frameLabel: frames[0].label,
+        stepFrames: true,
+        currentFrame: 0,
+        totalFrames: frames.length,
+        ...(title !== undefined ? { title } : {}),
+      });
+      setLastWorkspace(workspace);
+      try {
+        saveSnapshot("step-frames", assembledPayload, { title, workspace });
+      } catch { /* non-fatal */ }
+
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
       };

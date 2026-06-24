@@ -12,6 +12,12 @@ export type RenderCommand =
       totalFrames?: number;  // total frames in the loaded sequence
       nodeToFrame?: Record<string, number>; // node ID → frame index for autonomous navigation
     }
+  | {
+      action: "replace";
+      type: "step-frames-placeholder"; // incremental builder in progress (v0.8)
+      frameCount: number;
+      title?: string;
+    }
   | { action: "clear" }
   | {
       action: "set_node_actions";

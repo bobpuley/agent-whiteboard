@@ -479,3 +479,40 @@ test("history panel: cross-workspace load sends correct workspace in POST body",
 
   expect(loadBody).toMatchObject({ workspace: "other-workspace", filename: "20260609_140000_screen.json" });
 });
+
+// ── Incremental step-frames builder (v0.8) ────────────────────────────────────
+
+test("step-frames builder: placeholder appears after init, diagram appears after commit", async ({
+  page,
+  request,
+}) => {
+  await page.goto("/");
+
+  // Init the builder — placeholder should appear.
+  const initRes = await request.post(`${SERVER}/step-frames/init`, {
+    data: { frame_type: "mermaid", workspace: "e2e-test", title: "Build test" },
+  });
+  const { id } = await initRes.json() as { ok: boolean; id: string };
+  expect(typeof id).toBe("string");
+
+  // Browser should show the building placeholder.
+  await expect(page.locator(".placeholder")).toBeVisible();
+  await expect(page.locator(".placeholder")).toContainText("Building step-frames");
+
+  // Append frames.
+  await request.post(`${SERVER}/step-frames/${id}/frame`, {
+    data: { payload: "graph TD; A --> B", label: "Step 1" },
+  });
+  await request.post(`${SERVER}/step-frames/${id}/frame`, {
+    data: { payload: "graph TD; A --> B --> C", label: "Step 2" },
+  });
+
+  // Commit — browser should show the rendered step-frames diagram.
+  await request.post(`${SERVER}/step-frames/${id}/commit`);
+
+  await expect(page.locator(".mermaid-container svg")).toBeVisible();
+  await expect(page.locator(".placeholder")).not.toBeVisible();
+
+  // Step bar should be visible for a 2-frame sequence.
+  await expect(page.locator(".step-bar")).toBeVisible();
+});
