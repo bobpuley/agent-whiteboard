@@ -174,14 +174,10 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 ## I. Incremental Step-Frames Creation (FR5)
 
 **I1 — Partial step-frames state held in memory by ID**
-> ⚠️ ASSUMPTION: The server holds an in-memory map of `id → { frame_type, frames[], options }` while the agent appends frames incrementally. This state is never written to disk until `commit_step_frames()` is called.
-- Risk: if the agent crashes, times out, or deliberately abandons a session, the partial state leaks indefinitely — no cleanup occurs.
-- Mitigation (proposed): apply a TTL (e.g., 30 minutes from last `append_frame()` or from init). Expired entries are silently deleted. No cleanup API needed in v1.
+> ✅ DECISION (v0.8): The server holds an in-memory map of `id → { frame_type, frames[], options, timer }`. State is never written to disk until `commit_step_frames()` is called. A 30-minute inactivity TTL (reset by each `append_frame()`) silently deletes abandoned entries — no cleanup API needed. Multiple concurrent builder sessions (distinct IDs) are supported. Specified in F15 (`03`) and `step-frames-builder.ts` (`04`).
 
 **I2 — Frames are always appended sequentially**
-> ⚠️ ASSUMPTION: The agent appends frames in order (frame 0 first, frame N last). The server does not support random-access insertion by index in v1.
-- Risk: the agent cannot correct or replace an already-appended frame without restarting the sequence.
-- Mitigation: document the constraint clearly in the MCP tool description. Future phases may add `patch_frame(id, index, payload)`.
+> ✅ DECISION (v0.8): Frames are appended in order (frame 0 first, frame N last). Random-access insertion by index is not supported in v0.8. Documented in the `append_frame` MCP tool description. Future phases may add `patch_frame(id, index, payload)`. Specified in F15 (`03`).
 
 **I3 — `init_step_frames()` renders an empty placeholder immediately**
 > ✅ DECISION (v0.8): When `init_step_frames()` is called, the server immediately pushes a minimal placeholder state to the browser (`{ action: "replace", type: "step-frames-placeholder", title, frameCount: 0 }`). The browser displays a "Building step-frames… 0 frames" label so the user understands the state. This is fully specified in F15 (`03`) and the data flow section of `04`.
