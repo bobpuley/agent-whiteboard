@@ -145,9 +145,8 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 ## F. Project Infrastructure
 
 **G1 — `~/.agent-whiteboard/` is writable**
-> ⚠️ ASSUMPTION: The server assumes the user's home directory is writable and that creating `~/.agent-whiteboard/<workspace>/` will succeed silently on first run.
-- Risk: restricted home directory configurations or permission issues cause a silent write failure or a startup crash.
-- Mitigation (proposed): catch the error, log a warning, and continue — snapshot persistence failure must never block rendering.
+> ✅ IMPLEMENTED (v0.3, Sprint 16): `snapshot.ts` wraps all disk writes in a try/catch. On failure, a warning is logged to stderr and execution continues — snapshot persistence failure never blocks rendering. The `mkdirSync` call uses `{ recursive: true }` to create the workspace directory if absent.
+- Risk (residual): restricted home directory configurations or permission issues may still cause silent write failures, but the server remains functional.
 
 **G2 — Workspace is always supplied by the agent (FR4, v0.7)**
 > ✅ DECISION (FR4): `options.workspace` in `render()` is mandatory. The server never derives a workspace implicitly — no `basename(process.cwd())` fallback and no `WHITEBOARD_WORKSPACE` env var. The agent must pass an explicit workspace name on every `render()` call. If the parameter is absent, the server returns `{ ok: false, error: "workspace is required" }` and writes no snapshot.
@@ -172,6 +171,26 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 
 ---
 
+## I. Incremental Step-Frames Creation (FR5)
+
+**I1 — Partial step-frames state held in memory by ID**
+> ⚠️ ASSUMPTION: The server holds an in-memory map of `id → { frame_type, frames[], options }` while the agent appends frames incrementally. This state is never written to disk until `commit_step_frames()` is called.
+- Risk: if the agent crashes, times out, or deliberately abandons a session, the partial state leaks indefinitely — no cleanup occurs.
+- Mitigation (proposed): apply a TTL (e.g., 30 minutes from last `append_frame()` or from init). Expired entries are silently deleted. No cleanup API needed in v1.
+
+**I2 — Frames are always appended sequentially**
+> ⚠️ ASSUMPTION: The agent appends frames in order (frame 0 first, frame N last). The server does not support random-access insertion by index in v1.
+- Risk: the agent cannot correct or replace an already-appended frame without restarting the sequence.
+- Mitigation: document the constraint clearly in the MCP tool description. Future phases may add `patch_frame(id, index, payload)`.
+
+**I3 — `init_step_frames()` renders an empty placeholder immediately**
+> ✅ DECISION (v0.8): When `init_step_frames()` is called, the server immediately pushes a minimal placeholder state to the browser (`{ action: "replace", type: "step-frames-placeholder", title, frameCount: 0 }`). The browser displays a "Building step-frames… 0 frames" label so the user understands the state. This is fully specified in F15 (`03`) and the data flow section of `04`.
+
+**I4 — `commit_step_frames()` is equivalent to `render(type="step-frames", ...)`**
+> ✅ DECISION (v0.8): Committing an in-progress step-frames sequence produces exactly the same server-side effect as calling `render(type="step-frames", payload=<full JSON>)` directly — including snapshot write, WebSocket broadcast, in-memory canvas state update, slideshow cancellation, and `export()` returning the assembled JSON. Validation of individual frame payloads happens at `append_frame()` time (hard gate, same rules as `render()`). `commit_step_frames()` can fail only if the sequence is empty or the ID is unknown. `clear()` does NOT cancel in-progress builder entries.
+
+---
+
 **F1 — Test folder restructure (Sprint 15)**
 
 > ⚠️ ASSUMPTION: `tests/unit/client/` is a placeholder only — no Svelte component unit tests exist today. Creating the directory structure signals intent but adds no immediate test coverage.
@@ -188,26 +207,16 @@ Risks from moving the three test roots:
 ## H. History Navigation
 
 **H1 — History load is write-silent**
-> ⚠️ ASSUMPTION: `POST /snapshots/load` calls the render pipeline but does NOT call `saveSnapshot()`. Only agent-initiated `render()` calls write snapshot files; user-initiated history navigation does not.
-- Risk: if this invariant is violated, loading from history would cascade into infinite snapshot writes.
-- Mitigation: `POST /snapshots/load` renders via a dedicated code path that bypasses `snapshot.ts`.
+> ✅ IMPLEMENTED (v0.4, Sprint 17): `POST /snapshots/load` renders via a dedicated code path that bypasses `snapshot.ts`. Only agent-initiated `render()` calls write snapshot files; user-initiated history navigation does not. This invariant is enforced in the implementation.
 
 **H2 — Agent is unaware of history navigation**
-> ⚠️ ASSUMPTION: When the user loads a past snapshot from the history panel, the canvas is updated but the agent is not notified. Any pending `wait_click()` or `wait_done()` calls continue waiting unaffected.
-- Risk: if the agent has called `wait_click()` and is waiting for a click on diagram X, the user may navigate to a history entry and replace the canvas with diagram Y. The agent will not receive the expected click and will time out.
-- Mitigation: document this as expected behavior; the agent recovers via normal 10-minute timeout handling.
+> ✅ DECISION (v0.4): When the user loads a past snapshot from the history panel, the canvas is updated but the agent is not notified. Pending `wait_click()` or `wait_done()` calls continue waiting until their 10-minute timeout. If `wait_click()` is armed and the user loads a different diagram, the agent times out normally. Accepted as expected behavior — agent recovers via timeout handling.
 
 **H3 — options.title is the history label**
-> ⚠️ ASSUMPTION: The history navigator uses `options.title` (already stored in the snapshot `options` field) as the human-readable label for each entry. If absent or empty, the UI falls back to `type + timestamp`.
-- No schema change needed — `options` (including `title`) is already persisted by `snapshot.ts`.
-- Risk: snapshots written before FR2 may have no title, making those history entries less descriptive.
+> ✅ IMPLEMENTED (v0.4, Sprint 17): The history navigator uses `options.title` (stored in the snapshot `options` field) as the human-readable label for each entry. Falls back to `type + timestamp` if absent or empty. `options` (including `title`) is persisted by `snapshot.ts` — no schema change needed.
 
 **H4 — All workspaces' snapshots are visible in the history panel**
-> ⚠️ ASSUMPTION: `GET /snapshots/all` scans every subdirectory of `~/.agent-whiteboard/` and returns their contents grouped by workspace. The user is assumed to be the sole operator of this machine — snapshots from all projects are shown without isolation.
-- Risk: if multiple users share a machine, one user could browse another's diagram history via the browser panel.
-- Mitigation: the server is localhost-only by default (see A1); this risk is accepted within the local-only deployment scope.
+> ✅ DECISION (v0.5): `GET /snapshots/all` scans every subdirectory of `~/.agent-whiteboard/` and returns contents grouped by workspace. All-workspace visibility accepted as expected behavior for a single-user local tool (see A1). Risk (multiple users sharing a machine) is accepted within the localhost-only deployment scope.
 
 **H5 — Cross-workspace snapshot load is safe with a workspace name safety check**
-> ⚠️ ASSUMPTION: `POST /snapshots/load` accepts an optional `workspace` field. The server validates that the value is a plain directory name — no path separators, no `..`, no null bytes — before constructing the file path.
-- Risk: a crafted `workspace` value could attempt to escape the snapshots root directory.
-- Mitigation: server validates `workspace` against a safe-name pattern (alphanumeric, dashes, underscores, dots, spaces only) before resolving the path. Directory must exist under `WHITEBOARD_SNAPSHOTS_DIR`.
+> ✅ IMPLEMENTED (v0.5, Sprint 18): `POST /snapshots/load` validates `workspace` against a safe-name pattern (alphanumeric, dashes, underscores, dots, spaces; no path separators, no `..`, no null bytes) before resolving the path. Directory must exist under `WHITEBOARD_SNAPSHOTS_DIR`. Path traversal attacks are mitigated.

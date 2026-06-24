@@ -92,7 +92,10 @@
 | `seek(frame)` *(Sprint 13)*       | Jumps the step-frame cursor to an arbitrary frame index. Useful for random-access navigation without repeated `step()` calls. Returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no `step-frames` sequence is loaded or frame is out of range. (Phase 2 — Sprint 13) |
 | `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
 | `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label, action: null }` on click (`action` is always present; null in Sprint 12 because no popup menu exists yet); `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
-| `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action? }` — `action` present only when a menu item was selected. (Phase 2 — Sprint 14) |
+| `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action }` — `action` is **always present**: null when no popup was shown or when user clicked without selecting a menu item; string value when a menu item was selected. (Phase 2 — Sprint 14) |
+| `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
+| `append_frame(id, payload, label?)` *(v0.8)* | Looks up the builder entry by ID. Validates `payload` against `frame_type` (same hard gate as `render()`). Appends `{ label?, payload }` to the frame list. Resets the TTL timer. Returns `{ ok: true, frame_count: N }`. Does NOT push to browser. |
+| `commit_step_frames(id)` *(v0.8)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Calls `saveSnapshot()` and broadcasts to browser (identical path to `render(type="step-frames", ...)`). Deletes the builder entry. Returns `{ ok: true }`. After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
 
 ### Validation — two layers
 
@@ -131,6 +134,9 @@ On success:
 | `step`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
 | `seek`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
 | `wait_click` | `{ "ok": true, "type": "node"\|"edge", "id": "<id>", "label": "<label>", "action": "<string or null>" }` — `action` field always present; null when no menu shown or click was plain; string value when menu item was selected. On timeout: `{ "ok": true, "type": "timeout" }`. | — |
+| `init_step_frames` | `{ "ok": true, "id": "<uuid>" }` | `{ "ok": false, "error": "..." }` — unsupported `frame_type` or missing/invalid `workspace` |
+| `append_frame` | `{ "ok": true, "frame_count": N }` | `{ "ok": false, "error": "..." }` — unknown/expired ID or invalid payload |
+| `commit_step_frames` | `{ "ok": true }` | `{ "ok": false, "error": "..." }` — unknown/expired ID or zero frames |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
 
@@ -152,9 +158,9 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /slideshow` failure behavior: If validation fails for any slide in the playlist, the server returns `{ ok: false, error: "..." }`. No timer is started, and the canvas state is unchanged (remains as the last successful `render()` or `clear()`). If a slideshow is already running and a new `POST /slideshow` request fails, the running slideshow continues unaffected (error returned, new request rejected).
 
-`GET /snapshots` — v0.4 (Sprint 17). No body. Reads `<WHITEBOARD_SNAPSHOTS_DIR>/<WHITEBOARD_WORKSPACE>/` and returns `{ ok: true, snapshots: [{ filename, timestamp, type, title? }] }` sorted newest-first. Empty array if directory absent. Unreadable/malformed files silently skipped (warning to stderr).
+`GET /snapshots` — v0.4 (Sprint 17). No body. Reads `<WHITEBOARD_SNAPSHOTS_DIR>/<lastWorkspace>/` (where `lastWorkspace` is the workspace from the most recent successful `render()` call in the session; see G2c) and returns `{ ok: true, snapshots: [{ filename, timestamp, type, title? }] }` sorted newest-first. Empty array if directory absent or no `render()` has been called yet. Unreadable/malformed files silently skipped (warning to stderr).
 
-`GET /snapshots/all` — v0.5 (Sprint 18). No body. Scans all subdirectories of `WHITEBOARD_SNAPSHOTS_DIR`, reads each workspace's `*_screen.json` files, and returns them grouped. Response: `{ ok: true, workspaces: [{ name, isCurrent, snapshots: [{ filename, timestamp, type, title? }] }] }`. Each workspace's list sorted newest-first. `isCurrent: true` for the workspace matching `WHITEBOARD_WORKSPACE`. Workspaces with no readable snapshots omitted. Returns `{ ok: true, workspaces: [] }` if root absent.
+`GET /snapshots/all` — v0.5 (Sprint 18). No body. Scans all subdirectories of `WHITEBOARD_SNAPSHOTS_DIR`, reads each workspace's `*_screen.json` files, and returns them grouped. Response: `{ ok: true, workspaces: [{ name, isCurrent, snapshots: [{ filename, timestamp, type, title? }] }] }`. Each workspace's list sorted newest-first. `isCurrent: true` for the workspace matching `lastWorkspace` (in-memory, updated on every successful `render()`; see G2c). Workspaces with no readable snapshots omitted. Returns `{ ok: true, workspaces: [] }` if root absent.
 
 `POST /snapshots/load` — v0.4 (Sprint 17), extended in v0.5 (Sprint 18). Body: `{ "filename": "…" }` (current workspace) or `{ "filename": "…", "workspace": "…" }` (explicit workspace). Filename safety: must match `*_screen.json`, no `/` or `..`. Workspace safety (when provided): plain directory name only — no path separators, no `..`, no null bytes; must exist under `WHITEBOARD_SNAPSHOTS_DIR`. Reads the snapshot, validates its payload (same hard gate as `POST /render`), broadcasts to browser via WebSocket, updates in-memory canvas state. **Write-silent:** does NOT call `saveSnapshot()`. Returns `{ ok: true }` or `{ ok: false, error: "…" }` (file not found, path-safety failure, or invalid payload).
 
@@ -296,6 +302,57 @@ user clicks a snapshot entry (any workspace)
 
 **Slideshow cancellation:** `POST /render`, `POST /clear`, or a new `POST /slideshow` call cancels any running slideshow. `POST /slideshow/stop` also cancels. `POST /step` and `POST /seek` do not cancel.
 
+### Incremental Step-Frames Creation (v0.8)
+
+```
+agent calls init_step_frames(frame_type="mermaid", workspace="my-course", title="TCP Handshake")
+  → server validates workspace and frame_type
+  → creates entry in step-frames-builder map: { id: uuid, frame_type, workspace, title, frames: [] }
+  → starts 30-min inactivity TTL timer for this id
+  → pushes 0-frame placeholder to browser via WebSocket:
+      { action: "replace", type: "step-frames-placeholder", title: "TCP Handshake", frameCount: 0 }
+  → returns { ok: true, id: "<uuid>" }
+
+agent calls append_frame(id="<uuid>", payload="graph TD; A-->B", label="Step 1")
+  → server looks up id in builder map
+  → validates payload against frame_type (same hard gate as render())
+  → IF valid: appends { label: "Step 1", payload: "graph TD; A-->B" } to frames[]
+  → resets TTL timer
+  → returns { ok: true, frame_count: 1 }
+
+... agent repeats for each frame ...
+
+agent calls commit_step_frames(id="<uuid>")
+  → server assembles full step-frames JSON:
+      { frame_type: "mermaid", frames: [{ label, payload }, ...] }
+  → cancels any running slideshow (same as render())
+  → runs through render() pipeline (same code path as render(type="step-frames", ...)):
+      → validates assembled payload
+      → stores as current canvas state
+      → pushes render command to browser via WebSocket
+      → calls saveSnapshot(type="step-frames", payload, options={workspace, title})
+  → deletes builder entry for this id
+  → returns { ok: true }
+  (after commit, export() returns the assembled full step-frames JSON)
+
+TTL expiry (background):
+  → 30 minutes after last append_frame() or init_step_frames() with no commit
+  → builder entry is silently deleted from the map
+  → any subsequent append_frame/commit_step_frames with that id returns:
+      { ok: false, error: "step-frames session not found or expired" }
+
+Interaction with clear():
+  → clear() does NOT cancel in-progress builder entries
+  → the canvas is blanked but the builder entry remains alive
+  → the agent may continue appending and then commit
+  → the committed diagram replaces the blank canvas
+```
+
+**REST fallback endpoints (v0.8):**
+- `POST /step-frames/init` — body: `{ frame_type, workspace, title? }` → `{ ok: true, id }`
+- `POST /step-frames/:id/frame` — body: `{ payload, label? }` → `{ ok: true, frame_count: N }`
+- `POST /step-frames/:id/commit` — no body → `{ ok: true }`
+
 ### Node Click Flow (Phase 2 — Sprint 12 plain click)
 
 ```
@@ -427,6 +484,7 @@ agent-whiteboard/
 │   ├── ws.ts             # WebSocket push to browser
 │   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
 │   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18)
+│   ├── step-frames-builder.ts  # in-memory map of id → partial step-frames state; TTL cleanup (v0.8)
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/

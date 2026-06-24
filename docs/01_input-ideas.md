@@ -286,6 +286,14 @@ The history panel (FR2) should group snapshots by workspace using an accordion U
 **FR4 — Mandatory workspace parameter in render()**
 The `options.workspace` parameter in `render()` (currently optional, FR0/v0.6) is promoted to mandatory. The agent must always provide an explicit workspace name in every `render()` call. The implicit fallback chain (`options.workspace` → `WHITEBOARD_WORKSPACE` env var → `basename(process.cwd())`) is removed — no implicit workspace derivation at render time. Motivation: forces explicit session context at the call site, preventing accidental cross-workspace snapshot pollution and making workspace routing unambiguous.
 
+**FR5 — Incremental step-frames creation (chunked upload)**
+Problem: generating a complex step-frames graph in a single `render()` call is error-prone and slow. The full JSON payload is large, deeply nested, and contains many character escape sequences — LLMs frequently produce syntax errors and require multiple retries.
+Proposed three-phase protocol:
+1. Agent calls an initialisation tool/endpoint with high-level metadata (frame type, title, workspace, etc.) → server creates an empty step-frames skeleton in memory and returns a unique ID.
+2. Agent sends one frame at a time (payload + ID) → server validates and appends the frame to the skeleton. Frames are added sequentially.
+3. Agent repeats step 2 for every frame. When all frames have been sent, the agent triggers finalisation → server assembles the complete step-frames sequence and renders it (equivalent to calling `render(type="step-frames", ...)` with the full payload).
+Motivation: each individual frame payload is small and straightforward; splitting creation avoids the compound complexity that causes one-shot failures.
+
 ---
 
 ## Bug Reports
