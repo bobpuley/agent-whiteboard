@@ -1,3 +1,16 @@
+## 0.8.0 — 2026-06-24
+
+- **New three-tool protocol for incremental step-frames construction:** `init_step_frames()`, `append_frame()`, `commit_step_frames()` — lets agents build complex step-frames sequences one frame at a time instead of generating one large JSON payload in a single shot
+- `init_step_frames(frame_type, workspace, title?)` — creates an in-memory builder session, pushes a "Building step-frames… 0 frames" placeholder to the browser, returns a UUID
+- `append_frame(id, payload, label?)` — validates payload against `frame_type` (same hard gate as `render()`), appends to the session; invalid frames are rejected without disturbing prior frames
+- `commit_step_frames(id)` — assembles full step-frames JSON, cancels any running slideshow, writes snapshot, broadcasts to browser (identical path to `render(type="step-frames", ...)`); `export()` returns assembled JSON after commit
+- Partial builder sessions expire silently after 30 minutes of inactivity; expired IDs return `{ ok: false, error: "step-frames session not found or expired" }`
+- REST fallback endpoints: `POST /step-frames/init`, `POST /step-frames/:id/frame`, `POST /step-frames/:id/commit`
+- Browser shows a placeholder state ("Building step-frames… N frames") during construction; diagram renders normally after commit
+- `server/validate.ts` now exports `validatePayload()` as a shared helper (used by both the builder and REST/MCP handlers)
+- `server/step-frames-builder.ts` is a new module encapsulating the in-memory builder map with TTL cleanup
+- 32 new automated tests: 16 builder unit tests, 16 REST endpoint tests, 1 Playwright e2e test
+
 ## 0.7.0 — 2026-06-15
 
 - **Breaking change:** `options.workspace` is now required in both the `render()` MCP tool and `POST /render` REST endpoint; omitting it returns `{ ok: false, error: "workspace is required" }` with HTTP 400 before any render or snapshot write
