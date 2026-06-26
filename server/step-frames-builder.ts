@@ -34,7 +34,7 @@ export function createBuilder(
 }
 
 export type AppendResult =
-  | { ok: true; frame_count: number }
+  | { ok: true; frame_count: number; frames: BuilderFrame[]; frame_type: string; title?: string }
   | { ok: false; error: string };
 
 /** Append a frame to an existing builder entry. Validates payload against frame_type. */
@@ -55,7 +55,13 @@ export async function appendFrame(
   // Reset TTL.
   clearTimeout(entry.timer);
   entry.timer = setTimeout(() => expireBuilder(id), TTL_MS);
-  return { ok: true, frame_count: entry.frames.length };
+  return {
+    ok: true,
+    frame_count: entry.frames.length,
+    frames: entry.frames,
+    frame_type: entry.frame_type,
+    title: entry.title,
+  };
 }
 
 export type CommitResult =

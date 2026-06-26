@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const SERVER = "http://localhost:3000";
+const WS = "e2e-test";
 
 const THREE_FRAMES = JSON.stringify({
   frame_type: "mermaid",
@@ -33,7 +34,7 @@ test("mermaid: renders SVG after POST /render", async ({ page, request }) => {
   await expect(page.locator(".placeholder")).toBeVisible();
 
   await request.post(`${SERVER}/render`, {
-    data: { type: "mermaid", payload: "graph TD; A --> B" },
+    data: { type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WS } },
   });
 
   await expect(page.locator(".mermaid-container svg")).toBeVisible();
@@ -43,7 +44,7 @@ test("mermaid: renders SVG after POST /render", async ({ page, request }) => {
 test("html: renders content after POST /render", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "html", payload: "<h1 id='e2e-h1'>Hello</h1>" },
+    data: { type: "html", payload: "<h1 id='e2e-h1'>Hello</h1>", options: { workspace: WS } },
   });
   await expect(page.locator(".html-renderer #e2e-h1")).toBeVisible();
 });
@@ -51,7 +52,7 @@ test("html: renders content after POST /render", async ({ page, request }) => {
 test("svg: renders SVG element after POST /render", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "svg", payload: "<svg width='50' height='50'><circle r='20' cx='25' cy='25'/></svg>" },
+    data: { type: "svg", payload: "<svg width='50' height='50'><circle r='20' cx='25' cy='25'/></svg>", options: { workspace: WS } },
   });
   await expect(page.locator(".html-renderer svg")).toBeVisible();
 });
@@ -59,7 +60,7 @@ test("svg: renders SVG element after POST /render", async ({ page, request }) =>
 test("katex: renders math after POST /render", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "katex", payload: "E = mc^2" },
+    data: { type: "katex", payload: "E = mc^2", options: { workspace: WS } },
   });
   // KaTeX renders a .katex span inside the container div.
   await expect(page.locator(".katex-renderer .katex")).toBeVisible();
@@ -76,7 +77,7 @@ test("vega-lite: renders chart SVG after POST /render", async ({ page, request }
       y: { field: "y", type: "quantitative" },
     },
   });
-  await request.post(`${SERVER}/render`, { data: { type: "vega-lite", payload: spec } });
+  await request.post(`${SERVER}/render`, { data: { type: "vega-lite", payload: spec, options: { workspace: WS } } });
   // vega-embed renders with svg renderer (set in VegaLite.svelte).
   await expect(page.locator(".vegalite-renderer svg")).toBeVisible();
 });
@@ -89,7 +90,7 @@ test("title: shown when options.title is provided", async ({ page, request }) =>
     data: {
       type: "html",
       payload: "<p>content</p>",
-      options: { title: "My Lesson" },
+      options: { workspace: WS, title: "My Lesson" },
     },
   });
   await expect(page.locator(".canvas-title")).toBeVisible();
@@ -99,7 +100,7 @@ test("title: shown when options.title is provided", async ({ page, request }) =>
 test("title: hidden when render has no title", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "html", payload: "<p>content</p>" },
+    data: { type: "html", payload: "<p>content</p>", options: { workspace: WS } },
   });
   await expect(page.locator(".html-renderer p")).toBeVisible();
   await expect(page.locator(".canvas-title")).not.toBeVisible();
@@ -108,7 +109,7 @@ test("title: hidden when render has no title", async ({ page, request }) => {
 test("title: cleared by POST /clear", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "html", payload: "<p>x</p>", options: { title: "Temporary" } },
+    data: { type: "html", payload: "<p>x</p>", options: { workspace: WS, title: "Temporary" } },
   });
   await expect(page.locator(".canvas-title")).toBeVisible();
 
@@ -122,7 +123,7 @@ test("title: cleared by POST /clear", async ({ page, request }) => {
 test("clear: reverts canvas to placeholder", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "mermaid", payload: "graph TD; A --> B" },
+    data: { type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WS } },
   });
   await expect(page.locator(".mermaid-container svg")).toBeVisible();
 
@@ -136,7 +137,7 @@ test("clear: reverts canvas to placeholder", async ({ page, request }) => {
 test("step-frames: step-bar visible and Prev disabled on load", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES },
+    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
   });
   await expect(page.locator(".step-bar")).toBeVisible();
   await expect(page.getByRole("button", { name: "Previous frame" })).toBeDisabled();
@@ -146,7 +147,7 @@ test("step-frames: step-bar visible and Prev disabled on load", async ({ page, r
 test("step-frames: frame label shown in step-bar", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES },
+    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
   });
   await expect(page.locator(".step-label")).toBeVisible();
   await expect(page.locator(".step-label")).toHaveText("Step 1 — A");
@@ -155,7 +156,7 @@ test("step-frames: frame label shown in step-bar", async ({ page, request }) => 
 test("step-frames: clicking Next advances to frame 2", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES },
+    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
   });
   await expect(page.locator(".step-bar")).toBeVisible();
 
@@ -168,7 +169,7 @@ test("step-frames: clicking Next advances to frame 2", async ({ page, request })
 test("step-frames: clicking Prev rewinds to frame 1", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES },
+    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
   });
   await expect(page.locator(".step-bar")).toBeVisible();
 
@@ -183,7 +184,7 @@ test("step-frames: clicking Prev rewinds to frame 1", async ({ page, request }) 
 test("step-frames: Next disabled on last frame", async ({ page, request }) => {
   await page.goto("/");
   await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES },
+    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
   });
   await expect(page.locator(".step-bar")).toBeVisible();
 
