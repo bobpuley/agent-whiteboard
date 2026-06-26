@@ -1,3 +1,15 @@
+## 0.9.0 — 2026-06-26
+
+- **Live browser preview on `append_frame()`:** each valid `append_frame()` call now immediately broadcasts the accumulated partial step-frames sequence to the browser, so the user watches the step-through diagram grow one frame at a time — no waiting for `commit_step_frames()`
+- `commit_step_frames()` is now **finalization-only**: assembles the full step-frames JSON, writes the snapshot, updates in-memory canvas state (so `export()` works), cancels any running slideshow, and sends a final broadcast for consistency (handles `clear()` edge cases) — the primary visual was already rendered incrementally by `append_frame()`
+- `export()` before `commit_step_frames()` continues to return the pre-build canvas state; after commit it returns the fully assembled step-frames JSON (unchanged contract)
+- `server/ws.ts` gains `broadcastStepFrames(frames, frameType, currentFrame, title?)` — shared helper used by both `append_frame` and `commit_step_frames`
+- `appendFrame()` in `step-frames-builder.ts` returns enriched success result including `frames`, `frame_type`, and `title` (callers use this to broadcast without a second lookup)
+- REST endpoint `POST /step-frames/:id/frame` mirrors the change (pushes to browser after each valid append)
+- MCP tool descriptions for `append_frame`, `commit_step_frames`, and `init_step_frames` updated to reflect v0.9 behavior
+- 10 new unit tests verifying broadcast calls and canvas-state isolation during incremental builds
+- **e2e fix:** all 14 Playwright tests that were silently failing since v0.7 now pass — the calls to `POST /render` lacked the required `options.workspace` parameter; all 28 e2e tests green
+
 ## 0.8.0 — 2026-06-24
 
 - **New three-tool protocol for incremental step-frames construction:** `init_step_frames()`, `append_frame()`, `commit_step_frames()` — lets agents build complex step-frames sequences one frame at a time instead of generating one large JSON payload in a single shot
