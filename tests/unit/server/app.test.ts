@@ -17,6 +17,12 @@ vi.mock("../../../server/snapshot-reader.js", () => ({
   loadSnapshotContent: vi.fn(),
 }));
 
+vi.mock("../../../server/ws.js", () => ({
+  broadcast: vi.fn(),
+  broadcastStepFrames: vi.fn(),
+  addClient: vi.fn(),
+}));
+
 // Use a fresh app instance per suite; session state is reset between each test.
 const app = createApp();
 
@@ -1875,5 +1881,148 @@ describe("POST /step-frames/:id/commit", () => {
     const parsed = JSON.parse(payload) as { frame_type: string; frames: unknown[] };
     expect(parsed.frame_type).toBe("mermaid");
     expect(parsed.frames).toHaveLength(1);
+  });
+});
+
+// ── v0.9 — Live Step-Frames Preview ──────────────────────────────────────────
+
+describe("POST /step-frames/:id/frame — live preview (v0.9)", () => {
+  async function initBuilder(title?: string) {
+    const res = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE, ...(title ? { title } : {}) }),
+    });
+    const body = await res.json<{ ok: boolean; id: string }>();
+    return body.id;
+  }
+
+  it("calls broadcastStepFrames with frame_count=1, currentFrame=0 after first append", async () => {
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
+    spy.mockClear();
+
+    const id = await initBuilder();
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A", label: "Step 1" }),
+    });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [frames, frameType, currentFrame] = spy.mock.calls[0];
+    expect(frameType).toBe("mermaid");
+    expect(frames).toHaveLength(1);
+    expect(frames[0].payload).toBe("graph TD; A");
+    expect(frames[0].label).toBe("Step 1");
+    expect(currentFrame).toBe(0);
+  });
+
+  it("calls broadcastStepFrames positioned at the latest frame after each append", async () => {
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
+    spy.mockClear();
+
+    const id = await initBuilder();
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A" }),
+    });
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A --> B", label: "Step 2" }),
+    });
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    const [frames2, , currentFrame2] = spy.mock.calls[1];
+    expect(frames2).toHaveLength(2);
+    expect(currentFrame2).toBe(1); // positioned at latest frame (index 1)
+  });
+
+  it("passes builder title to broadcastStepFrames", async () => {
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
+    spy.mockClear();
+
+    const id = await initBuilder("TCP Handshake");
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A" }),
+    });
+
+    const [, , , title] = spy.mock.calls[0];
+    expect(title).toBe("TCP Handshake");
+  });
+
+  it("does NOT call broadcastStepFrames when payload is invalid", async () => {
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
+    spy.mockClear();
+
+    const id = await initBuilder();
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "not a diagram" }),
+    });
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("export() before commit returns pre-build canvas state (empty)", async () => {
+    const id = await initBuilder();
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A" }),
+    });
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A --> B" }),
+    });
+
+    const exportRes = await app.request("/export");
+    const body = await exportRes.json<{ ok: boolean; data: string }>();
+    expect(body.ok).toBe(true);
+    // Canvas state was never updated by append_frame — still empty.
+    expect(body.data).toBe("");
+  });
+});
+
+describe("POST /step-frames/:id/commit — final broadcast (v0.9)", () => {
+  async function initAndAppend(frameCount = 1) {
+    const initRes = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE }),
+    });
+    const { id } = await initRes.json<{ ok: boolean; id: string }>();
+    for (let i = 0; i < frameCount; i++) {
+      await app.request(`/step-frames/${id}/frame`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: `graph TD; A${i}`, label: `Step ${i + 1}` }),
+      });
+    }
+    return id;
+  }
+
+  it("calls broadcastStepFrames once at frame 0 after commit", async () => {
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
+    spy.mockClear();
+
+    const id = await initAndAppend(2);
+    spy.mockClear(); // clear calls from append_frame previews
+    await app.request(`/step-frames/${id}/commit`, { method: "POST" });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [frames, , currentFrame] = spy.mock.calls[0];
+    expect(frames).toHaveLength(2);
+    expect(currentFrame).toBe(0); // commit broadcasts at frame 0
   });
 });

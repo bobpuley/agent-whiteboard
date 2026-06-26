@@ -8,7 +8,7 @@ import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js"
 import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
-import { broadcast } from "./ws.js";
+import { broadcast, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
@@ -262,7 +262,10 @@ export function createApp(): Hono {
     if (!result.ok) {
       return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
     }
-    return c.json(result);
+    // Live preview: push the accumulated partial sequence to the browser.
+    const { frames, frame_type, title } = result;
+    broadcastStepFrames(frames, frame_type, frames.length - 1, title);
+    return c.json({ ok: true, frame_count: result.frame_count });
   });
 
   app.post("/step-frames/:id/commit", (c) => {
@@ -277,18 +280,10 @@ export function createApp(): Hono {
 
     cancelSlideshow();
     setStepFrames(frames, frame_type, assembledPayload, title);
-    broadcast({
-      action: "replace",
-      type: frame_type,
-      payload: frames[0].payload,
-      frameLabel: frames[0].label,
-      stepFrames: true,
-      currentFrame: 0,
-      totalFrames: frames.length,
-      ...(title !== undefined ? { title } : {}),
-    });
     setLastWorkspace(workspace);
     try { saveSnapshot("step-frames", assembledPayload, { title, workspace }); } catch { /* non-fatal */ }
+    // Final broadcast for consistency (handles clear() called between appends).
+    broadcastStepFrames(frames, frame_type, 0, title);
     return c.json({ ok: true });
   });
 

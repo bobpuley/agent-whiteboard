@@ -38,17 +38,24 @@ describe("createBuilder", () => {
 });
 
 describe("appendFrame", () => {
-  it("appends a frame and returns frame_count: 1", async () => {
+  it("appends a frame and returns frame_count: 1 with partial state", async () => {
     const id = createBuilder(FRAME_TYPE, WORKSPACE);
     const result = await appendFrame(id, PAYLOAD_A);
-    expect(result).toEqual({ ok: true, frame_count: 1 });
+    expect(result).toMatchObject({ ok: true, frame_count: 1, frame_type: FRAME_TYPE });
+    if (result.ok) {
+      expect(result.frames).toHaveLength(1);
+      expect(result.frames[0].payload).toBe(PAYLOAD_A);
+    }
   });
 
-  it("appends multiple frames and increments frame_count", async () => {
+  it("appends multiple frames and increments frame_count with all frames in result", async () => {
     const id = createBuilder(FRAME_TYPE, WORKSPACE);
     await appendFrame(id, PAYLOAD_A);
     const result = await appendFrame(id, PAYLOAD_B, "Step 2");
-    expect(result).toEqual({ ok: true, frame_count: 2 });
+    expect(result).toMatchObject({ ok: true, frame_count: 2 });
+    if (result.ok) {
+      expect(result.frames).toHaveLength(2);
+    }
   });
 
   it("stores the optional label with the frame", async () => {

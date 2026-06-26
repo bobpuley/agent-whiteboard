@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { StepFrame } from "./session.js";
-import { broadcast } from "./ws.js";
+import { broadcast, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
@@ -507,7 +507,7 @@ export function createMcpServer(): McpServer {
       description:
         "Begin an incremental step-frames sequence. Use this when you want to build a step-through diagram one frame at a time.\n" +
         "Creates an empty skeleton in server memory, pushes a 0-frame placeholder to the browser, and returns a unique ID.\n" +
-        "Protocol: init_step_frames() → append_frame() × N → commit_step_frames() → diagram appears in browser.\n" +
+        "Protocol: init_step_frames() → append_frame() × N (browser updates after each append) → commit_step_frames() (finalizes snapshot + state).\n" +
         "frame_type: content type shared by all frames (e.g. 'mermaid'). workspace: same rules as render() — required.\n" +
         "The ID expires after 30 minutes of inactivity (no append_frame or commit_step_frames call).\n" +
         'Returns { "ok": true, "id": "<uuid>" }. Error if workspace is missing/invalid or frame_type is unsupported.\n' +
@@ -562,8 +562,8 @@ export function createMcpServer(): McpServer {
       description:
         "Append one frame to an in-progress step-frames sequence identified by id.\n" +
         "payload is validated against the sequence's frame_type (same hard gate as render()).\n" +
-        "Does NOT update the browser — call commit_step_frames() when all frames are added.\n" +
-        "Invalid payloads are rejected; prior frames in the sequence are preserved — fix and retry the frame.\n" +
+        "After each valid append, immediately pushes the accumulated partial step-frames sequence to the browser (live preview positioned at the latest frame).\n" +
+        "Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved — fix and retry the frame.\n" +
         'Returns { "ok": true, "frame_count": N }. Error if id is unknown/expired or payload fails validation.\n' +
         'Example: append_frame({ id: "<uuid>", payload: "graph TD; A --> B", label: "Step 1" })',
       inputSchema: z.object({
@@ -574,8 +574,13 @@ export function createMcpServer(): McpServer {
     },
     async ({ id, payload, label }) => {
       const result = await appendFrame(id, payload, label);
+      if (result.ok) {
+        // Live preview: push the accumulated partial sequence to the browser.
+        const { frames, frame_type, title } = result;
+        broadcastStepFrames(frames, frame_type, frames.length - 1, title);
+      }
       return {
-        content: [{ type: "text", text: JSON.stringify(result) }],
+        content: [{ type: "text", text: JSON.stringify({ ok: result.ok, ...( result.ok ? { frame_count: result.frame_count } : { error: result.error }) }) }],
       };
     }
   );
@@ -585,10 +590,10 @@ export function createMcpServer(): McpServer {
     "commit_step_frames",
     {
       description:
-        "Finalise an in-progress step-frames sequence and render it to the browser.\n" +
-        "Assembles the full step-frames JSON from all appended frames, writes a snapshot, and broadcasts to the browser.\n" +
-        "Identical effect to render(type='step-frames', ...). Cancels any running slideshow.\n" +
-        "After commit, export() returns the assembled full step-frames JSON.\n" +
+        "Finalise an in-progress step-frames sequence (finalization only — the browser already shows the sequence via append_frame live previews).\n" +
+        "Assembles the full step-frames JSON, writes a snapshot, updates in-memory canvas state (so export() works), cancels any running slideshow, and deletes the builder entry.\n" +
+        "Still sends a final WebSocket broadcast for consistency (handles clear() called between appends).\n" +
+        "After commit, export() returns the assembled full step-frames JSON. step() and seek() work on the committed sequence.\n" +
         "The builder entry is deleted after commit — the ID cannot be reused.\n" +
         'Returns { "ok": true }. Error if id is unknown/expired or the sequence has zero frames.\n' +
         'Example: commit_step_frames({ id: "<uuid>" })',
@@ -611,20 +616,12 @@ export function createMcpServer(): McpServer {
 
       cancelSlideshow();
       setStepFrames(frames, frame_type, assembledPayload, title);
-      broadcast({
-        action: "replace",
-        type: frame_type,
-        payload: frames[0].payload,
-        frameLabel: frames[0].label,
-        stepFrames: true,
-        currentFrame: 0,
-        totalFrames: frames.length,
-        ...(title !== undefined ? { title } : {}),
-      });
       setLastWorkspace(workspace);
       try {
         saveSnapshot("step-frames", assembledPayload, { title, workspace });
       } catch { /* non-fatal */ }
+      // Final broadcast for consistency (handles clear() called between appends).
+      broadcastStepFrames(frames, frame_type, 0, title);
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
