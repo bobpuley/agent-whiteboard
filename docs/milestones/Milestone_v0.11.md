@@ -1,6 +1,6 @@
 # Milestone v0.11 — Export by Graph ID
 
-> Status: in progress.
+> Status: released.
 > Objective: Allow the agent to retrieve any previously rendered graph's payload by a stable UUID, not just the last rendered one.
 
 ---
