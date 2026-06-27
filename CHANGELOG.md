@@ -1,3 +1,13 @@
+## 0.11.0 — 2026-06-27
+
+- **`render()` and `commit_step_frames()` now return `{ ok: true, id: "<uuid>" }`:** the UUID of the snapshot written for that call — agents can store this to retrieve the diagram later regardless of what else is rendered; `id` is omitted (non-fatal) if the snapshot write fails
+- **`export(id?)` — retrieve any past snapshot by UUID:** `GET /export?id=<uuid>` (REST) and `export({ id })` (MCP tool) scan all workspace snapshot files for the one whose `id` field matches and return its payload; returns `{ ok: false, error: "graph not found" }` if no match; old snapshots without an `id` field are silently non-addressable
+- **Snapshot schema gains `id` field:** `saveSnapshot()` generates a UUID (`crypto.randomUUID()`) at write time and stores it as the first field in the JSON; backward-compatible — old readers ignore the new field
+- **`findSnapshotById(id, dir)` in `server/snapshot-reader.ts`:** scans all workspace subdirectories for a snapshot with a matching `id` field; returns the payload string or `null`
+- **`showcase.js` — Section 12 (`-x` / `--exportid`):** new manual test section that renders two diagrams, verifies `GET /export?id=` retrieves the first by UUID after the canvas has moved on, and confirms 404 for a nonexistent ID
+- **`showcase.js` and `click-demo.js` compliance fix:** all `POST /render` calls in both human-driven test scripts now pass the required `workspace` option (was silently failing since v0.7)
+- 16 new unit tests covering render/commit id-in-response and GET /export id-based lookup (found, not-found, empty-id fallback)
+
 ## 0.10.0 — 2026-06-27
 
 - **Right-side controls panel:** the history toggle button and Done button now live in a compact fixed panel on the right edge of the viewport (`<div class="controls-panel">`) — always visible, never occluding the canvas; replaces the footer-based `done-bar` from v0.2–v0.9
