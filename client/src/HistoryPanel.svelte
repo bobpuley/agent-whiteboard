@@ -19,8 +19,12 @@
   let workspaces: WorkspaceGroup[] = [];
   let loading = false;
   let error = "";
+  let locked = false;
 
   const dispatch = createEventDispatcher<{ close: void }>();
+
+  // Reset lock state when panel closes.
+  $: if (!open) locked = false;
 
   async function fetchSnapshots() {
     loading = true;
@@ -50,7 +54,7 @@
     } catch {
       // Silently ignore — canvas will update via WebSocket if successful
     }
-    dispatch("close");
+    if (!locked) dispatch("close");
   }
 
   $: if (open) fetchSnapshots();
@@ -77,6 +81,26 @@
   <div class="history-panel" role="dialog" aria-label="Snapshot history">
     <div class="panel-header">
       <span class="panel-title">History</span>
+      <button
+        class="lock-btn"
+        class:locked
+        on:click={() => { locked = !locked; }}
+        aria-label={locked ? "Unlock history panel (stays open)" : "Lock history panel (stays open)"}
+        aria-pressed={locked}
+        title={locked ? "Locked — panel stays open after load" : "Unlocked — panel closes after load"}
+      >
+        {#if locked}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        {:else}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+          </svg>
+        {/if}
+      </button>
       <button class="close-btn" on:click={() => dispatch("close")} aria-label="Close history panel">&#10005;</button>
     </div>
 
@@ -145,6 +169,29 @@
     font-size: 14px;
     font-weight: 600;
     color: #333;
+  }
+
+  .lock-btn {
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    color: #999;
+    padding: 3px 5px;
+    border-radius: 3px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .lock-btn:hover {
+    background: #f0f0f0;
+    color: #555;
+  }
+
+  .lock-btn.locked {
+    color: #2980b9;
+    border-color: #2980b9;
+    background: #e8f4fd;
   }
 
   .close-btn {

@@ -1515,6 +1515,36 @@ describe("POST /snapshots/load — workspace field (Sprint 18)", () => {
   });
 });
 
+// ── Sprint 23 — v0.10: POST /snapshots/load updates lastWorkspace ─────────────
+
+describe("POST /snapshots/load — lastWorkspace update (v0.10)", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockClear();
+    vi.mocked(snapshotReaderModule.listAllSnapshots).mockClear();
+  });
+
+  it("updates lastWorkspace so GET /snapshots/all marks the loaded workspace as current", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_SNAPSHOT_JSON);
+    vi.mocked(snapshotReaderModule.listAllSnapshots).mockImplementation((_root, currentWs) => [
+      { name: "original-project", isCurrent: currentWs === "original-project", snapshots: [] },
+      { name: "other-project", isCurrent: currentWs === "other-project", snapshots: [] },
+    ]);
+
+    await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "other-project", filename: "20260609_143000_screen.json" }),
+    });
+
+    const res = await app.request("/snapshots/all");
+    const body = await res.json<{ ok: boolean; workspaces: { name: string; isCurrent: boolean; snapshots: unknown[] }[] }>();
+
+    expect(body.ok).toBe(true);
+    const other = body.workspaces.find((g) => g.name === "other-project");
+    expect(other?.isCurrent).toBe(true);
+  });
+});
+
 // ── Sprint 19 — F14.4: isValidWorkspaceName unit tests ───────────────────────
 
 describe("isValidWorkspaceName", () => {

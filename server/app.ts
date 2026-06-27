@@ -447,6 +447,7 @@ export function createApp(): Hono {
       broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
     }
 
+    setLastWorkspace(workspace);
     return c.json({ ok: true });
   });
 

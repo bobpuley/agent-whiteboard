@@ -153,12 +153,18 @@
     </div>
   {/if}
 
-  <div class="done-bar">
+  <div class="controls-panel">
     <button class="history-btn" on:click={() => { historyOpen = !historyOpen; }} aria-label="Toggle history panel" aria-pressed={historyOpen}>
       &#128337;
     </button>
-    <button class="done-btn" on:click={handleDone} disabled={doneSent}>
-      {doneSent ? "Sent ✓" : "Done"}
+    <button class="done-btn" on:click={handleDone} disabled={doneSent} title="Done">
+      {#if doneSent}
+        Sent ✓
+      {:else}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      {/if}
     </button>
   </div>
 </main>
@@ -265,22 +271,33 @@
     text-align: center;
   }
 
-  .done-bar {
+  .controls-panel {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 16px 4px;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 8px;
+    background: #fff;
+    border: 1px solid #d8d8d8;
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
+    z-index: 50;
   }
 
   .history-btn {
-    padding: 5px 10px;
+    padding: 6px 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
     background: #fff;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 16px;
     color: #555;
     transition: background 0.1s;
+    line-height: 1;
   }
 
   .history-btn:hover {
@@ -294,15 +311,20 @@
   }
 
   .done-btn {
-    padding: 5px 18px;
+    padding: 6px 8px;
     border: 1px solid #27ae60;
     border-radius: 4px;
     background: #fff;
     color: #27ae60;
     cursor: pointer;
-    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
     font-weight: 500;
     transition: background 0.1s;
+    min-width: 32px;
+    min-height: 32px;
   }
 
   .done-btn:hover:not(:disabled) {
