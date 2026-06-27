@@ -294,6 +294,21 @@ Proposed three-phase protocol:
 3. Agent repeats step 2 for every frame. When all frames have been sent, the agent triggers finalisation → server assembles the complete step-frames sequence and renders it (equivalent to calling `render(type="step-frames", ...)` with the full payload).
 Motivation: each individual frame payload is small and straightforward; splitting creation avoids the compound complexity that causes one-shot failures.
 
+**FR6 — Live browser preview on each `append_frame`**
+The `init_step_frames` flow should render a slide in the browser on every `append_frame` call. The final `commit_step_frames` is only for triggering finalization steps (snapshot write, slideshow cancellation, builder-entry cleanup) — the visual must already be shown by the time commit is called. Current behavior: browser is only updated at `commit_step_frames` time.
+
+**FR7 — `export()` with optional graph ID parameter**
+Make the `export()` MCP tool accept an optional parameter to target a specific in-progress graph (e.g. a step-frames builder ID) instead of only the committed canvas state. When no parameter is passed, behavior is unchanged (returns last committed `render()` payload). This allows the agent to retrieve the assembled payload for a build in progress without waiting for `commit_step_frames()`.
+
+**FR8 — History load sets current workspace**
+When the user opens a file from a workspace in the history panel, that workspace should become the new current workspace (`lastWorkspace`). Currently `POST /snapshots/load` is write-silent and does not update `lastWorkspace`, so subsequent agent renders still route to the previous workspace.
+
+**FR9 — History and Done controls moved to a right side panel**
+Move the History toggle button and the Done button out of the footer and into a small always-visible right side panel. Replace the "Done" text label with an icon (no text). The panel should be unobtrusive and not occlude the main canvas.
+
+**FR10 — Lock/unlock toggle on history panel header**
+Add a small toggle button to the history panel's header that locks or unlocks the panel. When unlocked (default): clicking a snapshot loads it and closes the panel automatically (current behavior). When locked: clicking a snapshot loads it but the panel stays open, allowing the user to browse and load multiple snapshots without reopening the panel each time.
+
 ---
 
 ## Bug Reports

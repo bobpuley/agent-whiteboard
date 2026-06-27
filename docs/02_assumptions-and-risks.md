@@ -182,8 +182,11 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 **I3 — `init_step_frames()` renders an empty placeholder immediately**
 > ✅ DECISION (v0.8): When `init_step_frames()` is called, the server immediately pushes a minimal placeholder state to the browser (`{ action: "replace", type: "step-frames-placeholder", title, frameCount: 0 }`). The browser displays a "Building step-frames… 0 frames" label so the user understands the state. This is fully specified in F15 (`03`) and the data flow section of `04`.
 
-**I4 — `commit_step_frames()` is equivalent to `render(type="step-frames", ...)`**
-> ✅ DECISION (v0.8): Committing an in-progress step-frames sequence produces exactly the same server-side effect as calling `render(type="step-frames", payload=<full JSON>)` directly — including snapshot write, WebSocket broadcast, in-memory canvas state update, slideshow cancellation, and `export()` returning the assembled JSON. Validation of individual frame payloads happens at `append_frame()` time (hard gate, same rules as `render()`). `commit_step_frames()` can fail only if the sequence is empty or the ID is unknown. `clear()` does NOT cancel in-progress builder entries.
+**I4 — `commit_step_frames()` finalization scope**
+> ✅ UPDATED (v0.9): `commit_step_frames()` is responsible for finalization only: it assembles the full step-frames JSON, writes the snapshot, updates in-memory canvas state (so `export()` returns the complete assembled JSON), cancels any running slideshow, and deletes the builder entry. It still pushes a final WebSocket broadcast to the browser as part of the standard render pipeline (for consistency and to handle edge cases such as `clear()` being called between appends), but the primary visual appears incrementally via `append_frame()` — not at commit time. `commit_step_frames()` can fail only if the sequence is empty or the ID is unknown. `clear()` does NOT cancel in-progress builder entries.
+
+**I5 — `append_frame()` renders an incremental partial step-frames preview**
+> ✅ DECISION (v0.9): After each valid `append_frame()` call, the server immediately pushes the full accumulated partial step-frames sequence to the browser via WebSocket — the same format as `render(type="step-frames", ...)` but with only the frames appended so far, positioned at the latest frame (index N-1). The user sees the sequence grow one frame at a time. The in-memory canvas state is NOT updated on `append_frame()` — only `commit_step_frames()` updates it. Invalid payloads are rejected before any broadcast; prior frames and the browser state are preserved.
 
 ---
 
@@ -216,3 +219,15 @@ Risks from moving the three test roots:
 
 **H5 — Cross-workspace snapshot load is safe with a workspace name safety check**
 > ✅ IMPLEMENTED (v0.5, Sprint 18): `POST /snapshots/load` validates `workspace` against a safe-name pattern (alphanumeric, dashes, underscores, dots, spaces; no path separators, no `..`, no null bytes) before resolving the path. Directory must exist under `WHITEBOARD_SNAPSHOTS_DIR`. Path traversal attacks are mitigated.
+
+**H6 — History load updates current workspace (FR8, v0.10)**
+> ⚠️ ASSUMPTION (v0.10): When `POST /snapshots/load` succeeds, `lastWorkspace` is updated to the workspace of the loaded snapshot. This makes subsequent agent `render()` calls (which require `options.workspace`) and history panel opens consistent with the user's last navigation action — the user's browsing intent sets the working context.
+- Risk: if the agent resumes generating diagrams after a history navigation, it may be surprised that `lastWorkspace` changed without an explicit `render()` call. Accepted: the user's action was deliberate; the agent is unaware of history navigation per H2 and will supply its own workspace in every `render()` call anyway (mandatory since v0.7, G2).
+- Difference from H2: H2 (agent unaware of canvas change) is unchanged. H6 is a new consequence for server-side `lastWorkspace` state only.
+
+**H7 — Controls panel replaces footer (FR9, v0.10)**
+> ⚠️ ASSUMPTION (v0.10): Moving the History toggle and Done button to a small right side panel is a pure client-side refactor. No server-side changes required. The Done button's click handler (`POST /user-done`) is unchanged; only its DOM placement and label change.
+- Risk: the right panel could occlude content on narrow viewports. Accepted: target audience is developers on workstations; narrow-viewport use is out of scope for v1.
+
+**J1 — Snapshot schema gains an `id` field (FR7, v0.11 planned)**
+> ⚠️ ASSUMPTION (v0.11): Each snapshot JSON file will include a `id` UUID field generated at write time. Old snapshot files written before v0.11 will not have this field — the server must handle `id: undefined` gracefully (treat as non-exportable by ID). The `render()` and `commit_step_frames()` success responses will include the generated `id` field. Adding a new field to the snapshot schema and MCP response is backward-compatible: existing consumers ignore unknown fields.
