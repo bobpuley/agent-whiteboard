@@ -52,6 +52,8 @@
     │  • Done button → POST /user-done → signalDone() → wakes wait_done() tool
     │  • History panel (v0.4): toggle button → GET /snapshots → list; click entry → POST /snapshots/load → canvas updated
     │  • History panel workspace accordion (v0.5): toggle button → GET /snapshots/all → accordion grouped by workspace (current auto-expanded); click entry → POST /snapshots/load { workspace, filename } → canvas updated
+    │  • Right-side controls panel (v0.10): small fixed panel on right edge; contains history toggle + Done button (icon-only); replaces footer/bottom-right placement from v0.2–v0.9
+    │  • History panel lock/unlock (v0.10): toggle in panel header; locked = panel stays open after snapshot load
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -85,17 +87,17 @@
 
 | Tool                              | Server-side action                                                                                                                                                                                                                  |
 |-----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options.title` (optional string, MVP) displays a label above the canvas. `options.theme` and action variants are Phase 2. For `step-frames`: loads all frames, displays frame 0, stores full payload. |
+| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options.title` (optional string, MVP) displays a label above the canvas. `options.theme` and action variants are Phase 2. For `step-frames`: loads all frames, displays frame 0, stores full payload. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call. `id` is omitted if the snapshot write fails (non-fatal). |
 | `clear()`                         | Resets in-memory canvas state and step cursor; sends clear command to browser                                                                                                                                                       |
-| `export()`                        | Returns the last submitted source payload verbatim as a string. For all types (mermaid, svg, katex, vega-lite, step-frames): returns whatever was passed to `render()`. Empty string if canvas is empty or cleared.                 |
+| `export([id])`                    | Without `id`: returns the last submitted source payload verbatim as a string (current behavior). With optional `id` (UUID, v0.11 ✅): scans all workspace snapshot files for a record whose `id` field matches and returns its payload. Empty string if canvas is empty or cleared (no-id case). Error `{ ok: false, error: "graph not found" }` if id provided but no matching snapshot found. Old snapshots without an `id` field are not addressable. See F16 (`03`). Implemented in `server/snapshot-reader.ts` (`findSnapshotById`). |
 | `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
 | `seek(frame)` *(Sprint 13)*       | Jumps the step-frame cursor to an arbitrary frame index. Useful for random-access navigation without repeated `step()` calls. Returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no `step-frames` sequence is loaded or frame is out of range. (Phase 2 — Sprint 13) |
 | `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
 | `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label, action: null }` on click (`action` is always present; null in Sprint 12 because no popup menu exists yet); `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
 | `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action }` — `action` is **always present**: null when no popup was shown or when user clicked without selecting a menu item; string value when a menu item was selected. (Phase 2 — Sprint 14) |
 | `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
-| `append_frame(id, payload, label?)` *(v0.8)* | Looks up the builder entry by ID. Validates `payload` against `frame_type` (same hard gate as `render()`). Appends `{ label?, payload }` to the frame list. Resets the TTL timer. Returns `{ ok: true, frame_count: N }`. Does NOT push to browser. |
-| `commit_step_frames(id)` *(v0.8)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Calls `saveSnapshot()` and broadcasts to browser (identical path to `render(type="step-frames", ...)`). Deletes the builder entry. Returns `{ ok: true }`. After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
+| `append_frame(id, payload, label?)` *(v0.8; live preview v0.9)* | Looks up the builder entry by ID. Validates `payload` against `frame_type` (same hard gate as `render()`). Appends `{ label?, payload }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (same event format as `render(type="step-frames", ...)`, `currentFrame` set to N-1 so the browser shows the latest frame). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
+| `commit_step_frames(id)` *(v0.8; finalization-only v0.9)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
 
 ### Validation — two layers
 
@@ -128,21 +130,21 @@ On success:
 
 | Tool     | Success                                                                                                                                 | Failure                           |
 |----------|-----------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------|
-| `render` | `{ "ok": true }`                                                                                                                        | `{ "ok": false, "error": "..." }` |
+| `render` | `{ "ok": true, "id": "<uuid>" }` — UUID of the snapshot written; `id` omitted if snapshot write failed (v0.11 ✅). | `{ "ok": false, "error": "..." }` |
 | `clear`  | `{ "ok": true }`                                                                                                                        | — (always succeeds)               |
-| `export` | `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. Same contract for all types. | — (always succeeds) |
+| `export` | Without `id`: `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload; empty string if canvas is blank. With `id`: `{ "ok": true, "data": "<source>" }` — payload of the matching snapshot (v0.11 ✅). | Without `id`: always succeeds. With `id`: `{ "ok": false, "error": "graph not found" }` if no snapshot matches. |
 | `step`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
 | `seek`       | `{ "ok": true, "current_frame": N, "total_frames": M }`                                                                              | `{ "ok": false, "error": "..." }` |
 | `wait_click` | `{ "ok": true, "type": "node"\|"edge", "id": "<id>", "label": "<label>", "action": "<string or null>" }` — `action` field always present; null when no menu shown or click was plain; string value when menu item was selected. On timeout: `{ "ok": true, "type": "timeout" }`. | — |
 | `init_step_frames` | `{ "ok": true, "id": "<uuid>" }` | `{ "ok": false, "error": "..." }` — unsupported `frame_type` or missing/invalid `workspace` |
 | `append_frame` | `{ "ok": true, "frame_count": N }` | `{ "ok": false, "error": "..." }` — unknown/expired ID or invalid payload |
-| `commit_step_frames` | `{ "ok": true }` | `{ "ok": false, "error": "..." }` — unknown/expired ID or zero frames |
+| `commit_step_frames` | `{ "ok": true, "id": "<uuid>" }` — UUID of the snapshot written; `id` omitted if snapshot write failed (v0.11 ✅). | `{ "ok": false, "error": "..." }` — unknown/expired ID or zero frames |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
 
 ### REST fallback response shapes
 
-The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) return the same JSON shapes as the MCP tool responses above. `GET /export` returns the JSON body `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload for any type (not raw text).
+The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) return the same JSON shapes as the MCP tool responses above. `GET /export` returns the JSON body `{ "ok": true, "data": "<source>" }` — verbatim last `render()` payload for any type (not raw text). **v0.11 ✅:** `GET /export?id=<uuid>` returns the payload of the snapshot with that UUID; 404 `{ "ok": false, "error": "graph not found" }` if no match. `POST /render` and `POST /step-frames/:id/commit` both return `{ "ok": true, "id": "<uuid>" }` on success (id omitted if snapshot write fails).
 
 `POST /step` was added in Sprint 7 (MVP ✅). Body: `{ "direction": "next" | "prev" }`. Returns the same shape as the MCP `step()` response.
 
@@ -292,10 +294,12 @@ user clicks a snapshot entry (any workspace)
       → server updates in-memory canvas state
       → server broadcasts render command to browser via WebSocket (same format as render())
       → does NOT call saveSnapshot()
+      → updates lastWorkspace to the loaded snapshot's workspace (v0.10, see H6)
       → returns { ok: true }
   → IF invalid:
       → returns { ok: false, error: "..." }
-  → browser closes panel; canvas displays loaded snapshot
+  → browser: if panel is unlocked (default), closes panel; if locked, stays open (v0.10)
+  → canvas displays loaded snapshot
 ```
 
 **Interaction with pending wait_click() / wait_done():** loading a history entry replaces the canvas but does NOT cancel any pending tool calls. Both continue waiting until their 10-minute timeout elapses or the user signals them through normal channels (Done button / node click). See assumption H2.
@@ -318,19 +322,23 @@ agent calls append_frame(id="<uuid>", payload="graph TD; A-->B", label="Step 1")
   → validates payload against frame_type (same hard gate as render())
   → IF valid: appends { label: "Step 1", payload: "graph TD; A-->B" } to frames[]
   → resets TTL timer
+  → pushes partial step-frames to browser via WebSocket (v0.9 live preview):
+      { action: "replace", type: "mermaid", stepFrames: true,
+        frames: [<all frames so far>], currentFrame: 0, totalFrames: 1,
+        title?: <builder title> }
+      (browser shows growing step-frames sequence, positioned at latest frame)
+  → in-memory canvas state is NOT updated yet
   → returns { ok: true, frame_count: 1 }
 
-... agent repeats for each frame ...
+... agent repeats for each frame; browser updates after every append ...
 
 agent calls commit_step_frames(id="<uuid>")
   → server assembles full step-frames JSON:
       { frame_type: "mermaid", frames: [{ label, payload }, ...] }
   → cancels any running slideshow (same as render())
-  → runs through render() pipeline (same code path as render(type="step-frames", ...)):
-      → validates assembled payload
-      → stores as current canvas state
-      → pushes render command to browser via WebSocket
-      → calls saveSnapshot(type="step-frames", payload, options={workspace, title})
+  → updates in-memory canvas state (so export() returns the assembled JSON)
+  → calls saveSnapshot(type="step-frames", payload, options={workspace, title})
+  → pushes final WebSocket broadcast (handles edge case where clear() was called between appends)
   → deletes builder entry for this id
   → returns { ok: true }
   (after commit, export() returns the assembled full step-frames JSON)
@@ -348,10 +356,10 @@ Interaction with clear():
   → the committed diagram replaces the blank canvas
 ```
 
-**REST fallback endpoints (v0.8):**
+**REST fallback endpoints (v0.8; live preview v0.9):**
 - `POST /step-frames/init` — body: `{ frame_type, workspace, title? }` → `{ ok: true, id }`
-- `POST /step-frames/:id/frame` — body: `{ payload, label? }` → `{ ok: true, frame_count: N }`
-- `POST /step-frames/:id/commit` — no body → `{ ok: true }`
+- `POST /step-frames/:id/frame` — body: `{ payload, label? }` → `{ ok: true, frame_count: N }`. v0.9: also pushes partial step-frames to browser after each valid append (same as MCP `append_frame()`).
+- `POST /step-frames/:id/commit` — no body → `{ ok: true }`. v0.9: finalization only (snapshot, in-memory state, slideshow cancel, builder cleanup); final broadcast still sent for consistency.
 
 ### Node Click Flow (Phase 2 — Sprint 12 plain click)
 

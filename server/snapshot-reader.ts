@@ -104,3 +104,43 @@ export function loadSnapshotContent(workspace: string, dir: string, filename: st
     return null;
   }
 }
+
+/**
+ * Scan all workspace subdirectories under `dir` for a snapshot whose `id` field matches.
+ * Returns the snapshot's `payload` string if found, or null if no match.
+ * Old snapshots without an `id` field are silently skipped.
+ */
+export function findSnapshotById(id: string, dir: string): string | null {
+  let workspaceDirs: string[];
+  try {
+    workspaceDirs = readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return null;
+  }
+
+  for (const workspace of workspaceDirs) {
+    const workspaceDir = join(dir, workspace);
+    let files: string[];
+    try {
+      files = readdirSync(workspaceDir).filter((f) => f.endsWith("_screen.json"));
+    } catch {
+      continue;
+    }
+
+    for (const filename of files) {
+      try {
+        const raw = readFileSync(join(workspaceDir, filename), "utf-8");
+        const parsed = JSON.parse(raw) as { id?: unknown; payload?: unknown };
+        if (parsed.id === id && typeof parsed.payload === "string") {
+          return parsed.payload;
+        }
+      } catch {
+        // Skip unreadable or malformed files.
+      }
+    }
+  }
+
+  return null;
+}

@@ -60,11 +60,12 @@ Push content to the whiteboard canvas. Replaces whatever is currently on screen.
 | `"vega-lite"` | Vega-Lite JSON spec (must be valid JSON string). |
 | `"step-frames"` | Ordered sequence of frames for step-through (see below). Displays frame 0; use `step()` to navigate. |
 
-`options` (optional):
+`options`:
+- `workspace` — **required.** Workspace name for snapshot routing (alphanumeric, dashes, underscores, dots, spaces — no path separators). Snapshots are written to `~/.agent-whiteboard/<workspace>/`. Missing or invalid workspace returns `{ "ok": false, "error": "..." }` without rendering.
 - `title` — string label displayed above the canvas for this render call.
 - `node_to_frame` — (`step-frames` only) map of node ID → frame index. When set, clicking a mapped node in the browser jumps directly to its frame via `POST /seek` — no `wait_click()` call needed. Overridden for the duration of any `wait_click()` call; agent must re-render with the map to re-enable it.
 
-**Returns:** `{ "ok": true }` or `{ "ok": false, "error": "..." }`
+**Returns:** `{ "ok": true, "id": "<uuid>" }` — the UUID of the snapshot written for this call (`id` is omitted if the snapshot write fails, which is non-fatal). Error: `{ "ok": false, "error": "..." }`
 
 ### `step(direction)`
 
@@ -84,11 +85,14 @@ Reset the canvas to a blank state.
 
 **Returns:** `{ "ok": true }`
 
-### `export()`
+### `export([id])`
 
-Return the current canvas source payload verbatim. For `step-frames`, returns the full original frames JSON (not just the current frame). Returns an empty string if the canvas is blank.
+Return a canvas source payload.
 
-**Returns:** `{ "ok": true, "data": "<source>" }`
+- **Without `id`:** returns the current canvas state verbatim (last `render()` payload). For `step-frames`, returns the full original frames JSON. Returns an empty string if the canvas is blank.
+- **With `id` (UUID):** scans all snapshot files for the one whose `id` field matches (written from v0.11 onward) and returns its payload. Old snapshots without an `id` field are not addressable this way.
+
+**Returns:** `{ "ok": true, "data": "<source>" }` (without id: always succeeds; with id: `{ "ok": false, "error": "graph not found" }` if no match)
 
 ### `slideshow(slides, delay_ms)`
 
@@ -141,9 +145,9 @@ Pass this JSON stringified as the `payload` argument to `render(type="step-frame
 ## Example agent flow
 
 ```
-render(type="mermaid", payload="graph TD; A --> B", options={ title: "System overview" })
+render(type="mermaid", payload="graph TD; A --> B", options={ workspace: "my-lesson", title: "System overview" })
 → wait_done()   # agent pauses; user clicks Done when ready
-→ render(type="katex", payload="E = mc^2")
+→ render(type="katex", payload="E = mc^2", options={ workspace: "my-lesson" })
 → wait_done()
 ```
 
@@ -151,12 +155,12 @@ render(type="mermaid", payload="graph TD; A --> B", options={ title: "System ove
 
 All tools have HTTP equivalents for scripting or testing without an MCP client:
 
-| Endpoint | Body |
+| Endpoint | Body / Params |
 |---|---|
-| `POST /render` | `{ "type": "...", "payload": "...", "options": { "title": "..." } }` |
+| `POST /render` | `{ "type": "...", "payload": "...", "options": { "workspace": "...", "title": "..." } }` — `workspace` required. Returns `{ "ok": true, "id": "<uuid>" }` on success. |
 | `POST /step` | `{ "direction": "next" \| "prev" }` |
 | `POST /clear` | — |
-| `GET /export` | — |
+| `GET /export` | No params: returns current canvas. `?id=<uuid>`: returns matching snapshot payload (404 if not found). |
 | `POST /slideshow` | `{ "slides": [...], "delay_ms": N }` |
 | `POST /slideshow/stop` | — |
 | `POST /seek` | `{ "frame": N }` |
@@ -169,19 +173,25 @@ All endpoints return the same JSON shapes as the MCP tools.
 
 ## Manual showcase
 
-Exercises every renderer via a server-side slideshow (requires `npm run dev` running):
+Exercises every renderer and interactive feature (requires `npm run dev` running):
 
 ```bash
-node tests/human_driven/showcase.js
+node tests/human_driven/showcase.js        # Sections 1–8: renderer slideshow + seek
+node tests/human_driven/showcase.js -x    # Section 12: export-by-id (v0.11)
+node tests/human_driven/showcase.js -a    # All sections
 ```
 
-Options:
+Section flags (combinable):
 
 ```
+-s, --standard        Sections 1–8: renderer slideshow + seek demo (default)
+-i, --interactive     Section 9:  node click drill-down + Done button
+-u, --popup           Section 10: node_actions popup menu
+-e, --edge            Section 11: edge click demo
+-x, --exportid        Section 12: export by graph ID (v0.11)
+-a, --all             All sections
 -p, --port <port>     Server port (default: 3000)
 -d, --delay <ms>      Delay between slides (default: 5000)
--t, --type <types>    Comma-separated types to show (mermaid, svg, html, katex, vega-lite, step-frames)
--h, --help
 ```
 
 ## Tests

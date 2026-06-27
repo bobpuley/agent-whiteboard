@@ -13,7 +13,7 @@ import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./vali
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { saveSnapshot } from "./snapshot.js";
-import { listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
+import { findSnapshotById, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
@@ -90,16 +90,18 @@ export function createApp(): Hono {
         ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
       });
       setLastWorkspace(workspace);
-      try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
-      return c.json({ ok: true });
+      let snapshotId: string | undefined;
+      try { snapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
+      return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
     }
 
     // svg, html, katex, mermaid, vega-lite
     setCanvas(type as CanvasType, payload, title);
     broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
     setLastWorkspace(workspace);
-    try { saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
-    return c.json({ ok: true });
+    let snapshotId: string | undefined;
+    try { snapshotId = saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
+    return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
   });
 
   app.post("/step", async (c) => {
@@ -281,10 +283,11 @@ export function createApp(): Hono {
     cancelSlideshow();
     setStepFrames(frames, frame_type, assembledPayload, title);
     setLastWorkspace(workspace);
-    try { saveSnapshot("step-frames", assembledPayload, { title, workspace }); } catch { /* non-fatal */ }
+    let commitSnapshotId: string | undefined;
+    try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }); } catch { /* non-fatal */ }
     // Final broadcast for consistency (handles clear() called between appends).
     broadcastStepFrames(frames, frame_type, 0, title);
-    return c.json({ ok: true });
+    return c.json({ ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) });
   });
 
   // ── User events — bidirectionality (Sprint 10 experiment) ───────────────────
@@ -346,6 +349,15 @@ export function createApp(): Hono {
   });
 
   app.get("/export", (c) => {
+    const id = c.req.query("id");
+    if (id !== undefined && id !== "") {
+      const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+      const payload = findSnapshotById(id, root);
+      if (payload === null) {
+        return c.json({ ok: false, error: "graph not found" }, 404);
+      }
+      return c.json({ ok: true, data: payload });
+    }
     return c.json({ ok: true, data: exportCanvas() });
   });
 
