@@ -1,6 +1,6 @@
 # Milestone v0.10 — UI Controls Panel + History UX
 
-> Sprint 23. Status: in progress.
+> Sprint 23. Status: released.
 > Objective: Move the History toggle and Done button into a small right-side panel; replace the Done text label with an icon; add a lock/unlock toggle to the history panel header; and make history loads update the current workspace.
 
 ---
