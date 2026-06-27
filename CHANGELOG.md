@@ -1,3 +1,11 @@
+## 0.10.0 — 2026-06-27
+
+- **Right-side controls panel:** the history toggle button and Done button now live in a compact fixed panel on the right edge of the viewport (`<div class="controls-panel">`) — always visible, never occluding the canvas; replaces the footer-based `done-bar` from v0.2–v0.9
+- **Done button icon-only:** Done button displays a checkmark SVG icon instead of the text label "Done"; tooltip on hover shows "Done"; the 2s "Sent ✓" text feedback on click is preserved
+- **History panel lock/unlock toggle:** a small lock icon button in the panel header controls auto-close behaviour — unlocked (default): loading a snapshot closes the panel; locked: panel stays open so the user can browse multiple snapshots without reopening; lock state resets when the panel is closed
+- **`lastWorkspace` update on history load:** `POST /snapshots/load` now calls `setLastWorkspace(workspace)` on success so the history panel auto-expands the correct workspace section on next open after a cross-workspace load; `GET /snapshots/all` returns `isCurrent: true` for the loaded workspace
+- 1 new unit test verifying `lastWorkspace` is updated after a cross-workspace snapshot load
+
 ## 0.9.0 — 2026-06-26
 
 - **Live browser preview on `append_frame()`:** each valid `append_frame()` call now immediately broadcasts the accumulated partial step-frames sequence to the browser, so the user watches the step-through diagram grow one frame at a time — no waiting for `commit_step_frames()`
