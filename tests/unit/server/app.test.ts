@@ -15,6 +15,7 @@ vi.mock("../../../server/snapshot-reader.js", () => ({
   listSnapshots: vi.fn(),
   listAllSnapshots: vi.fn(),
   loadSnapshotContent: vi.fn(),
+  findSnapshotById: vi.fn(),
 }));
 
 vi.mock("../../../server/ws.js", () => ({
@@ -2054,5 +2055,134 @@ describe("POST /step-frames/:id/commit — final broadcast (v0.9)", () => {
     const [frames, , currentFrame] = spy.mock.calls[0];
     expect(frames).toHaveLength(2);
     expect(currentFrame).toBe(0); // commit broadcasts at frame 0
+  });
+});
+
+// ── v0.11 — Export by Graph ID ────────────────────────────────────────────────
+
+describe("POST /render — returns id in response (v0.11)", () => {
+  it("includes id in response when saveSnapshot returns a UUID", async () => {
+    const snapshotModule = await import("../../../server/snapshot.js");
+    vi.mocked(snapshotModule.saveSnapshot).mockReturnValueOnce("test-uuid-render-001");
+
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WORKSPACE } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, id: "test-uuid-render-001" });
+  });
+
+  it("omits id from response when saveSnapshot returns undefined (write failure)", async () => {
+    const snapshotModule = await import("../../../server/snapshot.js");
+    vi.mocked(snapshotModule.saveSnapshot).mockReturnValueOnce(undefined);
+
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "html", payload: "<p>test</p>", options: { workspace: WORKSPACE } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("includes id in response for step-frames render", async () => {
+    const snapshotModule = await import("../../../server/snapshot.js");
+    vi.mocked(snapshotModule.saveSnapshot).mockReturnValueOnce("test-uuid-sf-001");
+
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [{ payload: "graph TD; A --> B" }],
+    });
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, id: "test-uuid-sf-001" });
+  });
+});
+
+describe("POST /step-frames/:id/commit — returns id in response (v0.11)", () => {
+  it("includes id in response when saveSnapshot returns a UUID", async () => {
+    const snapshotModule = await import("../../../server/snapshot.js");
+
+    const initRes = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE }),
+    });
+    const { id: builderId } = await initRes.json<{ ok: boolean; id: string }>();
+
+    await app.request(`/step-frames/${builderId}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A --> B" }),
+    });
+
+    vi.mocked(snapshotModule.saveSnapshot).mockReturnValueOnce("test-uuid-commit-001");
+
+    const commitRes = await app.request(`/step-frames/${builderId}/commit`, { method: "POST" });
+    expect(commitRes.status).toBe(200);
+    expect(await commitRes.json()).toEqual({ ok: true, id: "test-uuid-commit-001" });
+  });
+});
+
+describe("GET /export?id — snapshot lookup by UUID (v0.11)", () => {
+  let snapshotReaderModule: typeof import("../../../server/snapshot-reader.js");
+
+  beforeEach(async () => {
+    snapshotReaderModule = await import("../../../server/snapshot-reader.js");
+    vi.mocked(snapshotReaderModule.findSnapshotById).mockClear();
+  });
+
+  it("returns the snapshot payload when id matches", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotById).mockReturnValueOnce("graph TD; A --> B");
+
+    const res = await app.request("/export?id=test-uuid-abc-123");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, data: "graph TD; A --> B" });
+    expect(snapshotReaderModule.findSnapshotById).toHaveBeenCalledOnce();
+    expect(snapshotReaderModule.findSnapshotById).toHaveBeenCalledWith("test-uuid-abc-123", expect.any(String));
+  });
+
+  it("returns 404 with graph not found error when id does not match", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotById).mockReturnValueOnce(null);
+
+    const res = await app.request("/export?id=nonexistent-uuid");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: "graph not found" });
+  });
+
+  it("falls back to canvas state when id param is absent", async () => {
+    // First render something so canvas is not blank.
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "html", payload: "<b>hello</b>", options: { workspace: WORKSPACE } }),
+    });
+
+    const res = await app.request("/export");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, data: "<b>hello</b>" });
+    expect(snapshotReaderModule.findSnapshotById).not.toHaveBeenCalled();
+  });
+
+  it("falls back to canvas state when id param is empty string", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "html", payload: "<i>test</i>", options: { workspace: WORKSPACE } }),
+    });
+
+    const res = await app.request("/export?id=");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, data: "<i>test</i>" });
+    expect(snapshotReaderModule.findSnapshotById).not.toHaveBeenCalled();
   });
 });

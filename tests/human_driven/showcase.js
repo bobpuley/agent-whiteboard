@@ -15,6 +15,7 @@ const { values } = parseArgs({
     interactive: { type: "boolean", short: "i", default: false   },
     popup:       { type: "boolean", short: "u", default: false   },
     edge:        { type: "boolean", short: "e", default: false   },
+    exportid:    { type: "boolean", short: "x", default: false   },
     all:         { type: "boolean", short: "a", default: false   },
     help:        { type: "boolean", short: "h", default: false   },
   },
@@ -30,7 +31,8 @@ Section flags (combinable, e.g. -ie runs Sections 9+11 only):
   -i, --interactive     Section 9:  node click drill-down + Done button
   -u, --popup           Section 10: node_actions popup menu (simulated)
   -e, --edge            Section 11: edge click demo
-  -a, --all             All sections (equivalent to -siue)
+  -x, --exportid        Section 12: export by graph ID (v0.11)
+  -a, --all             All sections (equivalent to -siuex)
 
 Other options:
   -p, --port <port>     Server port (default: 3000)
@@ -44,19 +46,21 @@ Other options:
 
 // ── Section selection ─────────────────────────────────────────────────────────
 // No section flags → behave as -s (backwards-compatible default).
-const anySection = values.standard || values.interactive || values.popup || values.edge || values.all;
+const anySection = values.standard || values.interactive || values.popup || values.edge || values.exportid || values.all;
 const RUN_STANDARD    = !anySection || values.standard    || values.all;
 const RUN_INTERACTIVE = values.interactive || values.all;
 const RUN_POPUP       = values.popup       || values.all;
 const RUN_EDGE        = values.edge        || values.all;
+const RUN_EXPORT_ID   = values.exportid    || values.all;
 
 const TYPE_FILTER = values.type
   ? new Set(values.type.split(",").map((t) => t.trim()).filter(Boolean))
   : null;
 
-const PORT     = values.port;
-const DELAY_MS = parseInt(values.delay, 10);
-const BASE     = `http://localhost:${PORT}`;
+const PORT      = values.port;
+const DELAY_MS  = parseInt(values.delay, 10);
+const BASE      = `http://localhost:${PORT}`;
+const WORKSPACE = "showcase";
 
 console.log(`\n🎬  Showcase — server: ${BASE}  delay: ${DELAY_MS}ms\n`);
 
@@ -397,7 +401,7 @@ async function runClientSlideshow(slideList) {
     const { type, payload, title, delay_ms = DELAY_MS, frame_delay_ms } = slide;
     process.stdout.write(`\n▶  ${title}\n`);
 
-    const renderRes = await post("/render", { type, payload, options: { title } });
+    const renderRes = await post("/render", { type, payload, options: { workspace: WORKSPACE, title } });
     if (!renderRes.ok) {
       console.error(`   ✗ render failed: ${renderRes.error}`);
       process.exit(1);
@@ -500,7 +504,7 @@ async function runSeekDemo() {
   const renderRes = await post("/render", {
     type: "step-frames",
     payload: seekFrames,
-    options: { title: "8 — seek() demo: frame 0 → 3 → 1 → 2" },
+    options: { workspace: WORKSPACE, title: "8 — seek() demo: frame 0 → 3 → 1 → 2" },
   });
   if (!renderRes.ok) {
     console.error(`   ✗ render failed: ${renderRes.error}`);
@@ -587,7 +591,7 @@ async function runInteractiveDemo() {
   const r1 = await post("/render", {
     type: "mermaid",
     payload: overview,
-    options: { title: "9 — Click FE, BE, or DB to drill in" },
+    options: { workspace: WORKSPACE, title: "9 — Click FE, BE, or DB to drill in" },
   });
   if (!r1.ok) { console.error(`   ✗ render failed: ${r1.error}`); return; }
 
@@ -616,7 +620,7 @@ async function runInteractiveDemo() {
   const r2 = await post("/render", {
     type: "mermaid",
     payload: detail.payload,
-    options: { title: detail.title },
+    options: { workspace: WORKSPACE, title: detail.title },
   });
   if (!r2.ok) { console.error(`   ✗ render failed: ${r2.error}`); return; }
   console.log(`   ✓ drill-down rendered for "${click.id}" — click Done in the browser when ready`);
@@ -653,7 +657,7 @@ async function runPopupDemo() {
   const r = await post("/render", {
     type: "mermaid",
     payload: diagram,
-    options: { title: "10 — Click a node to see its popup menu" },
+    options: { workspace: WORKSPACE, title: "10 — Click a node to see its popup menu" },
   });
   if (!r.ok) { console.error(`   ✗ render failed: ${r.error}`); return; }
   console.log("   ✓ diagram rendered — open the browser tab and click a node:");
@@ -711,7 +715,7 @@ async function runEdgeDemo() {
   const r = await post("/render", {
     type: "mermaid",
     payload: diagram,
-    options: { title: "11 — Edge click demo: click any labeled arrow" },
+    options: { workspace: WORKSPACE, title: "11 — Edge click demo: click any labeled arrow" },
   });
   if (!r.ok) { console.error(`   ✗ render failed: ${r.error}`); return; }
   console.log("   ✓ diagram rendered — open the browser tab and click one of the labeled arrows:");
@@ -744,16 +748,101 @@ if (RUN_EDGE) {
   await runEdgeDemo();
 }
 
+// ── Section 12 — Export by Graph ID (v0.11) ───────────────────────────────────
+//
+// Demonstrates the new id-based export feature:
+//   1. render() a diagram — capture the returned id
+//   2. render() a second diagram (canvas state changes)
+//   3. GET /export (no id) → returns the second diagram (current canvas)
+//   4. GET /export?id=<first-id> → returns the first diagram by UUID
+//
+// Confirms that render() returns { ok: true, id: "<uuid>" } and that the
+// id can be used to retrieve any past snapshot, not just the current one.
+
+async function runExportIdDemo() {
+  const PAUSE = Math.min(DELAY_MS, 2000);
+
+  // Render first diagram — capture id.
+  const diagram1 = `graph TD
+  A[Alpha] --> B[Beta]
+  B --> C[Gamma]`;
+
+  const r1 = await post("/render", {
+    type: "mermaid",
+    payload: diagram1,
+    options: { workspace: WORKSPACE, title: "12 — First diagram (will be replaced)" },
+  });
+  if (!r1.ok) { console.error(`   ✗ render failed: ${r1.error}`); return; }
+
+  const id1 = r1.id;
+  if (!id1) {
+    console.error("   ✗ render response did not include id — check v0.11 implementation");
+    return;
+  }
+  console.log(`   ✓ first render — id: ${id1}`);
+  await new Promise((r) => setTimeout(r, PAUSE));
+
+  // Render second diagram — replaces canvas state.
+  const diagram2 = `graph TD
+  X[Delta] --> Y[Epsilon]
+  Y --> Z[Zeta]`;
+
+  const r2 = await post("/render", {
+    type: "mermaid",
+    payload: diagram2,
+    options: { workspace: WORKSPACE, title: "12 — Second diagram (current canvas)" },
+  });
+  if (!r2.ok) { console.error(`   ✗ render 2 failed: ${r2.error}`); return; }
+  const id2 = r2.id;
+  console.log(`   ✓ second render — id: ${id2}`);
+  await new Promise((r) => setTimeout(r, PAUSE));
+
+  // GET /export (no id) → should return diagram2 (current canvas).
+  const expCurrent = await fetch(`${BASE}/export`).then((r3) => r3.json());
+  if (!expCurrent.ok || expCurrent.data !== diagram2) {
+    console.error("   ✗ GET /export (no id) did not return the current canvas");
+    console.error("     got:", JSON.stringify(expCurrent).slice(0, 120));
+    return;
+  }
+  console.log("   ✓ GET /export (no id) — returns current canvas (diagram 2)");
+
+  // GET /export?id=<id1> → should return diagram1 by UUID.
+  const expById = await fetch(`${BASE}/export?id=${encodeURIComponent(id1)}`).then((r4) => r4.json());
+  if (!expById.ok || expById.data !== diagram1) {
+    console.error("   ✗ GET /export?id=<id1> did not return diagram 1");
+    console.error("     got:", JSON.stringify(expById).slice(0, 120));
+    return;
+  }
+  console.log("   ✓ GET /export?id=<id1> — returns diagram 1 by UUID");
+
+  // GET /export?id=<nonexistent> → should return 404 with graph not found.
+  const expMissing = await fetch(`${BASE}/export?id=00000000-0000-0000-0000-000000000000`).then((r5) => r5.json());
+  if (expMissing.ok !== false || expMissing.error !== "graph not found") {
+    console.error("   ✗ GET /export?id=<nonexistent> did not return expected error");
+    console.error("     got:", JSON.stringify(expMissing));
+    return;
+  }
+  console.log("   ✓ GET /export?id=<nonexistent> — returns { ok: false, error: 'graph not found' }");
+
+  console.log("\n   All export-by-id checks passed.");
+}
+
+if (RUN_EXPORT_ID) {
+  console.log("\n── Section 12: export by graph ID (v0.11) ──");
+  await runExportIdDemo();
+}
+
 console.log("\n✅  Showcase complete.\n");
 
 const skipped = [
   !RUN_INTERACTIVE && "  -i  Section 9:  node click drill-down + Done button",
   !RUN_POPUP       && "  -u  Section 10: node_actions popup menu (simulated)",
   !RUN_EDGE        && "  -e  Section 11: edge click demo",
+  !RUN_EXPORT_ID   && "  -x  Section 12: export by graph ID (v0.11)",
 ].filter(Boolean);
 
 if (skipped.length) {
   console.log("   Sections not run (add flags to include):");
   skipped.forEach((s) => console.log(`   ${s}`));
-  console.log("   (use -a / --all to run everything)\n");
+  console.log("   (use -a / --all to run everything — equivalent to -siuex)\n");
 }

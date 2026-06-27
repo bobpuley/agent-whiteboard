@@ -8,7 +8,7 @@ export interface RenderOptions {
   workspace: string;
 }
 
-export function saveSnapshot(type: string, payload: string, options: RenderOptions): void {
+export function saveSnapshot(type: string, payload: string, options: RenderOptions): string | undefined {
   try {
     const { workspace } = options;
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
@@ -17,8 +17,10 @@ export function saveSnapshot(type: string, payload: string, options: RenderOptio
 
     const now = new Date();
     const filename = `${formatTimestamp(now)}_screen.json`;
+    const id = crypto.randomUUID();
 
     const content: Record<string, unknown> = {
+      id,
       timestamp: now.toISOString(),
       workspace,
       type,
@@ -32,11 +34,13 @@ export function saveSnapshot(type: string, payload: string, options: RenderOptio
     }
 
     writeFileSync(join(dir, filename), JSON.stringify(content, null, 2), "utf-8");
+    return id;
   } catch (err) {
     console.error(
       "[agent-whiteboard] snapshot write failed:",
       err instanceof Error ? err.message : String(err)
     );
+    return undefined;
   }
 }
 

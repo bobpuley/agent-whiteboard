@@ -1,6 +1,8 @@
 // MCP tool definitions and handlers.
 // Tools: render, clear, export, step.
 
+import { homedir } from "os";
+import { join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
@@ -10,6 +12,7 @@ import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validat
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
 import { saveSnapshot } from "./snapshot.js";
+import { findSnapshotById } from "./snapshot-reader.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 
 export function createMcpServer(): McpServer {
@@ -194,9 +197,10 @@ export function createMcpServer(): McpServer {
           ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
         });
         setLastWorkspace(workspace);
-        try { saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
+        let sfSnapshotId: string | undefined;
+        try { sfSnapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
         return {
-          content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+          content: [{ type: "text", text: JSON.stringify({ ok: true, ...(sfSnapshotId !== undefined ? { id: sfSnapshotId } : {}) }) }],
         };
       }
 
@@ -204,10 +208,11 @@ export function createMcpServer(): McpServer {
       setCanvas(type, payload, title);
       broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
       setLastWorkspace(workspace);
-      try { saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
+      let snapshotId: string | undefined;
+      try { snapshotId = saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
 
       return {
-        content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+        content: [{ type: "text", text: JSON.stringify({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) }) }],
       };
     }
   );
@@ -617,30 +622,51 @@ export function createMcpServer(): McpServer {
       cancelSlideshow();
       setStepFrames(frames, frame_type, assembledPayload, title);
       setLastWorkspace(workspace);
+      let commitSnapshotId: string | undefined;
       try {
-        saveSnapshot("step-frames", assembledPayload, { title, workspace });
+        commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace });
       } catch { /* non-fatal */ }
       // Final broadcast for consistency (handles clear() called between appends).
       broadcastStepFrames(frames, frame_type, 0, title);
 
       return {
-        content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
+        content: [{ type: "text", text: JSON.stringify({ ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) }) }],
       };
     }
   );
 
-  // export() — return the current canvas source spec.
+    // export(id?) — return the current canvas source spec, or a past snapshot by UUID.
   server.registerTool(
     "export",
     {
       description:
-        "Return the current canvas source spec. " +
-        'Response: { "ok": true, "data": "<source>" }. ' +
+        "Return the current canvas source spec, or a past snapshot by UUID. " +
+        'Without id: returns verbatim last render() payload. Response: { "ok": true, "data": "<source>" }. ' +
         "For step-frames: returns the full original frames JSON string (not the current frame). " +
-        "data is an empty string if the canvas is empty or was cleared.",
-      inputSchema: z.object({}),
+        'data is an empty string if the canvas is empty or was cleared. ' +
+        'With optional id (UUID returned by render() or commit_step_frames()): scans snapshot files for a record whose id field matches and returns its payload. ' +
+        'Error if id provided but no matching snapshot found: { "ok": false, "error": "graph not found" }. ' +
+        "Old snapshots without an id field are not addressable by this mechanism.",
+      inputSchema: z.object({
+        id: z.string().optional().describe(
+          "Optional UUID returned by a previous render() or commit_step_frames() call. " +
+          "When provided, retrieves that specific snapshot's payload instead of the current canvas state."
+        ),
+      }),
     },
-    () => {
+    ({ id }) => {
+      if (id !== undefined && id !== "") {
+        const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+        const payload = findSnapshotById(id, root);
+        if (payload === null) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ ok: false, error: "graph not found" }) }],
+          };
+        }
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: true, data: payload }) }],
+        };
+      }
       const data = exportCanvas();
       return {
         content: [

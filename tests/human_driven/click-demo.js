@@ -48,7 +48,8 @@ Modes:
   process.exit(0);
 }
 
-const BASE = `http://localhost:${values.port}`;
+const BASE      = `http://localhost:${values.port}`;
+const WORKSPACE = "showcase";
 
 async function post(path, body) {
   const res = await fetch(`${BASE}${path}`, {
@@ -72,7 +73,7 @@ async function runClickMode() {
   const renderRes = await post("/render", {
     type: "mermaid",
     payload: diagram,
-    options: { title: "Click any node or edge" },
+    options: { workspace: WORKSPACE, title: "Click any node or edge" },
   });
 
   if (!renderRes.ok) {
@@ -148,6 +149,7 @@ async function runNavMode() {
     type: "step-frames",
     payload: framesPayload,
     options: {
+      workspace: WORKSPACE,
       title: "Click a layer node to jump to its detail frame",
       node_to_frame: nodeToFrame,
     },
@@ -203,7 +205,7 @@ async function runPopupMode() {
   const renderRes = await post("/render", {
     type: "mermaid",
     payload: diagram,
-    options: { title: "Click node B (Server) for a popup menu, or any other node for a plain click" },
+    options: { workspace: WORKSPACE, title: "Click node B (Server) for a popup menu, or any other node for a plain click" },
   });
 
   if (!renderRes.ok) {
