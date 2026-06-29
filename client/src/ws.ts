@@ -23,6 +23,10 @@ export type RenderCommand =
       action: "set_node_actions";
       enabled: boolean;
       node_actions?: Record<string, string[]>; // node ID → action labels (Sprint 13)
+    }
+  | {
+      action: "set_done_armed";
+      armed: boolean;
     };
 
 type CommandHandler = (cmd: RenderCommand) => void;

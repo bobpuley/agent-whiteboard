@@ -8,6 +8,22 @@ const WAIT_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
 
 // ── Done signal ───────────────────────────────────────────────────────────────
 
+let doneArmed = false
+
+export function getDoneArmed(): boolean {
+  return doneArmed
+}
+
+// Lazily imported to avoid circular dependency (ws.ts imports events.ts indirectly).
+let _broadcastFn: ((msg: object) => void) | null = null
+export function setBroadcastFn(fn: (msg: object) => void): void {
+  _broadcastFn = fn
+}
+
+function broadcastDoneArmed(armed: boolean): void {
+  _broadcastFn?.({ action: 'set_done_armed', armed })
+}
+
 /** Signal that the user clicked Done — wakes all pending waitForDone() calls. */
 export function signalDone(): void {
   bus.emit('done')
@@ -15,13 +31,19 @@ export function signalDone(): void {
 
 /** Resolve when the user clicks Done (or after the timeout). */
 export function waitForDone(): Promise<void> {
+  doneArmed = true
+  broadcastDoneArmed(true)
   return new Promise<void>((resolve) => {
     const onDone = () => {
       clearTimeout(timer)
+      doneArmed = false
+      broadcastDoneArmed(false)
       resolve()
     }
     const timer = setTimeout(() => {
       bus.off('done', onDone)
+      doneArmed = false
+      broadcastDoneArmed(false)
       resolve()
     }, WAIT_TIMEOUT_MS)
     bus.once('done', onDone)

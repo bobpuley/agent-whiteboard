@@ -2186,3 +2186,261 @@ describe("GET /export?id — snapshot lookup by UUID (v0.11)", () => {
     expect(snapshotReaderModule.findSnapshotById).not.toHaveBeenCalled();
   });
 });
+
+// ── v0.12 — Snapshot delete endpoints ────────────────────────────────────────
+
+import { mkdirSync, writeFileSync, existsSync, rmSync as fsRmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as pathJoin } from "node:path";
+import { getLastWorkspace } from "../../../server/session.js";
+
+const BASE_SNAP_ROOT = pathJoin(tmpdir(), `whiteboard-delete-tests-${process.pid}`);
+
+function makeSnapRoot(suffix: string) {
+  return pathJoin(BASE_SNAP_ROOT, suffix);
+}
+
+function createWorkspace(root: string, ws: string, filenames: string[]) {
+  const dir = pathJoin(root, ws);
+  mkdirSync(dir, { recursive: true });
+  const stub = JSON.stringify({ timestamp: "2026-01-01T00:00:00.000Z", type: "mermaid", payload: "graph TD; A" });
+  for (const f of filenames) writeFileSync(pathJoin(dir, f), stub);
+}
+
+describe("POST /snapshots/delete-files (v0.12)", () => {
+  const SNAP_ROOT = makeSnapRoot("delete-files");
+
+  beforeEach(() => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+    createWorkspace(SNAP_ROOT, "test-ws", [
+      "20260101_000000_screen.json",
+      "20260101_000001_screen.json",
+    ]);
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+    try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it("deletes a single file and returns { ok: true, deleted: 1 }", async () => {
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws", filenames: ["20260101_000000_screen.json"] }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json<{ ok: boolean; deleted: number }>();
+    expect(body).toEqual({ ok: true, deleted: 1 });
+    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws", "20260101_000000_screen.json"))).toBe(false);
+    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws", "20260101_000001_screen.json"))).toBe(true);
+  });
+
+  it("deletes multiple files in one request", async () => {
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspace: "test-ws",
+        filenames: ["20260101_000000_screen.json", "20260101_000001_screen.json"],
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: 2 });
+  });
+
+  it("skips missing files silently and returns deleted: 0", async () => {
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws", filenames: ["missing_screen.json"] }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: 0 });
+  });
+
+  it("returns 404 when workspace does not exist", async () => {
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "nonexistent", filenames: ["20260101_000000_screen.json"] }),
+    });
+    expect(res.status).toBe(404);
+    expect((await res.json<{ ok: boolean; error: string }>()).ok).toBe(false);
+  });
+
+  it("rejects path-traversal in filename", async () => {
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws", filenames: ["../other_screen.json"] }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+
+  it("rejects path-traversal in workspace", async () => {
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "../evil", filenames: ["20260101_000000_screen.json"] }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+
+  it("rejects empty filenames array", async () => {
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws", filenames: [] }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+});
+
+describe("POST /snapshots/clear-workspace (v0.12)", () => {
+  const SNAP_ROOT = makeSnapRoot("clear-workspace");
+
+  beforeEach(() => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+    createWorkspace(SNAP_ROOT, "test-ws", [
+      "20260101_000000_screen.json",
+      "20260101_000001_screen.json",
+    ]);
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+    try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it("deletes all _screen.json files and returns { ok: true, deleted: 2 }", async () => {
+    const res = await app.request("/snapshots/clear-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: 2 });
+    // Directory should still exist.
+    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws"))).toBe(true);
+    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws", "20260101_000000_screen.json"))).toBe(false);
+  });
+
+  it("returns deleted: 0 when workspace has no snapshot files", async () => {
+    // Create empty workspace (no files).
+    mkdirSync(pathJoin(SNAP_ROOT, "empty-ws"), { recursive: true });
+    const res = await app.request("/snapshots/clear-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "empty-ws" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: 0 });
+  });
+
+  it("returns 404 when workspace does not exist", async () => {
+    const res = await app.request("/snapshots/clear-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "nonexistent" }),
+    });
+    expect(res.status).toBe(404);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+
+  it("rejects path-traversal in workspace", async () => {
+    const res = await app.request("/snapshots/clear-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: ".." }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+});
+
+describe("POST /snapshots/delete-workspace (v0.12)", () => {
+  const SNAP_ROOT = makeSnapRoot("delete-workspace");
+
+  beforeEach(() => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+    createWorkspace(SNAP_ROOT, "test-ws", ["20260101_000000_screen.json"]);
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+    try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it("removes the workspace directory entirely and returns { ok: true }", async () => {
+    const res = await app.request("/snapshots/delete-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws"))).toBe(false);
+  });
+
+  it("resets lastWorkspace to empty string when deleted workspace matches", async () => {
+    // Simulate a render that sets lastWorkspace to "test-ws".
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "svg", payload: "<svg/>", options: { workspace: "test-ws" } }),
+    });
+    expect(getLastWorkspace()).toBe("test-ws");
+
+    await app.request("/snapshots/delete-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws" }),
+    });
+
+    expect(getLastWorkspace()).toBe("");
+  });
+
+  it("does NOT reset lastWorkspace when deleted workspace does not match", async () => {
+    createWorkspace(SNAP_ROOT, "other-ws", ["20260101_000000_screen.json"]);
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "svg", payload: "<svg/>", options: { workspace: "other-ws" } }),
+    });
+    expect(getLastWorkspace()).toBe("other-ws");
+
+    await app.request("/snapshots/delete-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws" }),
+    });
+
+    expect(getLastWorkspace()).toBe("other-ws");
+  });
+
+  it("returns 404 when workspace does not exist", async () => {
+    const res = await app.request("/snapshots/delete-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "nonexistent" }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/not found/);
+  });
+
+  it("rejects path-traversal in workspace", async () => {
+    const res = await app.request("/snapshots/delete-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "../evil" }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+});
