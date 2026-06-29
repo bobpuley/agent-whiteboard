@@ -3,6 +3,7 @@
 
 import { homedir } from "os";
 import { join } from "path";
+import { existsSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
 import type { ClickEvent } from "./events.js";
@@ -460,6 +461,105 @@ export function createApp(): Hono {
     }
 
     setLastWorkspace(workspace);
+    return c.json({ ok: true });
+  });
+
+  // ── Snapshot delete endpoints (v0.12) ─────────────────────────────────────
+
+  function resolveSnapshotRoot(): string {
+    return process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+  }
+
+  function validateWorkspaceForDelete(workspace: unknown, root: string): { workspace: string } | { error: string; status: number } {
+    if (typeof workspace !== "string" || workspace.length === 0) {
+      return { error: "workspace must be a non-empty string", status: 400 };
+    }
+    if (workspace.includes("/") || workspace.includes("\\") || workspace.includes("\0") || workspace === "..") {
+      return { error: "invalid workspace: path traversal not allowed", status: 400 };
+    }
+    const dir = join(root, workspace);
+    if (!existsSync(dir)) {
+      return { error: "workspace not found", status: 404 };
+    }
+    return { workspace };
+  }
+
+  app.post("/snapshots/delete-files", async (c) => {
+    const body = await c.req.json<{ workspace?: unknown; filenames?: unknown }>();
+    const root = resolveSnapshotRoot();
+    const validated = validateWorkspaceForDelete(body.workspace, root);
+    if ("error" in validated) {
+      return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
+    }
+    const { workspace } = validated;
+
+    if (!Array.isArray(body.filenames) || body.filenames.length === 0) {
+      return c.json({ ok: false, error: "filenames must be a non-empty array" }, 400);
+    }
+    const filenames = body.filenames as unknown[];
+    for (const f of filenames) {
+      if (typeof f !== "string") {
+        return c.json({ ok: false, error: "each filename must be a string" }, 400);
+      }
+      if (!/^[^/]+_screen\.json$/.test(f) || f.includes("..")) {
+        return c.json({ ok: false, error: `invalid filename: ${f}` }, 400);
+      }
+    }
+
+    const workspaceDir = join(root, workspace);
+    let deleted = 0;
+    for (const f of filenames as string[]) {
+      const fullPath = join(workspaceDir, f);
+      try {
+        unlinkSync(fullPath);
+        deleted++;
+      } catch {
+        // Missing files are silently skipped.
+      }
+    }
+    return c.json({ ok: true, deleted });
+  });
+
+  app.post("/snapshots/clear-workspace", async (c) => {
+    const body = await c.req.json<{ workspace?: unknown }>();
+    const root = resolveSnapshotRoot();
+    const validated = validateWorkspaceForDelete(body.workspace, root);
+    if ("error" in validated) {
+      return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
+    }
+    const { workspace } = validated;
+
+    const workspaceDir = join(root, workspace);
+    let files: string[];
+    try {
+      files = readdirSync(workspaceDir).filter((f) => f.endsWith("_screen.json"));
+    } catch {
+      files = [];
+    }
+
+    let deleted = 0;
+    for (const f of files) {
+      try {
+        unlinkSync(join(workspaceDir, f));
+        deleted++;
+      } catch { /* skip */ }
+    }
+    return c.json({ ok: true, deleted });
+  });
+
+  app.post("/snapshots/delete-workspace", async (c) => {
+    const body = await c.req.json<{ workspace?: unknown }>();
+    const root = resolveSnapshotRoot();
+    const validated = validateWorkspaceForDelete(body.workspace, root);
+    if ("error" in validated) {
+      return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
+    }
+    const { workspace } = validated;
+
+    rmSync(join(root, workspace), { recursive: true, force: true });
+    if (getLastWorkspace() === workspace) {
+      setLastWorkspace("");
+    }
     return c.json({ ok: true });
   });
 

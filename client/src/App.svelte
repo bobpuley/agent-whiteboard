@@ -58,6 +58,9 @@
       clickable = cmd.enabled;
       nodeActions = cmd.enabled ? (cmd.node_actions ?? {}) : undefined;
       if (cmd.enabled) nodeToFrameEnabled = false;
+    } else if (cmd.action === "set_done_armed") {
+      doneArmed = cmd.armed;
+      if (!doneArmed) { doneSent = false; if (doneTimer) { clearTimeout(doneTimer); doneTimer = null; } }
     }
   }
 
@@ -89,7 +92,8 @@
 
   let historyOpen = false;
 
-  // Done button — signals Claude Code via the channel server that the user finished exploring.
+  // Done button — shown only while wait_done() is armed on the server.
+  let doneArmed = false;
   let doneSent = false;
   let doneTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -157,15 +161,17 @@
     <button class="history-btn" on:click={() => { historyOpen = !historyOpen; }} aria-label="Toggle history panel" aria-pressed={historyOpen}>
       &#128337;
     </button>
-    <button class="done-btn" on:click={handleDone} disabled={doneSent} title="Done">
-      {#if doneSent}
-        Sent ✓
-      {:else}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      {/if}
-    </button>
+    {#if doneArmed}
+      <button class="done-btn" on:click={handleDone} disabled={doneSent} title="Done">
+        {#if doneSent}
+          Sent ✓
+        {:else}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        {/if}
+      </button>
+    {/if}
   </div>
 </main>
 

@@ -1,12 +1,21 @@
 // WebSocket push to all connected browser clients.
 
 import type WebSocket from "ws";
+import { getDoneArmed, setBroadcastFn } from "./events.js";
 
 const clients = new Set<WebSocket>();
+
+// Wire up the broadcast function so events.ts can push state changes without
+// a circular import.
+setBroadcastFn((msg) => broadcast(msg));
 
 export function addClient(ws: WebSocket): void {
   clients.add(ws);
   ws.on("close", () => clients.delete(ws));
+  // Push current armed state immediately so a fresh browser tab shows the right
+  // Done button visibility without waiting for the next state change.
+  const payload = JSON.stringify({ action: "set_done_armed", armed: getDoneArmed() });
+  if (ws.readyState === 1 /* OPEN */) ws.send(payload);
 }
 
 export function broadcast(message: object): void {
