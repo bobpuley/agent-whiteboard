@@ -1,3 +1,14 @@
+## 0.12.0 — 2026-06-29
+
+- **Done button conditional visibility:** the Done button is now hidden by default and only appears while `wait_done()` is armed on the server; `server/events.ts` tracks `doneArmed` state and calls `broadcastDoneArmed()` on every change; `server/ws.ts` pushes `{ action: "set_done_armed", armed: <current> }` to every new WebSocket connection so a fresh browser tab initialises correctly; `client/src/App.svelte` shows/hides the button reactively
+- **History panel — per-row delete:** each snapshot row shows a trash icon on hover; clicking it calls `POST /snapshots/delete-files` and removes the row immediately from the UI (no page reload)
+- **History panel — multi-select delete:** a pencil/edit icon in the panel header enters selection mode; the icon swaps to a recycle bin (confirming delete mode) and a yellow bar appears showing selection count + "Delete selected" + "Cancel"; checkboxes appear on all rows across all workspace sections; "Delete selected" calls `POST /snapshots/delete-files` for all checked items at once
+- **History panel — Clear workspace:** in selection mode, each workspace section shows a "Clear all" button that calls `POST /snapshots/clear-workspace`; deletes all snapshot files inside the workspace but leaves the folder and accordion row visible (empty)
+- **History panel — Delete workspace:** in selection mode, each workspace section shows a "Delete folder" button; after a browser confirm dialog, calls `POST /snapshots/delete-workspace` and removes the workspace section entirely from the panel
+- **Three new server endpoints (v0.12):** `POST /snapshots/delete-files`, `POST /snapshots/clear-workspace`, `POST /snapshots/delete-workspace` — all apply workspace and filename safe-name checks (same rules as `POST /snapshots/load`); `delete-workspace` resets `lastWorkspace` to `""` when the deleted workspace matches
+- **Header layout:** action buttons (pencil/recycle-bin, lock/unlock) right-aligned in the panel header with a vertical separator (`|`) before the close button
+- 16 new server unit tests for the three delete endpoints (172 total)
+
 ## 0.11.0 — 2026-06-27
 
 - **`render()` and `commit_step_frames()` now return `{ ok: true, id: "<uuid>" }`:** the UUID of the snapshot written for that call — agents can store this to retrieve the diagram later regardless of what else is rendered; `id` is omitted (non-fatal) if the snapshot write fails
