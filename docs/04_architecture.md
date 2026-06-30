@@ -15,6 +15,7 @@
 | MCP transport              | SSE (HTTP + Server-Sent Events)                                                                                                                                                                                                                                                                              | Server has its own lifecycle (also drives browser); SSE avoids a second process. stdio ruled out — requires Claude Code to spawn the server, but server must already be running for the browser.                                                       |
 | Frontend framework         | Svelte                                                                                                                                                                                                                                                                                                       | Minimal bundle, reactive by default, no virtual DOM overhead; replaceable at low cost given thin v1 UX                                                                                                                                                 |
 | Rendering libraries        | Mermaid.js ^11, KaTeX, vega-lite + vega-embed, DOMPurify (all npm, bundled by Vite)                                                                                                                                                                                                                         | Mermaid pinned to ^11 (breaking changes between major versions make floating risky). KaTeX, Vega-Lite, SVG/HTML (DOMPurify) added in Sprint 5 ✅. D2 and D3 deferred (D2 requires server-side render process; D3 is post-Phase-2 nice-to-have). |
+| Server-side rendering (export) | `happy-dom` (npm, server-only, v0.13) | DOM host for `mermaid.render()` and `DOMPurify` during HTML export. One `Window` instance per export call, torn down after all items are rendered. KaTeX and Vega-Lite do not require `happy-dom` (no DOM dependency). |
 | Transport (server→browser) | WebSocket                                                                                                                                                                                                                                                                                                    | Real-time incremental updates                                                                                                                                                                                                                          |
 | Packaging (v1)             | `npm run dev` — dev-only, no distribution concern yet                                                                                                                                                                                                                                                        | No remote repo yet; packaging deferred                                                                                                                                                                                                                 |
 | Dev server                 | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies `/render`, `/stream`, `/mcp` to Node. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2                                                                                                                                                  |
@@ -55,7 +56,8 @@
     │  • Right-side controls panel (v0.10): small fixed panel on right edge; contains history toggle + Done button (icon-only); replaces footer/bottom-right placement from v0.2–v0.9
     │  • History panel lock/unlock (v0.10): toggle in panel header; locked = panel stays open after snapshot load
     │  • Done button conditional visibility (v0.12): button hidden by default; shown only when server emits { action: "set_done_armed", armed: true }; hidden again on armed: false; server pushes current state to every new WebSocket connection
-    │  • History panel delete (v0.12): recycle bin icon in header activates selection mode; single/multi-select delete via POST /snapshots/delete-files; "Clear workspace" via POST /snapshots/clear-workspace; "Workspace delete" via POST /snapshots/delete-workspace
+    │  • History panel delete (v0.12; simplified v0.13): recycle bin icon in header activates selection mode; single/multi-select delete via POST /snapshots/delete-files; "Workspace delete" via POST /snapshots/delete-workspace. "Clear workspace" (POST /snapshots/clear-workspace) removed in v0.13.
+    │  • History panel export (v0.13): dedicated export icon in header enters export mode (parallel to delete mode, same checkbox-on-rows view); "Export selected" in select-bar for checked items; "Export workspace" on each workspace accordion header for one-click full-workspace export; both POST to POST /export-html and trigger browser download
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -170,9 +172,9 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /snapshots/delete-files` — v0.12. Body: `{ "workspace": "…", "filenames": ["…", …] }`. Workspace and filename safety checks same as `POST /snapshots/load`. Deletes matching files from disk; missing files silently skipped. Returns `{ ok: true, deleted: N }` (N = count of files actually removed). Handles single delete and multi-select delete with the same endpoint.
 
-`POST /snapshots/clear-workspace` — v0.12. Body: `{ "workspace": "…" }`. Workspace safety check. Deletes all `*_screen.json` files in `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/`; directory itself is preserved. Returns `{ ok: true, deleted: N }`.
-
 `POST /snapshots/delete-workspace` — v0.12. Body: `{ "workspace": "…" }`. Workspace safety check. Removes the entire workspace directory and all its contents (`rmdirSync` recursive). If the deleted workspace matches `lastWorkspace`, resets `lastWorkspace` to `""`. Returns `{ ok: true }`. Non-existent workspace returns `{ ok: false, error: "workspace not found" }`.
+
+`POST /export-html` — v0.13. Body: `{ "items": [{ "workspace": "…", "filename": "…" }] }`. Workspace and filename safety checks same as `POST /snapshots/load`. Renders each valid snapshot server-side (Mermaid via `mermaid.render()` + `happy-dom`; KaTeX via `katex.renderToString()`; Vega-Lite via `vega.View().toSVG()`; SVG/HTML via DOMPurify + `happy-dom`; step-frames expanded per frame). Unreadable or malformed snapshots silently skipped. Assembles a single self-contained HTML file (no external references, all CSS inline). Returns `Content-Type: text/html; charset=utf-8` with `Content-Disposition: attachment; filename="<name>-YYYYMMDD-HHmmss.html"` on success; `{ ok: false, error: "no valid items to export" }` (400) if no valid items remain after skipping. Implemented in `server/export-html.ts`.
 
 ---
 
@@ -385,6 +387,51 @@ Interaction with clear():
 - `POST /step-frames/:id/frame` — body: `{ payload, label? }` → `{ ok: true, frame_count: N }`. v0.9: also pushes partial step-frames to browser after each valid append (same as MCP `append_frame()`).
 - `POST /step-frames/:id/commit` — no body → `{ ok: true }`. v0.9: finalization only (snapshot, in-memory state, slideshow cancel, builder cleanup); final broadcast still sent for consistency.
 
+### HTML Export (v0.13)
+
+```
+[path A — "Export selected"]
+user enters export mode (clicks export icon in header) → checkboxes appear on all rows
+user checks ≥1 items → clicks "Export selected" in select-bar
+  → browser POSTs to /export-html: { items: [{ workspace, filename }, …] }
+
+[path B — "Export workspace"]
+user enters export mode → clicks "Export workspace" on a workspace accordion header
+  → browser collects all { workspace, filename } pairs for that workspace
+  → browser POSTs to /export-html: { items: [{ workspace, filename }, …] }
+
+  → server/export-html.ts receives request
+  → for each item:
+      → validate workspace (safe-name) and filename (no traversal)
+      → read snapshot JSON from <WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/<filename>
+      → IF unreadable or malformed: skip silently; continue
+  → IF no valid items remain: return { ok: false, error: "no valid items to export" } (400)
+  → create one happy-dom Window instance for this export call
+  → for each valid snapshot item:
+      → dispatch to renderer by type:
+          "mermaid"    → mermaid.render() using the happy-dom Window globals → SVG string
+          "katex"      → katex.renderToString(payload, { displayMode: true, throwOnError: false }) → HTML string
+          "vega-lite"  → vl.compile(spec).spec → vega.parse() → new vega.View().toSVG() → SVG string
+          "svg"        → DOMPurify(window).sanitize(payload, { USE_PROFILES: { svg: true } })
+          "html"       → DOMPurify(window).sanitize(payload, { USE_PROFILES: { html: true } })
+          "step-frames"→ expand each frame → render each frame by frame_type (recursive)
+      → IF render fails: replace content with inline <p class="export-error">error message</p>
+  → tear down happy-dom Window
+  → assemble HTML document:
+      → <nav>: table of contents — workspace list → item list (linking to section anchors)
+      → <main>: workspace <section id="ws-{name}"> → item <section id="item-{id}">
+          → for step-frames: frame sub-sections <section class="frame" id="item-{id}-frame-{n}">
+      → <style>: layout CSS always included; KaTeX CSS included only when ≥1 katex items present
+      → ordering: items within workspace sorted chronologically (oldest first by timestamp);
+                  workspaces ordered by their earliest item's timestamp
+  → determine download filename:
+      → single workspace: sanitize name (non-[a-zA-Z0-9_.-] → "-", truncate to 24 chars) + "-" + timestamp
+      → multiple workspaces: "export-" + timestamp
+  → return response: Content-Type: text/html; charset=utf-8
+                      Content-Disposition: attachment; filename="<name>-YYYYMMDD-HHmmss.html"
+  → browser receives response → triggers download via <a download> element
+```
+
 ### Node Click Flow (Phase 2 — Sprint 12 plain click)
 
 ```
@@ -517,6 +564,7 @@ agent-whiteboard/
 │   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
 │   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18)
 │   ├── step-frames-builder.ts  # in-memory map of id → partial step-frames state; TTL cleanup (v0.8)
+│   ├── export-html.ts    # server-side rendering + HTML assembly for POST /export-html (v0.13)
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/

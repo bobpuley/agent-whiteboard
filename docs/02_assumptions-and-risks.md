@@ -239,10 +239,31 @@ Risks from moving the three test roots:
 - Risk: accidental bulk deletion (e.g. "Workspace delete") destroys snapshots that cannot be recovered.
 - Mitigation: require a confirmation step for "Clear workspace" and "Workspace delete" actions; single-item delete may proceed without confirmation.
 
-**K2 — Workspace delete removes the OS directory (FR12, v0.12)**
-> ⚠️ ASSUMPTION: "Workspace delete" calls `fs.rmdirSync` (or equivalent) on the workspace directory, removing it entirely. "Clear workspace" deletes all `*_screen.json` files but does not remove the directory itself.
+**K2 — Workspace delete removes the OS directory (FR12, v0.12; Clear workspace removed v0.13)**
+> ✅ DECISION (v0.13): "Clear workspace" is removed — it has the same high-level effect as "Workspace delete" with the added complexity of leaving behind an empty directory and an empty accordion row. `POST /snapshots/clear-workspace` server endpoint and corresponding UI button are removed. Only one bulk workspace operation remains: "Workspace delete", which calls `fs.rmdirSync` (or equivalent) and removes the directory and all its contents.
 - Risk: if non-snapshot files exist inside a workspace directory (e.g. user placed other files there), "Workspace delete" removes them too.
 - Decision: document clearly in UI that the operation removes all contents of the workspace folder. No scanning or selective removal in v1.
 
 **J1 — Snapshot schema gains an `id` field (FR7, v0.11 planned)**
 > ⚠️ ASSUMPTION (v0.11): Each snapshot JSON file will include a `id` UUID field generated at write time. Old snapshot files written before v0.11 will not have this field — the server must handle `id: undefined` gracefully (treat as non-exportable by ID). The `render()` and `commit_step_frames()` success responses will include the generated `id` field. Adding a new field to the snapshot schema and MCP response is backward-compatible: existing consumers ignore unknown fields.
+
+---
+
+## L. HTML Export (v0.13)
+
+**L1 — `happy-dom` provides a sufficient DOM environment for server-side Mermaid rendering**
+> ⚠️ ASSUMPTION: `mermaid.render()` can be called in a Node.js process when `happy-dom` provides `document`, `window`, and SVG DOM globals. The produced SVG is deterministic and complete.
+- Risk: `happy-dom` may not faithfully replicate all browser APIs that Mermaid.js depends on (e.g. `getBoundingClientRect`, layout metrics). Some diagram types may produce incomplete SVGs or throw.
+- Mitigation: per-item error isolation — a render failure replaces that item's content area with an inline error message; the overall export continues.
+- Risk: `happy-dom` APIs may change across versions. Pin at install time.
+
+**L2 — KaTeX runs server-side without a DOM**
+> ✅ ASSUMPTION: `katex.renderToString(source, { displayMode: true, throwOnError: false })` does not require a browser DOM and can be called directly in Node.js. This is a documented property of KaTeX (it is specifically designed for server-side use).
+
+**L3 — Vega-Lite can be compiled and rendered to SVG in Node.js**
+> ⚠️ ASSUMPTION: The pipeline `vl.compile(spec).spec` → `vega.parse()` → `new vega.View().toSVG()` works in Node.js without a full browser environment. Vega's Node.js support is documented.
+- Risk: Vega chart types that use canvas-backed rendering may fail server-side.
+- Mitigation: per-item error isolation (same as L1).
+
+**L4 — DOMPurify sanitization shares the `happy-dom` Window with Mermaid rendering**
+> ✅ DECISION: One `happy-dom` Window instance is created per export call and reused for both `mermaid.render()` and `DOMPurify` (with `USE_PROFILES: { svg: true }` for SVG payloads, `{ html: true }` for HTML payloads). The Window is torn down after all items are rendered.

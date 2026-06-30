@@ -16,6 +16,8 @@ import type { Slide } from "./slideshow.js";
 import { saveSnapshot } from "./snapshot.js";
 import { findSnapshotById, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
+import { generateExportHtml } from "./export-html.js";
+import type { ValidatedExportItem } from "./export-html.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -520,33 +522,6 @@ export function createApp(): Hono {
     return c.json({ ok: true, deleted });
   });
 
-  app.post("/snapshots/clear-workspace", async (c) => {
-    const body = await c.req.json<{ workspace?: unknown }>();
-    const root = resolveSnapshotRoot();
-    const validated = validateWorkspaceForDelete(body.workspace, root);
-    if ("error" in validated) {
-      return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
-    }
-    const { workspace } = validated;
-
-    const workspaceDir = join(root, workspace);
-    let files: string[];
-    try {
-      files = readdirSync(workspaceDir).filter((f) => f.endsWith("_screen.json"));
-    } catch {
-      files = [];
-    }
-
-    let deleted = 0;
-    for (const f of files) {
-      try {
-        unlinkSync(join(workspaceDir, f));
-        deleted++;
-      } catch { /* skip */ }
-    }
-    return c.json({ ok: true, deleted });
-  });
-
   app.post("/snapshots/delete-workspace", async (c) => {
     const body = await c.req.json<{ workspace?: unknown }>();
     const root = resolveSnapshotRoot();
@@ -561,6 +536,64 @@ export function createApp(): Hono {
       setLastWorkspace("");
     }
     return c.json({ ok: true });
+  });
+
+  // ── HTML Export (v0.13) ────────────────────────────────────────────────────
+
+  app.post("/export-html", async (c) => {
+    const body = await c.req.json<{ items?: unknown }>();
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return c.json({ ok: false, error: "items must be a non-empty array" }, 400);
+    }
+
+    const root = resolveSnapshotRoot();
+    const validItems: ValidatedExportItem[] = [];
+
+    for (const item of body.items as unknown[]) {
+      if (typeof item !== "object" || item === null) continue;
+      const { workspace, filename } = item as Record<string, unknown>;
+
+      if (typeof workspace !== "string" || typeof filename !== "string") continue;
+      if (workspace.includes("/") || workspace.includes("\\") || workspace.includes("\0") || workspace === "..") continue;
+      if (!/^[^/]+_screen\.json$/.test(filename) || filename.includes("..")) continue;
+
+      const raw = loadSnapshotContent(workspace, root, filename);
+      if (raw === null) continue;
+
+      let record: { type?: unknown; payload?: unknown; timestamp?: unknown; options?: { title?: string } };
+      try {
+        record = JSON.parse(raw) as typeof record;
+      } catch {
+        continue;
+      }
+
+      if (typeof record.type !== "string" || typeof record.payload !== "string" || typeof record.timestamp !== "string") continue;
+
+      validItems.push({
+        workspace,
+        filename,
+        record: {
+          type: record.type,
+          payload: record.payload,
+          timestamp: record.timestamp,
+          options: record.options,
+        },
+      });
+    }
+
+    if (validItems.length === 0) {
+      return c.json({ ok: false, error: "no valid items to export" }, 400);
+    }
+
+    const { html, downloadFilename } = await generateExportHtml(validItems);
+
+    return new Response(html, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${downloadFilename}"`,
+      },
+    });
   });
 
   return app;

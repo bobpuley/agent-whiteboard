@@ -2300,68 +2300,6 @@ describe("POST /snapshots/delete-files (v0.12)", () => {
   });
 });
 
-describe("POST /snapshots/clear-workspace (v0.12)", () => {
-  const SNAP_ROOT = makeSnapRoot("clear-workspace");
-
-  beforeEach(() => {
-    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
-    createWorkspace(SNAP_ROOT, "test-ws", [
-      "20260101_000000_screen.json",
-      "20260101_000001_screen.json",
-    ]);
-  });
-
-  afterEach(() => {
-    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
-    try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
-  });
-
-  it("deletes all _screen.json files and returns { ok: true, deleted: 2 }", async () => {
-    const res = await app.request("/snapshots/clear-workspace", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace: "test-ws" }),
-    });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, deleted: 2 });
-    // Directory should still exist.
-    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws"))).toBe(true);
-    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws", "20260101_000000_screen.json"))).toBe(false);
-  });
-
-  it("returns deleted: 0 when workspace has no snapshot files", async () => {
-    // Create empty workspace (no files).
-    mkdirSync(pathJoin(SNAP_ROOT, "empty-ws"), { recursive: true });
-    const res = await app.request("/snapshots/clear-workspace", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace: "empty-ws" }),
-    });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, deleted: 0 });
-  });
-
-  it("returns 404 when workspace does not exist", async () => {
-    const res = await app.request("/snapshots/clear-workspace", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace: "nonexistent" }),
-    });
-    expect(res.status).toBe(404);
-    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
-  });
-
-  it("rejects path-traversal in workspace", async () => {
-    const res = await app.request("/snapshots/clear-workspace", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workspace: ".." }),
-    });
-    expect(res.status).toBe(400);
-    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
-  });
-});
-
 describe("POST /snapshots/delete-workspace (v0.12)", () => {
   const SNAP_ROOT = makeSnapRoot("delete-workspace");
 
@@ -2442,5 +2380,140 @@ describe("POST /snapshots/delete-workspace (v0.12)", () => {
     });
     expect(res.status).toBe(400);
     expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+  });
+});
+
+// ── v0.13 — HTML Export ───────────────────────────────────────────────────────
+
+describe("POST /export-html (v0.13)", () => {
+  const VALID_KATEX_RECORD = JSON.stringify({
+    type: "katex",
+    payload: "x^2 + y^2 = r^2",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  });
+
+  beforeEach(() => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = makeSnapRoot("export-html");
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockClear();
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+  });
+
+  it("returns 400 when items is missing", async () => {
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).ok).toBe(false);
+  });
+
+  it("returns 400 when items is an empty array", async () => {
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [] }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).ok).toBe(false);
+  });
+
+  it("returns 400 when workspace contains path-traversal characters", async () => {
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "../evil", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
+  });
+
+  it("returns 400 when filename does not match the safe pattern", async () => {
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "../evil.json" }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
+  });
+
+  it("returns 400 when all snapshots are unreadable (loadSnapshotContent returns null)", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(null);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
+  });
+
+  it("skips unreadable snapshot and still exports the remaining valid item", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent)
+      .mockReturnValueOnce(null)                // first item: unreadable
+      .mockReturnValueOnce(VALID_KATEX_RECORD); // second item: valid
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [
+          { workspace: "my-ws", filename: "20260101_000000_screen.json" },
+          { workspace: "my-ws", filename: "20260101_000001_screen.json" },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/html/);
+  });
+
+  it("returns 200 with HTML body and correct headers for a valid single-workspace export", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_KATEX_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toMatch(/text\/html/);
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    expect(disposition).toContain("attachment");
+    expect(disposition).toMatch(/my-ws/);
+    const body = await res.text();
+    expect(body).toContain("<!DOCTYPE html>");
+  });
+
+  it("uses 'export-' filename prefix when items span multiple workspaces", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_KATEX_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [
+          { workspace: "ws-a", filename: "20260101_000000_screen.json" },
+          { workspace: "ws-b", filename: "20260101_000001_screen.json" },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    expect(disposition).toMatch(/export-/);
   });
 });
