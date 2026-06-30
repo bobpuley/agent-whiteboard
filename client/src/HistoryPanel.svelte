@@ -20,7 +20,7 @@
   let loading = false;
   let error = "";
   let locked = false;
-  let selectMode = false;
+  let selectionMode: "delete" | "export" | null = null;
   // key: "workspace/filename"
   let selected = new Set<string>();
 
@@ -29,7 +29,7 @@
   // Reset ephemeral state when panel closes.
   $: if (!open) {
     locked = false;
-    selectMode = false;
+    selectionMode = null;
     selected = new Set();
   }
 
@@ -52,7 +52,7 @@
   }
 
   async function loadSnapshot(workspace: string, filename: string) {
-    if (selectMode) {
+    if (selectionMode !== null) {
       toggleSelect(workspace, filename);
       return;
     }
@@ -87,9 +87,13 @@
 
   $: hasAnySnapshot = workspaces.some((g) => g.snapshots.length > 0);
 
-  function toggleSelectMode() {
-    selectMode = !selectMode;
-    if (!selectMode) selected = new Set();
+  function enterMode(mode: "delete" | "export") {
+    if (selectionMode === mode) {
+      selectionMode = null;
+    } else {
+      selectionMode = mode;
+    }
+    selected = new Set();
   }
 
   function toggleSelect(workspace: string, filename: string) {
@@ -105,7 +109,6 @@
   }
 
   async function deleteSelected() {
-    // Group selected items by workspace.
     const byWorkspace = new Map<string, string[]>();
     for (const key of selected) {
       const slash = key.indexOf("/");
@@ -123,26 +126,12 @@
         });
       } catch { /* ignore */ }
     }
-    // Optimistically remove from UI.
     workspaces = workspaces.map((g) => ({
       ...g,
       snapshots: g.snapshots.filter((s) => !selected.has(`${g.name}/${s.filename}`)),
     }));
     selected = new Set();
-    selectMode = false;
-  }
-
-  async function clearWorkspace(workspace: string) {
-    try {
-      await fetch("/snapshots/clear-workspace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspace }),
-      });
-    } catch { /* ignore */ }
-    workspaces = workspaces.map((g) =>
-      g.name === workspace ? { ...g, snapshots: [] } : g
-    );
+    selectionMode = null;
   }
 
   async function deleteWorkspace(workspace: string) {
@@ -159,6 +148,51 @@
     } catch { /* ignore */ }
     workspaces = workspaces.filter((g) => g.name !== workspace);
   }
+
+  async function triggerDownload(res: Response) {
+    const contentDisposition = res.headers.get("Content-Disposition") ?? "";
+    const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+    const filename = filenameMatch?.[1] ?? "export.html";
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportItems(items: Array<{ workspace: string; filename: string }>) {
+    try {
+      const res = await fetch("/export-html", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (!res.ok) return;
+      await triggerDownload(res);
+    } catch { /* ignore */ }
+  }
+
+  async function exportSelected() {
+    const items: Array<{ workspace: string; filename: string }> = [];
+    for (const key of selected) {
+      const slash = key.indexOf("/");
+      items.push({ workspace: key.slice(0, slash), filename: key.slice(slash + 1) });
+    }
+    await exportItems(items);
+    selected = new Set();
+    selectionMode = null;
+  }
+
+  async function exportWorkspace(workspace: string) {
+    const group = workspaces.find((g) => g.name === workspace);
+    if (!group) return;
+    const items = group.snapshots.map((s) => ({ workspace, filename: s.filename }));
+    await exportItems(items);
+  }
 </script>
 
 {#if open}
@@ -166,36 +200,36 @@
     <div class="panel-header">
       <span class="panel-title">History</span>
       <div class="header-actions">
-        {#if !selectMode}
-          <!-- Edit mode entry: pencil icon, visible by default -->
-          <button
-            class="action-btn"
-            on:click={toggleSelectMode}
-            aria-label="Edit — enter selection/delete mode"
-            title="Edit (select and delete snapshots)"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </button>
-        {:else}
-          <!-- Recycle bin icon, visible in selection/delete mode -->
-          <button
-            class="action-btn active"
-            on:click={toggleSelectMode}
-            aria-label="Exit selection/delete mode"
-            title="Exit delete mode"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6"/>
-              <path d="M14 11v6"/>
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-            </svg>
-          </button>
-        {/if}
+        <!-- Recycle bin: enter/exit delete mode; switches from export mode to delete mode -->
+        <button
+          class="action-btn"
+          class:active={selectionMode === "delete"}
+          on:click={() => enterMode("delete")}
+          aria-label={selectionMode === "delete" ? "Exit delete mode" : "Enter delete mode"}
+          title="Delete snapshots"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/>
+            <path d="M14 11v6"/>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+          </svg>
+        </button>
+        <!-- Export/download icon: enter/exit export mode; switches from delete mode to export mode -->
+        <button
+          class="action-btn"
+          class:active={selectionMode === "export"}
+          on:click={() => enterMode("export")}
+          aria-label={selectionMode === "export" ? "Exit export mode" : "Enter export mode"}
+          title="Export snapshots to HTML"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
         <button
           class="action-btn"
           class:locked
@@ -221,14 +255,24 @@
       </div>
     </div>
 
-    {#if selectMode}
-      <div class="select-bar">
-        <span class="select-count">{selected.size === 0 ? "Select snapshots to delete" : `${selected.size} selected`}</span>
+    {#if selectionMode !== null}
+      <div class="select-bar" class:export-bar={selectionMode === "export"}>
+        <span class="select-count">
+          {#if selected.size === 0}
+            {selectionMode === "delete" ? "Select snapshots to delete" : "Select snapshots to export"}
+          {:else}
+            {selected.size} selected
+          {/if}
+        </span>
         <div class="select-bar-actions">
           {#if selected.size > 0}
-            <button class="delete-selected-btn" on:click={deleteSelected}>Delete selected</button>
+            {#if selectionMode === "delete"}
+              <button class="delete-selected-btn" on:click={deleteSelected}>Delete selected</button>
+            {:else}
+              <button class="export-selected-btn" on:click={exportSelected}>Export selected</button>
+            {/if}
           {/if}
-          <button class="cancel-select-btn" on:click={toggleSelectMode}>Cancel</button>
+          <button class="cancel-select-btn" on:click={() => enterMode(selectionMode)}>Cancel</button>
         </div>
       </div>
     {/if}
@@ -249,25 +293,28 @@
                 <span class="current-badge">current</span>
               {/if}
             </summary>
-            {#if selectMode}
+            {#if selectionMode !== null}
               <div class="ws-actions-bar">
                 <span class="ws-actions-label">Workspace:</span>
-                <button
-                  class="ws-action-btn"
-                  on:click={() => clearWorkspace(group.name)}
-                  title="Delete all snapshots in this workspace (keeps folder)"
-                >Clear all</button>
-                <button
-                  class="ws-action-btn ws-action-delete"
-                  on:click={() => deleteWorkspace(group.name)}
-                  title="Delete workspace folder and all its snapshots"
-                >Delete folder</button>
+                {#if selectionMode === "delete"}
+                  <button
+                    class="ws-action-btn ws-action-delete"
+                    on:click={() => deleteWorkspace(group.name)}
+                    title="Delete workspace folder and all its snapshots"
+                  >Delete folder</button>
+                {:else}
+                  <button
+                    class="ws-action-btn ws-action-export"
+                    on:click={() => exportWorkspace(group.name)}
+                    title="Export all snapshots in this workspace to HTML"
+                  >Export workspace</button>
+                {/if}
               </div>
             {/if}
             <ul class="snapshot-list">
               {#each group.snapshots as entry (group.name + "/" + entry.filename)}
                 <li class="snapshot-item" class:selected={isSelected(group.name, entry.filename)}>
-                  {#if selectMode}
+                  {#if selectionMode !== null}
                     <label class="snapshot-checkbox-label">
                       <input
                         type="checkbox"
@@ -284,7 +331,7 @@
                       <span class="snapshot-time">{formatTimestamp(entry.timestamp)}</span>
                     </span>
                   </button>
-                  {#if !selectMode}
+                  {#if selectionMode === null}
                     <button
                       class="row-delete-btn"
                       on:click|stopPropagation={async () => {
@@ -420,6 +467,11 @@
     gap: 8px;
   }
 
+  .select-bar.export-bar {
+    background: #e8f4fd;
+    border-bottom-color: #90caf9;
+  }
+
   .select-count {
     color: #555;
     flex: 1;
@@ -444,6 +496,21 @@
 
   .delete-selected-btn:hover {
     background: #c0392b;
+  }
+
+  .export-selected-btn {
+    background: #2980b9;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .export-selected-btn:hover {
+    background: #1f6699;
   }
 
   .cancel-select-btn {
@@ -576,6 +643,15 @@
 
   .ws-action-delete:hover {
     background: #fdf0f0;
+  }
+
+  .ws-action-export {
+    border-color: #2980b9;
+    color: #2980b9;
+  }
+
+  .ws-action-export:hover {
+    background: #e8f4fd;
   }
 
   .snapshot-list {

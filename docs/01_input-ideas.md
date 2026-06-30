@@ -313,15 +313,17 @@ Add a small toggle button to the history panel's header that locks or unlocks th
 The Done button in the right-side controls panel should only be visible when the agent has called `wait_done()` (i.e. the server is armed and waiting for the signal). When `wait_done()` is not active, the Done button is hidden. When `wait_done()` resolves or times out, the button is hidden again. Rationale: showing the Done button at all times is confusing — clicking it has no effect unless the agent armed it.
 
 **FR12 — History panel delete functionality**
-The history panel should support four delete operations:
+The history panel supports three delete operations:
 1. **Single delete** — delete an individual snapshot item.
 2. **Select items + delete** — select multiple items (across one or more workspaces) and delete them in one action.
-3. **"Clear workspace"** — shortcut to delete all snapshot files inside a workspace. The workspace folder remains on disk and the accordion row stays in the panel (now empty).
-4. **"Workspace delete"** — delete the workspace folder and all its snapshot files. The accordion row disappears from the panel entirely.
-Resolved distinction (2026-06-29): "Clear workspace" leaves an empty workspace row visible; "Workspace delete" removes the row.
+3. **"Workspace delete"** — delete the workspace folder and all its snapshot files. The accordion row disappears from the panel entirely.
+Decision (2026-06-30): "Clear workspace" (delete files, keep directory, leave empty accordion row) is removed — it has the same high-level effect as "Workspace delete" and adds complexity without user value. `POST /snapshots/clear-workspace` is removed in v0.13.
 
 **FR13 — Recycle bin icon + history panel header layout**
 Add a recycle bin (trash) icon button to the history panel's header. This button controls the delete action (e.g. enters delete/selection mode). All action buttons in the header (recycle bin, lock/unlock, and any future controls) should be aligned to the right, with a vertical separator between the action button group and the close button.
+
+**FR14 — Export selected snapshots to self-contained HTML**
+From the HistoryPanel in selection mode, an "Export selected" button appears in the select-bar alongside "Delete selected", visible only when at least one item is checked. Clicking it POSTs the selected `{ workspace, filename }` pairs to `POST /export-html`, receives a self-contained HTML file, and triggers a browser download. The HTML file contains all selected snapshots rendered as static content — Mermaid as inline SVG, KaTeX as HTML string, Vega-Lite as inline SVG, SVG/HTML as sanitized markup. Step-frames sequences are expanded into frame sub-sections. The file requires no external network requests (all CSS inline; KaTeX CSS only when ≥1 KaTeX items are present). New server-side dependency: `happy-dom` for Mermaid rendering and DOMPurify. Per-item render failure shows an inline error message — the overall export continues.
 
 ---
 
