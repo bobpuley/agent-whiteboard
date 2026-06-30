@@ -1,3 +1,12 @@
+## 0.13.0 — 2026-06-30
+
+- **HTML Export (`POST /export-html`):** exports one or more selected snapshots to a single fully self-contained HTML file (no external network requests); server-side rendering pipeline handles all snapshot types — KaTeX via `katex.renderToString`, Vega-Lite via `vl.compile` → `vega.View.toSVG`, SVG/HTML via DOMPurify + happy-dom, Mermaid via `mermaid.render` in a happy-dom Window with DOMPurify module patched for Node.js compatibility; items with render failures show an inline error message and do not block the rest of the export
+- **Download filename:** single-workspace exports use the sanitised workspace name (`<name>-YYYYMMDD-HHmmss.html`); multi-workspace exports use `export-YYYYMMDD-HHmmss.html`
+- **History panel — Export mode:** new export icon button in the panel header enters export mode (`selectionMode: 'delete' | 'export' | null`); select-bar shows "Export selected" (blue) when ≥1 item checked; each workspace accordion shows "Export workspace" to export all snapshots in that workspace without individual selection; clicking the opposite mode icon switches modes immediately without a cancel step
+- **Clear workspace removed:** `POST /snapshots/clear-workspace` endpoint removed — it was functionally equivalent to workspace-delete from the user's perspective; "Clear all" button removed from HistoryPanel selection mode; three clear-workspace server tests removed
+- **`happy-dom` dependency added** for server-side DOM host (DOMPurify + Mermaid SSR)
+- 8 new server unit tests for `POST /export-html` (validation, path-traversal safety, malformed-snapshot skipping, single/multi-workspace filename format, HTML body/headers) — 176 total
+
 ## 0.12.0 — 2026-06-29
 
 - **Done button conditional visibility:** the Done button is now hidden by default and only appears while `wait_done()` is armed on the server; `server/events.ts` tracks `doneArmed` state and calls `broadcastDoneArmed()` on every change; `server/ws.ts` pushes `{ action: "set_done_armed", armed: <current> }` to every new WebSocket connection so a fresh browser tab initialises correctly; `client/src/App.svelte` shows/hides the button reactively
