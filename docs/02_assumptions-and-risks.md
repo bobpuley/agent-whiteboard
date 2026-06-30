@@ -229,5 +229,20 @@ Risks from moving the three test roots:
 > ⚠️ ASSUMPTION (v0.10): Moving the History toggle and Done button to a small right side panel is a pure client-side refactor. No server-side changes required. The Done button's click handler (`POST /user-done`) is unchanged; only its DOM placement and label change.
 - Risk: the right panel could occlude content on narrow viewports. Accepted: target audience is developers on workstations; narrow-viewport use is out of scope for v1.
 
+**H8 — Done button arm state must be resent on WebSocket reconnect (FR11, v0.12)**
+> ⚠️ ASSUMPTION: When a new browser connection opens (or the page reloads) while `wait_done()` is currently armed on the server, the server must emit the `set_done_armed: true` event to the new connection so the Done button appears correctly.
+- Risk: if the server only emits `set_done_armed` at call time (not on connect), a page refresh while `wait_done()` is in progress will leave the Done button hidden. The user cannot signal they are done until the agent times out (10 minutes).
+- Mitigation: server tracks current `doneArmed` state in-memory; on WebSocket connect, immediately pushes `{ action: "set_done_armed", armed: <current state> }` to the new connection.
+
+**K1 — Snapshot deletion is permanent (FR12, v0.12)**
+> ⚠️ ASSUMPTION: Deleting a snapshot or workspace from the history panel permanently removes files from the user's `~/.agent-whiteboard/` directory. There is no undo, no trash/recycle bin, and no soft-delete mechanism.
+- Risk: accidental bulk deletion (e.g. "Workspace delete") destroys snapshots that cannot be recovered.
+- Mitigation: require a confirmation step for "Clear workspace" and "Workspace delete" actions; single-item delete may proceed without confirmation.
+
+**K2 — Workspace delete removes the OS directory (FR12, v0.12)**
+> ⚠️ ASSUMPTION: "Workspace delete" calls `fs.rmdirSync` (or equivalent) on the workspace directory, removing it entirely. "Clear workspace" deletes all `*_screen.json` files but does not remove the directory itself.
+- Risk: if non-snapshot files exist inside a workspace directory (e.g. user placed other files there), "Workspace delete" removes them too.
+- Decision: document clearly in UI that the operation removes all contents of the workspace folder. No scanning or selective removal in v1.
+
 **J1 — Snapshot schema gains an `id` field (FR7, v0.11 planned)**
 > ⚠️ ASSUMPTION (v0.11): Each snapshot JSON file will include a `id` UUID field generated at write time. Old snapshot files written before v0.11 will not have this field — the server must handle `id: undefined` gracefully (treat as non-exportable by ID). The `render()` and `commit_step_frames()` success responses will include the generated `id` field. Adding a new field to the snapshot schema and MCP response is backward-compatible: existing consumers ignore unknown fields.

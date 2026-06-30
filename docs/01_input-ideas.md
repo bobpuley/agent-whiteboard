@@ -309,6 +309,20 @@ Move the History toggle button and the Done button out of the footer and into a 
 **FR10 — Lock/unlock toggle on history panel header**
 Add a small toggle button to the history panel's header that locks or unlocks the panel. When unlocked (default): clicking a snapshot loads it and closes the panel automatically (current behavior). When locked: clicking a snapshot loads it but the panel stays open, allowing the user to browse and load multiple snapshots without reopening the panel each time.
 
+**FR11 — "Done" button conditional visibility**
+The Done button in the right-side controls panel should only be visible when the agent has called `wait_done()` (i.e. the server is armed and waiting for the signal). When `wait_done()` is not active, the Done button is hidden. When `wait_done()` resolves or times out, the button is hidden again. Rationale: showing the Done button at all times is confusing — clicking it has no effect unless the agent armed it.
+
+**FR12 — History panel delete functionality**
+The history panel should support four delete operations:
+1. **Single delete** — delete an individual snapshot item.
+2. **Select items + delete** — select multiple items (across one or more workspaces) and delete them in one action.
+3. **"Clear workspace"** — shortcut to delete all snapshot files inside a workspace. The workspace folder remains on disk and the accordion row stays in the panel (now empty).
+4. **"Workspace delete"** — delete the workspace folder and all its snapshot files. The accordion row disappears from the panel entirely.
+Resolved distinction (2026-06-29): "Clear workspace" leaves an empty workspace row visible; "Workspace delete" removes the row.
+
+**FR13 — Recycle bin icon + history panel header layout**
+Add a recycle bin (trash) icon button to the history panel's header. This button controls the delete action (e.g. enters delete/selection mode). All action buttons in the header (recycle bin, lock/unlock, and any future controls) should be aligned to the right, with a vertical separator between the action button group and the close button.
+
 ---
 
 ## Bug Reports

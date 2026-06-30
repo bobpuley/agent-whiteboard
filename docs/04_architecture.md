@@ -54,6 +54,8 @@
     │  • History panel workspace accordion (v0.5): toggle button → GET /snapshots/all → accordion grouped by workspace (current auto-expanded); click entry → POST /snapshots/load { workspace, filename } → canvas updated
     │  • Right-side controls panel (v0.10): small fixed panel on right edge; contains history toggle + Done button (icon-only); replaces footer/bottom-right placement from v0.2–v0.9
     │  • History panel lock/unlock (v0.10): toggle in panel header; locked = panel stays open after snapshot load
+    │  • Done button conditional visibility (v0.12): button hidden by default; shown only when server emits { action: "set_done_armed", armed: true }; hidden again on armed: false; server pushes current state to every new WebSocket connection
+    │  • History panel delete (v0.12): recycle bin icon in header activates selection mode; single/multi-select delete via POST /snapshots/delete-files; "Clear workspace" via POST /snapshots/clear-workspace; "Workspace delete" via POST /snapshots/delete-workspace
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -166,6 +168,12 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /snapshots/load` — v0.4 (Sprint 17), extended in v0.5 (Sprint 18). Body: `{ "filename": "…" }` (current workspace) or `{ "filename": "…", "workspace": "…" }` (explicit workspace). Filename safety: must match `*_screen.json`, no `/` or `..`. Workspace safety (when provided): plain directory name only — no path separators, no `..`, no null bytes; must exist under `WHITEBOARD_SNAPSHOTS_DIR`. Reads the snapshot, validates its payload (same hard gate as `POST /render`), broadcasts to browser via WebSocket, updates in-memory canvas state. **Write-silent:** does NOT call `saveSnapshot()`. Returns `{ ok: true }` or `{ ok: false, error: "…" }` (file not found, path-safety failure, or invalid payload).
 
+`POST /snapshots/delete-files` — v0.12. Body: `{ "workspace": "…", "filenames": ["…", …] }`. Workspace and filename safety checks same as `POST /snapshots/load`. Deletes matching files from disk; missing files silently skipped. Returns `{ ok: true, deleted: N }` (N = count of files actually removed). Handles single delete and multi-select delete with the same endpoint.
+
+`POST /snapshots/clear-workspace` — v0.12. Body: `{ "workspace": "…" }`. Workspace safety check. Deletes all `*_screen.json` files in `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/`; directory itself is preserved. Returns `{ ok: true, deleted: N }`.
+
+`POST /snapshots/delete-workspace` — v0.12. Body: `{ "workspace": "…" }`. Workspace safety check. Removes the entire workspace directory and all its contents (`rmdirSync` recursive). If the deleted workspace matches `lastWorkspace`, resets `lastWorkspace` to `""`. Returns `{ ok: true }`. Non-existent workspace returns `{ ok: false, error: "workspace not found" }`.
+
 ---
 
 ## 4. Data Flows
@@ -239,13 +247,29 @@ agent calls export()
 ### Done Signal
 
 ```
+agent calls wait_done()
+  → server sets doneArmed = true  (in-memory flag in events.ts)
+  → server pushes { action: "set_done_armed", armed: true } to browser via WebSocket
+  → browser shows Done button
+
 user clicks Done button in browser
   → browser fires POST /user-done to Hono server
   → server calls signalDone()  (events.ts EventEmitter bus)
   → all pending waitForDone() promises resolve
   → any suspended wait_done() MCP tool calls return { ok: true } to agent
+  → server sets doneArmed = false
+  → server pushes { action: "set_done_armed", armed: false } to browser via WebSocket
+  → browser hides Done button
   → server also forwards to channel relay on port 3001 (if running)
-  → browser button shows "Sent ✓" for 2s
+  → browser button shows "Sent ✓" for 2s before hiding
+
+On WebSocket connect (new connection or page reload):
+  → server immediately pushes { action: "set_done_armed", armed: <current doneArmed> }
+  → browser initialises Done button visibility correctly (see H8)
+
+Timeout (10 minutes with no click):
+  → waitForDone() resolves with { ok: true }
+  → server sets doneArmed = false and pushes armed: false to browser
 ```
 
 ### Slideshow Command (Phase 2 — Sprint 9)

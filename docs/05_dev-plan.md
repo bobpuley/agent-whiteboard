@@ -15,6 +15,6 @@
 | v0.9 | Live Step-Frames Preview | 22 | released    | [Milestone_v0.9.md](./milestones/Milestone_v0.9.md) |
 | v0.10 | UI Controls Panel + History UX | 23 | released    | [Milestone_v0.10.md](./milestones/Milestone_v0.10.md) |
 | v0.11 | Export by Graph ID | 24 | released    | [Milestone_v0.11.md](./milestones/Milestone_v0.11.md) |
-| v0.12 | Done Button & History Delete | 25 | in progress | [Milestone_v0.12.md](./milestones/Milestone_v0.12.md) |
+| v0.12 | Done Button & History Delete | 25 | released    | [Milestone_v0.12.md](./milestones/Milestone_v0.12.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.

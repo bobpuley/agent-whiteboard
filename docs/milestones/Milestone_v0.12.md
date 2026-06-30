@@ -1,6 +1,6 @@
 # Milestone v0.12 — Done Button Visibility & History Delete
 
-> Status: in progress.
+> Status: released.
 > Objective: Make the Done button context-sensitive (only visible when the agent is waiting for the user), and give the user the ability to delete snapshot entries from the history panel.
 
 ---
