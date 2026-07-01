@@ -12,6 +12,7 @@ A set of project commands that drive an incremental, document-first development 
 | `next-step` | `/doc-creator-driver:next-step` | Not sure what to do next — finds the earliest unresolved gap |
 | `review` | `/doc-creator-driver:review` | Audit docs 02–05 for contradictions, unresolved assumptions, and gaps |
 | `implement` | `/doc-creator-driver:implement` | Execute the dev plan: branch → implement → test → merge, recursively |
+| `archive` | `/doc-creator-driver:archive` | A version is fully released — snapshot docs 01–05 into `docs/vX.Y/` and reset 01–04 as seeds for the next version |
 
 ---
 
@@ -27,7 +28,8 @@ docs/
 ├── 02_assumptions-and-risks.md ← bets and risks, marked ⚠️ ASSUMPTION
 ├── 03_requirements.md          ← clear, coherent, complete requirements
 ├── 04_architecture.md          ← tech decisions, system design, API contracts
-└── 05_dev-plan.md              ← sprint plan, tasks, definition of done
+├── 05_dev-plan.md              ← sprint plan, tasks, definition of done
+└── vX.Y/                       ← snapshot of 01–05 (and 06_review.md) for a shipped version, written by /archive
 ```
 
 Documents flow in order: a later doc must never assume something not established by an earlier one.
@@ -71,6 +73,19 @@ Select **Bug report**. The command logs the bug, finds the violated requirement,
 ```
 
 Reads docs 02–05, produces a structured list of contradictions, unresolved assumptions, and gaps in `docs/06_review.md`, creates a task per issue, fixes them one by one (asking the user for decisions), and deletes `06_review.md` when the checklist is clear.
+
+### Archiving a shipped version
+
+```
+/doc-creator-driver:archive
+```
+
+Only runs once every milestone for a version is `released` in the Milestone Registry
+(`docs/05_dev-plan.md`) and all its tasks are checked. Snapshots docs 01–05 (and
+`06_review.md` if present) into `docs/vX.Y/`, resets docs 01–04 as stubs seeding the next
+version, updates the Milestone Registry row and adds a `planned` row for the next version,
+logs the shipped version in `.claude/memory/project-progress.md`, and commits. Runs after
+the tag/CHANGELOG sprint-close protocol in the root `CLAUDE.md`, not instead of it.
 
 ---
 
