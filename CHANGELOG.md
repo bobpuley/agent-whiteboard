@@ -1,3 +1,10 @@
+## 0.14.0 — 2026-07-02
+
+- **Mermaid export fix (bug B4):** `POST /export-html` no longer pre-renders Mermaid diagrams server-side via `happy-dom` — `happy-dom` lacks real text-layout/font-metrics APIs, which caused invisible labels, a too-tight/incorrect viewBox, or thrown errors on diagrams with edge labels or certain node shapes
+- **Client-side rendering:** Mermaid items (plain or step-frames frames with `frame_type: "mermaid"`) are now emitted as `<pre class="mermaid">` containers holding the raw, HTML-escaped source; when ≥1 Mermaid item is present, the full `mermaid.js` browser bundle is embedded inline as a `<script>` block (read from `mermaid/dist/mermaid.min.js`, no CDN reference — export stays fully offline-capable) alongside a bootstrap script that calls `mermaid.initialize({ startOnLoad: false })` and `mermaid.run()` on `DOMContentLoaded`
+- **Removed:** `renderMermaid()` and `fixSvgViewBox()` (the happy-dom Mermaid render path and its viewBox-repair workaround); `happy-dom` is retained for the KaTeX/Vega-Lite/SVG/HTML export paths, which are unaffected
+- 5 new server unit tests for the fixed Mermaid export path, including regressions for the three previously-failing scenarios (step-frames flowchart, seek demo, diagram with edge labels + cylinder node) — 181 total
+
 ## 0.13.0 — 2026-06-30
 
 - **HTML Export (`POST /export-html`):** exports one or more selected snapshots to a single fully self-contained HTML file (no external network requests); server-side rendering pipeline handles all snapshot types — KaTeX via `katex.renderToString`, Vega-Lite via `vl.compile` → `vega.View.toSVG`, SVG/HTML via DOMPurify + happy-dom, Mermaid via `mermaid.render` in a happy-dom Window with DOMPurify module patched for Node.js compatibility; items with render failures show an inline error message and do not block the rest of the export
