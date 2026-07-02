@@ -16,6 +16,7 @@ vi.mock("../../../server/snapshot-reader.js", () => ({
   listAllSnapshots: vi.fn(),
   loadSnapshotContent: vi.fn(),
   findSnapshotById: vi.fn(),
+  findSnapshotByIdInWorkspace: vi.fn(),
 }));
 
 vi.mock("../../../server/ws.js", () => ({
@@ -1167,6 +1168,64 @@ describe("GET /snapshots", () => {
     const res = await app.request("/snapshots");
     expect(snapshotReaderModule.listSnapshots).toHaveBeenCalledOnce();
     expect(res.status).toBe(200);
+  });
+});
+
+// ── Sprint 28 — GET /snapshots?workspace= explicit param (v0.15) ─────────────
+
+describe("GET /snapshots — explicit ?workspace= param (v0.15)", () => {
+  beforeEach(() => {
+    vi.mocked(snapshotReaderModule.listSnapshots).mockClear();
+  });
+
+  it("uses the explicit ?workspace= param instead of lastWorkspace", async () => {
+    vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([]);
+
+    // Set lastWorkspace to something different via a real render() call.
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "browser-workspace" } }),
+    });
+
+    const res = await app.request("/snapshots?workspace=agent-workspace");
+    expect(res.status).toBe(200);
+    expect(snapshotReaderModule.listSnapshots).toHaveBeenCalledWith("agent-workspace", expect.any(String));
+  });
+
+  it("falls back to lastWorkspace when the param is absent (unchanged browser behavior)", async () => {
+    vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([]);
+
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "browser-workspace" } }),
+    });
+
+    const res = await app.request("/snapshots");
+    expect(res.status).toBe(200);
+    expect(snapshotReaderModule.listSnapshots).toHaveBeenCalledWith("browser-workspace", expect.any(String));
+  });
+
+  it("returns 400 for an empty ?workspace= value", async () => {
+    const res = await app.request("/snapshots?workspace=");
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).ok).toBe(false);
+  });
+
+  it("returns 400 when ?workspace= contains path-traversal characters", async () => {
+    const res = await app.request(`/snapshots?workspace=${encodeURIComponent("../evil")}`);
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/path traversal/);
+  });
+
+  it("includes the id field in each returned entry (additive, from snapshot-reader)", async () => {
+    vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([
+      { id: "uuid-1", filename: "20260609_143000_screen.json", timestamp: "2026-06-09T14:30:00.000Z", type: "svg" },
+    ]);
+    const res = await app.request("/snapshots?workspace=agent-workspace");
+    const body = await res.json<{ ok: boolean; snapshots: { id?: string }[] }>();
+    expect(body.snapshots[0].id).toBe("uuid-1");
   });
 });
 
@@ -2626,5 +2685,74 @@ describe("POST /export-html (v0.13)", () => {
     const body = await res.text();
     expect(body).not.toContain('<p class="export-error">');
     expect(body).toContain('<pre class="mermaid">');
+  });
+});
+
+// ── Sprint 28 — POST /export-html: { workspace, id } items (v0.15) ───────────
+
+describe("POST /export-html — { workspace, id } items (v0.15)", () => {
+  const VALID_KATEX_RECORD = {
+    type: "katex",
+    payload: "x^2 + y^2 = r^2",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = makeSnapRoot("export-html-id");
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReset();
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+  });
+
+  it("resolves an { workspace, id } item via findSnapshotByIdInWorkspace and returns 200 HTML", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ workspace: "my-ws", id: "uuid-1" }] }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(snapshotReaderModule.findSnapshotByIdInWorkspace).toHaveBeenCalledWith("my-ws", "uuid-1", expect.any(String));
+    const body = await res.text();
+    expect(body).toContain("<!DOCTYPE html>");
+  });
+
+  it("skips an unresolvable id and returns 400 when it is the only item", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(null);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ workspace: "my-ws", id: "uuid-missing" }] }),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
+  });
+
+  it("accepts filename-based and id-based items in the same request", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(
+      JSON.stringify({ type: "katex", payload: "a^2", timestamp: "2026-01-01T00:00:00.000Z" })
+    );
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [
+          { workspace: "my-ws", filename: "20260101_000000_screen.json" },
+          { workspace: "my-ws", id: "uuid-1" },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(snapshotReaderModule.loadSnapshotContent).toHaveBeenCalled();
+    expect(snapshotReaderModule.findSnapshotByIdInWorkspace).toHaveBeenCalled();
   });
 });

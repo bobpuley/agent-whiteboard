@@ -14,7 +14,7 @@ import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./vali
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { saveSnapshot } from "./snapshot.js";
-import { findSnapshotById, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
+import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
@@ -367,7 +367,19 @@ export function createApp(): Hono {
   // ── History navigator (v0.4 — Sprint 17) ──────────────────────────────────────
 
   app.get("/snapshots", (c) => {
-    const workspace = getLastWorkspace();
+    const queryWorkspace = c.req.query("workspace");
+    let workspace: string;
+    if (queryWorkspace !== undefined) {
+      if (queryWorkspace.length === 0) {
+        return c.json({ ok: false, error: "workspace must be a non-empty string" }, 400);
+      }
+      if (queryWorkspace.includes("/") || queryWorkspace.includes("\\") || queryWorkspace.includes("\0") || queryWorkspace === "..") {
+        return c.json({ ok: false, error: "invalid workspace: path traversal not allowed" }, 400);
+      }
+      workspace = queryWorkspace;
+    } else {
+      workspace = getLastWorkspace();
+    }
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
     const snapshots = listSnapshots(workspace, root);
     return c.json({ ok: true, snapshots });
@@ -551,34 +563,42 @@ export function createApp(): Hono {
 
     for (const item of body.items as unknown[]) {
       if (typeof item !== "object" || item === null) continue;
-      const { workspace, filename } = item as Record<string, unknown>;
+      const { workspace, filename, id } = item as Record<string, unknown>;
 
-      if (typeof workspace !== "string" || typeof filename !== "string") continue;
+      if (typeof workspace !== "string") continue;
       if (workspace.includes("/") || workspace.includes("\\") || workspace.includes("\0") || workspace === "..") continue;
-      if (!/^[^/]+_screen\.json$/.test(filename) || filename.includes("..")) continue;
 
-      const raw = loadSnapshotContent(workspace, root, filename);
-      if (raw === null) continue;
+      if (typeof filename === "string") {
+        if (!/^[^/]+_screen\.json$/.test(filename) || filename.includes("..")) continue;
 
-      let record: { type?: unknown; payload?: unknown; timestamp?: unknown; options?: { title?: string } };
-      try {
-        record = JSON.parse(raw) as typeof record;
-      } catch {
-        continue;
+        const raw = loadSnapshotContent(workspace, root, filename);
+        if (raw === null) continue;
+
+        let record: { type?: unknown; payload?: unknown; timestamp?: unknown; options?: { title?: string } };
+        try {
+          record = JSON.parse(raw) as typeof record;
+        } catch {
+          continue;
+        }
+
+        if (typeof record.type !== "string" || typeof record.payload !== "string" || typeof record.timestamp !== "string") continue;
+
+        validItems.push({
+          workspace,
+          filename,
+          record: {
+            type: record.type,
+            payload: record.payload,
+            timestamp: record.timestamp,
+            options: record.options,
+          },
+        });
+      } else if (typeof id === "string") {
+        const record = findSnapshotByIdInWorkspace(workspace, id, root);
+        if (record === null) continue;
+
+        validItems.push({ workspace, id, record });
       }
-
-      if (typeof record.type !== "string" || typeof record.payload !== "string" || typeof record.timestamp !== "string") continue;
-
-      validItems.push({
-        workspace,
-        filename,
-        record: {
-          type: record.type,
-          payload: record.payload,
-          timestamp: record.timestamp,
-          options: record.options,
-        },
-      });
     }
 
     if (validItems.length === 0) {

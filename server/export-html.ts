@@ -1,5 +1,6 @@
-import { readFileSync } from "fs";
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { createRequire } from "module";
+import { dirname, join, resolve } from "path";
 import { Window } from "happy-dom";
 import katex from "katex";
 import * as vl from "vega-lite";
@@ -10,7 +11,8 @@ import DOMPurify from "dompurify";
 
 export interface ValidatedExportItem {
   workspace: string;
-  filename: string;
+  filename?: string;
+  id?: string;
   record: {
     type: string;
     payload: string;
@@ -346,6 +348,27 @@ function itemsIncludeType(items: ValidatedExportItem[], type: string): boolean {
     }
     return false;
   });
+}
+
+// ── Agent-facing disk write (v0.15) ─────────────────────────────────────────
+
+/**
+ * Write an assembled export HTML string to disk and return the absolute path.
+ * `outputPath`, if provided, is used as-is (parent directories created as needed) —
+ * relative paths resolve against the server process's cwd, not the caller's.
+ * Otherwise defaults to `<snapshotsRoot>/<workspace>/exports/<downloadFilename>`.
+ */
+export function writeExportHtmlToDisk(
+  workspace: string,
+  html: string,
+  downloadFilename: string,
+  outputPath: string | undefined,
+  snapshotsRoot: string
+): string {
+  const targetPath = outputPath ?? join(snapshotsRoot, workspace, "exports", downloadFilename);
+  mkdirSync(dirname(targetPath), { recursive: true });
+  writeFileSync(targetPath, html, "utf-8");
+  return resolve(targetPath);
 }
 
 // ── Public entrypoint ──────────────────────────────────────────────────────
