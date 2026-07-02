@@ -1,6 +1,6 @@
 # Milestone v0.14 — Mermaid Export Fix (Sprint 27)
 
-**Status:** in progress
+**Status:** released
 
 > Objective: fix bug B4 — Mermaid diagrams in `POST /export-html` output (v0.13) render with invisible labels, an incorrect/too-tight viewBox, or throw outright, because `happy-dom` cannot supply the real text-layout/font-metrics APIs Mermaid's layout engine depends on. Replace server-side Mermaid pre-rendering with client-side rendering: embed the Mermaid source and the `mermaid.js` library inline in the exported HTML so it renders in a real browser when the file is opened.
 
