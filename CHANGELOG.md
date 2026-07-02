@@ -1,3 +1,12 @@
+## 0.15.0 — 2026-07-02
+
+- **`list_snapshots(workspace)` MCP tool:** lists a workspace's snapshots (`id`, `timestamp`, `type`, optional `title`), newest-first, so an agent can discover what it can export without going through the browser HistoryPanel; wraps the same `listSnapshots()` used by `GET /snapshots`
+- **`export_html(workspace, ids, output_path?)` MCP tool:** agent-facing equivalent of the HistoryPanel's "Export selected" — exports 1..N snapshots (addressed by `id`, not filename) to a single self-contained HTML file; the assembled HTML (which can be several MB once `mermaid.js` is embedded) is written to disk rather than returned inline, and the tool returns the absolute path. Defaults to `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html`; `output_path` (optional) writes anywhere, creating parent directories as needed
+- **`findSnapshotByIdInWorkspace(workspace, id, dir)` in `server/snapshot-reader.ts`:** scoped variant of `findSnapshotById()` restricted to one workspace directory; returns the full parsed record (`type`, `payload`, `timestamp`, `options`) needed by the export pipeline, not just the payload
+- **`GET /snapshots` extended:** accepts an optional `?workspace=` query param (validated with the same safe-name check as `POST /snapshots/load`) for explicit agent use; falls back to `lastWorkspace` when absent — the browser's existing call pattern is unchanged. Each entry gains an additive `id` field
+- **`POST /export-html` extended:** items may now be `{ workspace, id }` in addition to the existing `{ workspace, filename }` form; both forms may appear in the same request. Unresolvable ids are skipped, same as unreadable files
+- 25 new unit tests: `GET /snapshots?workspace=`, `POST /export-html` with `{ workspace, id }` items, `findSnapshotByIdInWorkspace()`/`listSnapshots()` id population against real files, and the two new MCP tool handlers (206 total)
+
 ## 0.14.0 — 2026-07-02
 
 - **Mermaid export fix (bug B4):** `POST /export-html` no longer pre-renders Mermaid diagrams server-side via `happy-dom` — `happy-dom` lacks real text-layout/font-metrics APIs, which caused invisible labels, a too-tight/incorrect viewBox, or thrown errors on diagrams with edge labels or certain node shapes
