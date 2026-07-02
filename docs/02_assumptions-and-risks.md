@@ -162,12 +162,13 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 - No new config surface, no client changes needed.
 
 **G3 — No snapshot cleanup policy in v1**
-> ⚠️ ASSUMPTION: Files accumulate indefinitely. No TTL, quota, or rotation is defined.
+> ✅ DECISION: Files accumulate indefinitely by design. No TTL, quota, or rotation is defined, and none is planned for v1.
 - Risk: unbounded disk growth over long-lived projects.
+- Mitigation: the user has two manual cleanup paths — the history panel's single/multi-select delete and "Workspace delete" (U7e, v0.12), or deleting files directly from `~/.agent-whiteboard/` on disk. No automated policy is needed given these exist. Accepted as sufficient for v1; revisit only if manual cleanup proves inadequate in practice.
 
 **G4 — Snapshot payloads may contain sensitive content**
-> ⚠️ ASSUMPTION: The user is responsible for the security of `~/.agent-whiteboard/`. No encryption or access control beyond standard file permissions.
-- Risk: diagram payloads stored to disk may contain credentials, internal architecture diagrams, or PII.
+> ✅ DECISION: The user is responsible for the security of `~/.agent-whiteboard/`. No encryption or access control beyond standard file permissions is planned. This is consistent with the local-only, single-trusted-user deployment model (see A1) — the same trust boundary already applies to the whole tool.
+- Risk: diagram payloads stored to disk may contain credentials, internal architecture diagrams, or PII. Accepted risk: the user controls what they render and their machine's file permissions.
 
 ---
 
@@ -192,7 +193,7 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 
 **F1 — Test folder restructure (Sprint 15)**
 
-> ⚠️ ASSUMPTION: `tests/unit/client/` is a placeholder only — no Svelte component unit tests exist today. Creating the directory structure signals intent but adds no immediate test coverage.
+> ✅ DECISION: `tests/unit/client/` is a placeholder only — no Svelte component unit tests exist today, and none are planned for v1. The directory signals intent but adds no immediate test coverage. Accepted: `tests/e2e/canvas.spec.ts` (Playwright) already covers the interactive browser surface end-to-end; component-level unit tests are deferred indefinitely rather than scoped to a milestone.
 
 Risks from moving the three test roots:
 - `playwright.config.ts` `testDir` must be updated to `"./tests/e2e"` — a missed update breaks `npm run test:e2e`
@@ -220,48 +221,48 @@ Risks from moving the three test roots:
 **H5 — Cross-workspace snapshot load is safe with a workspace name safety check**
 > ✅ IMPLEMENTED (v0.5, Sprint 18): `POST /snapshots/load` validates `workspace` against a safe-name pattern (alphanumeric, dashes, underscores, dots, spaces; no path separators, no `..`, no null bytes) before resolving the path. Directory must exist under `WHITEBOARD_SNAPSHOTS_DIR`. Path traversal attacks are mitigated.
 
-**H6 — History load updates current workspace (FR8, v0.10)**
-> ⚠️ ASSUMPTION (v0.10): When `POST /snapshots/load` succeeds, `lastWorkspace` is updated to the workspace of the loaded snapshot. This makes subsequent agent `render()` calls (which require `options.workspace`) and history panel opens consistent with the user's last navigation action — the user's browsing intent sets the working context.
+**H6 — History load updates current workspace (FR8, v0.10 ✅)**
+> ✅ IMPLEMENTED (v0.10): When `POST /snapshots/load` succeeds, `lastWorkspace` is updated to the workspace of the loaded snapshot. This makes subsequent agent `render()` calls (which require `options.workspace`) and history panel opens consistent with the user's last navigation action — the user's browsing intent sets the working context.
 - Risk: if the agent resumes generating diagrams after a history navigation, it may be surprised that `lastWorkspace` changed without an explicit `render()` call. Accepted: the user's action was deliberate; the agent is unaware of history navigation per H2 and will supply its own workspace in every `render()` call anyway (mandatory since v0.7, G2).
 - Difference from H2: H2 (agent unaware of canvas change) is unchanged. H6 is a new consequence for server-side `lastWorkspace` state only.
 
-**H7 — Controls panel replaces footer (FR9, v0.10)**
-> ⚠️ ASSUMPTION (v0.10): Moving the History toggle and Done button to a small right side panel is a pure client-side refactor. No server-side changes required. The Done button's click handler (`POST /user-done`) is unchanged; only its DOM placement and label change.
+**H7 — Controls panel replaces footer (FR9, v0.10 ✅)**
+> ✅ IMPLEMENTED (v0.10): Moving the History toggle and Done button to a small right side panel was a pure client-side refactor. No server-side changes required. The Done button's click handler (`POST /user-done`) is unchanged; only its DOM placement and label changed.
 - Risk: the right panel could occlude content on narrow viewports. Accepted: target audience is developers on workstations; narrow-viewport use is out of scope for v1.
 
-**H8 — Done button arm state must be resent on WebSocket reconnect (FR11, v0.12)**
-> ⚠️ ASSUMPTION: When a new browser connection opens (or the page reloads) while `wait_done()` is currently armed on the server, the server must emit the `set_done_armed: true` event to the new connection so the Done button appears correctly.
+**H8 — Done button arm state must be resent on WebSocket reconnect (FR11, v0.12 ✅)**
+> ✅ IMPLEMENTED (v0.12): When a new browser connection opens (or the page reloads) while `wait_done()` is currently armed on the server, the server emits the `set_done_armed: true` event to the new connection so the Done button appears correctly.
 - Risk: if the server only emits `set_done_armed` at call time (not on connect), a page refresh while `wait_done()` is in progress will leave the Done button hidden. The user cannot signal they are done until the agent times out (10 minutes).
 - Mitigation: server tracks current `doneArmed` state in-memory; on WebSocket connect, immediately pushes `{ action: "set_done_armed", armed: <current state> }` to the new connection.
 
 **K1 — Snapshot deletion is permanent (FR12, v0.12)**
 > ⚠️ ASSUMPTION: Deleting a snapshot or workspace from the history panel permanently removes files from the user's `~/.agent-whiteboard/` directory. There is no undo, no trash/recycle bin, and no soft-delete mechanism.
 - Risk: accidental bulk deletion (e.g. "Workspace delete") destroys snapshots that cannot be recovered.
-- Mitigation: require a confirmation step for "Clear workspace" and "Workspace delete" actions; single-item delete may proceed without confirmation.
+- Mitigation: require a confirmation step for the "Workspace delete" action; single-item delete may proceed without confirmation. ("Clear workspace" no longer exists — removed in v0.13, see K2.)
 
 **K2 — Workspace delete removes the OS directory (FR12, v0.12; Clear workspace removed v0.13)**
 > ✅ DECISION (v0.13): "Clear workspace" is removed — it has the same high-level effect as "Workspace delete" with the added complexity of leaving behind an empty directory and an empty accordion row. `POST /snapshots/clear-workspace` server endpoint and corresponding UI button are removed. Only one bulk workspace operation remains: "Workspace delete", which calls `fs.rmdirSync` (or equivalent) and removes the directory and all its contents.
 - Risk: if non-snapshot files exist inside a workspace directory (e.g. user placed other files there), "Workspace delete" removes them too.
 - Decision: document clearly in UI that the operation removes all contents of the workspace folder. No scanning or selective removal in v1.
 
-**J1 — Snapshot schema gains an `id` field (FR7, v0.11 planned)**
-> ⚠️ ASSUMPTION (v0.11): Each snapshot JSON file will include a `id` UUID field generated at write time. Old snapshot files written before v0.11 will not have this field — the server must handle `id: undefined` gracefully (treat as non-exportable by ID). The `render()` and `commit_step_frames()` success responses will include the generated `id` field. Adding a new field to the snapshot schema and MCP response is backward-compatible: existing consumers ignore unknown fields.
+**J1 — Snapshot schema gains an `id` field (FR7, v0.11 ✅)**
+> ✅ IMPLEMENTED (v0.11): Each snapshot JSON file includes an `id` UUID field generated at write time. Old snapshot files written before v0.11 do not have this field — the server handles `id: undefined` gracefully (treated as non-exportable by ID). The `render()` and `commit_step_frames()` success responses include the generated `id` field. Adding a new field to the snapshot schema and MCP response is backward-compatible: existing consumers ignore unknown fields.
 
 ---
 
 ## L. HTML Export (v0.13)
 
 **L1 — `happy-dom` provides a sufficient DOM environment for server-side Mermaid rendering**
-> ⚠️ ASSUMPTION: `mermaid.render()` can be called in a Node.js process when `happy-dom` provides `document`, `window`, and SVG DOM globals. The produced SVG is deterministic and complete.
-- Risk: `happy-dom` may not faithfully replicate all browser APIs that Mermaid.js depends on (e.g. `getBoundingClientRect`, layout metrics). Some diagram types may produce incomplete SVGs or throw.
-- Mitigation: per-item error isolation — a render failure replaces that item's content area with an inline error message; the overall export continues.
-- Risk: `happy-dom` APIs may change across versions. Pin at install time.
+~~> ⚠️ ASSUMPTION: `mermaid.render()` can be called in a Node.js process when `happy-dom` provides `document`, `window`, and SVG DOM globals. The produced SVG is deterministic and complete.~~
+> ❌ INVALIDATED (bug B4, `01`; fix planned for v0.14, **in progress — not yet implemented**): the flagged risk materialized in practice. `happy-dom` does not implement real text-layout/font-metrics APIs (no working `getComputedTextLength`, no real `getBBox`), which Mermaid's dagre-based layout engine depends on to size nodes and route edges. Observed failure modes: (1) node/edge `<foreignObject>` labels collapse to `width="0" height="0"` — text is present in the DOM but invisible; (2) the exported SVG's computed bounding box shrinks to the collapsed layout, producing a much-too-tight viewBox ("too zoomed in"); (3) diagrams with edge labels plus certain node shapes hit a different mermaid code path that throws outright (`"Could not find a suitable point for the given distance"`) instead of degrading silently. Per-item error isolation (previous mitigation) only caught case (3), not (1)/(2), since those don't throw.
+- **Decision (v0.14, planned — not yet implemented):** stop rendering Mermaid server-side via `happy-dom`. Instead, embed the Mermaid source and the full `mermaid.js` library inline in the exported HTML and let it render client-side, in a real browser, when the file is opened — see F17 (`03`) and the HTML Export data flow (`04`). `happy-dom` will be retained only for KaTeX/Vega-Lite/SVG/HTML paths, which do not depend on text-layout metrics. As of this writing, `server/export-html.ts` still renders Mermaid server-side via `happy-dom` — this decision is designed but not yet coded (see `Milestone_v0.14.md`, Sprint 27, status in progress).
+- Risk (residual): `happy-dom` APIs may still change across versions for the remaining (KaTeX/Vega-Lite/SVG/HTML) usages. Pin at install time.
 
 **L2 — KaTeX runs server-side without a DOM**
 > ✅ ASSUMPTION: `katex.renderToString(source, { displayMode: true, throwOnError: false })` does not require a browser DOM and can be called directly in Node.js. This is a documented property of KaTeX (it is specifically designed for server-side use).
 
 **L3 — Vega-Lite can be compiled and rendered to SVG in Node.js**
-> ⚠️ ASSUMPTION: The pipeline `vl.compile(spec).spec` → `vega.parse()` → `new vega.View().toSVG()` works in Node.js without a full browser environment. Vega's Node.js support is documented.
+> ✅ VALIDATED (in production use since v0.13): The pipeline `vl.compile(spec).spec` → `vega.parse()` → `new vega.View().toSVG()` works in Node.js without a full browser environment, as shipped in `POST /export-html`.
 - Risk: Vega chart types that use canvas-backed rendering may fail server-side.
 - Mitigation: per-item error isolation (same as L1).
 

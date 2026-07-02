@@ -340,3 +340,7 @@ From the HistoryPanel in selection mode, an "Export selected" button appears in 
 **B3 — Slideshow stops after slide 1 → slide 2**
 - Observed: running the slideshow causes the canvas to advance from slide 1 to slide 2, then the server-side timer stops — remaining slides are never displayed.
 - Expected: the timer should advance through all slides in the playlist at `delay_ms` intervals, stopping only after the last slide.
+
+**B4 — Mermaid HTML export produces invisible labels, wrong zoom, or throws (v0.13 export-html)**
+- Observed: exporting `7c-step-frames` and `8-seek` (step-frames sequences with mermaid frames) to HTML produces diagrams with no visible labels and an incorrect, too-tight viewBox ("too zoomed in"). Exporting `click` (a plain mermaid diagram with edge labels and a cylinder-shaped node) throws an inline render error instead: "Could not find a suitable point for the given distance." The same payloads render correctly in the live whiteboard (real browser).
+- Expected: exported HTML should render Mermaid diagrams with visible labels and a correct viewBox, matching what the live whiteboard shows, for both plain and step-frames diagrams regardless of node/edge-label complexity.

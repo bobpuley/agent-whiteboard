@@ -1,6 +1,6 @@
 # Milestone v0.13 — HTML Export & Clear Workspace Removal (Sprint 26)
 
-**Status:** planned
+**Status:** released
 
 > Objective: (1) Remove the "Clear workspace" delete operation — it has the same high-level effect as "Workspace delete" and the empty-folder/empty-row distinction adds complexity without user value. (2) Add the ability to export selected history snapshots to a single self-contained HTML file that can be read offline with no external dependencies.
 

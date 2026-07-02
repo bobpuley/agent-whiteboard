@@ -17,5 +17,6 @@
 | v0.11 | Export by Graph ID | 24 | released    | [Milestone_v0.11.md](./milestones/Milestone_v0.11.md) |
 | v0.12 | Done Button & History Delete | 25 | released    | [Milestone_v0.12.md](./milestones/Milestone_v0.12.md) |
 | v0.13 | HTML Export & Clear Workspace Removal | 26 | released    | [Milestone_v0.13.md](./milestones/Milestone_v0.13.md) |
+| v0.14 | Mermaid Export Fix | 27 | in progress | [Milestone_v0.14.md](./milestones/Milestone_v0.14.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.

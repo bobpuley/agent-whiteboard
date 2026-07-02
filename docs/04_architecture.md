@@ -15,7 +15,8 @@
 | MCP transport              | SSE (HTTP + Server-Sent Events)                                                                                                                                                                                                                                                                              | Server has its own lifecycle (also drives browser); SSE avoids a second process. stdio ruled out — requires Claude Code to spawn the server, but server must already be running for the browser.                                                       |
 | Frontend framework         | Svelte                                                                                                                                                                                                                                                                                                       | Minimal bundle, reactive by default, no virtual DOM overhead; replaceable at low cost given thin v1 UX                                                                                                                                                 |
 | Rendering libraries        | Mermaid.js ^11, KaTeX, vega-lite + vega-embed, DOMPurify (all npm, bundled by Vite)                                                                                                                                                                                                                         | Mermaid pinned to ^11 (breaking changes between major versions make floating risky). KaTeX, Vega-Lite, SVG/HTML (DOMPurify) added in Sprint 5 ✅. D2 and D3 deferred (D2 requires server-side render process; D3 is post-Phase-2 nice-to-have). |
-| Server-side rendering (export) | `happy-dom` (npm, server-only, v0.13) | DOM host for `mermaid.render()` and `DOMPurify` during HTML export. One `Window` instance per export call, torn down after all items are rendered. KaTeX and Vega-Lite do not require `happy-dom` (no DOM dependency). |
+| Server-side rendering (export) | `happy-dom` (npm, server-only, v0.13) | DOM host for `DOMPurify` (SVG/HTML sanitization) during HTML export. One `Window` instance per export call, torn down after all items are rendered. KaTeX and Vega-Lite do not require `happy-dom` (no DOM dependency). **Mermaid usage planned for removal (v0.14, in progress — not yet implemented):** `happy-dom` lacks real text-layout/font-metrics APIs, so `mermaid.render()` inside it produces invisible labels, wrong viewBox, or thrown errors (bug B4, see `01`/`02` L1). As of this writing, `server/export-html.ts` still renders Mermaid via `happy-dom`; the fix (embed + render client-side) is designed but not yet coded. |
+| Client-side rendering (export, Mermaid only) | Embedded `mermaid.js` bundle inline in exported HTML (v0.14, planned — in progress) | Mermaid needs real browser text-layout to size nodes/edges correctly — `happy-dom` cannot provide this. Embedding the full library source (not a CDN `<script src>`) preserves the "opens correctly offline" requirement (F17) while getting real layout from whatever browser opens the file. |
 | Transport (server→browser) | WebSocket                                                                                                                                                                                                                                                                                                    | Real-time incremental updates                                                                                                                                                                                                                          |
 | Packaging (v1)             | `npm run dev` — dev-only, no distribution concern yet                                                                                                                                                                                                                                                        | No remote repo yet; packaging deferred                                                                                                                                                                                                                 |
 | Dev server                 | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies `/render`, `/stream`, `/mcp` to Node. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2                                                                                                                                                  |
@@ -217,7 +218,7 @@ agent calls render(type="mermaid", payload="graph TD; A-->B", options={workspace
 Snapshot directory layout:
 ```
 ~/.agent-whiteboard/
-└── agent-whiteboard/          ← workspace (basename of project dir)
+└── my-course/                 ← workspace (from options.workspace, always agent-supplied — see F14/G2)
     ├── 20260609_143000_screen.json
     ├── 20260609_143215_screen.json
     └── …
@@ -406,22 +407,36 @@ user enters export mode → clicks "Export workspace" on a workspace accordion h
       → read snapshot JSON from <WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/<filename>
       → IF unreadable or malformed: skip silently; continue
   → IF no valid items remain: return { ok: false, error: "no valid items to export" } (400)
-  → create one happy-dom Window instance for this export call
+  → create one happy-dom Window instance for this export call (used by katex/vega-lite/svg/html paths only — see below)
   → for each valid snapshot item:
       → dispatch to renderer by type:
-          "mermaid"    → mermaid.render() using the happy-dom Window globals → SVG string
+          "mermaid"    → (v0.14, planned — in progress, not yet implemented) target design: NOT
+                         rendered server-side. Raw Mermaid source would be written into a
+                         container <pre class="mermaid">…</pre> in the output; actual rendering
+                         would happen later, client-side, when the exported file is opened (see below).
+                         [Current (v0.13) behavior, still in place: mermaid.render() using happy-dom
+                         Window globals → SVG string — produces invisible labels / wrong viewBox /
+                         thrown errors because happy-dom has no real text-layout engine; bug B4,
+                         see `01`/`02` L1 — this is the bug v0.14 is meant to fix]
           "katex"      → katex.renderToString(payload, { displayMode: true, throwOnError: false }) → HTML string
           "vega-lite"  → vl.compile(spec).spec → vega.parse() → new vega.View().toSVG() → SVG string
           "svg"        → DOMPurify(window).sanitize(payload, { USE_PROFILES: { svg: true } })
           "html"       → DOMPurify(window).sanitize(payload, { USE_PROFILES: { html: true } })
-          "step-frames"→ expand each frame → render each frame by frame_type (recursive)
-      → IF render fails: replace content with inline <p class="export-error">error message</p>
+          "step-frames"→ expand each frame → render each frame by frame_type (recursive; mermaid frames
+                         become their own client-rendered containers, same as above)
+      → IF render fails (non-mermaid types, or malformed step-frames JSON): replace content with
+        inline <p class="export-error">error message</p>
   → tear down happy-dom Window
   → assemble HTML document:
       → <nav>: table of contents — workspace list → item list (linking to section anchors)
       → <main>: workspace <section id="ws-{name}"> → item <section id="item-{id}">
           → for step-frames: frame sub-sections <section class="frame" id="item-{id}-frame-{n}">
       → <style>: layout CSS always included; KaTeX CSS included only when ≥1 katex items present
+      → IF ≥1 mermaid items present (plain or step-frames frame_type): embed the full mermaid.js
+        library source inline as a <script> block, plus a small bootstrap <script> that calls
+        mermaid.initialize({ startOnLoad: false }) and mermaid.run() against every
+        <pre class="mermaid"> container once the DOM is loaded — this executes in whatever real
+        browser opens the exported file, giving Mermaid the actual text-layout APIs it needs
       → ordering: items within workspace sorted chronologically (oldest first by timestamp);
                   workspaces ordered by their earliest item's timestamp
   → determine download filename:
@@ -430,6 +445,10 @@ user enters export mode → clicks "Export workspace" on a workspace accordion h
   → return response: Content-Type: text/html; charset=utf-8
                       Content-Disposition: attachment; filename="<name>-YYYYMMDD-HHmmss.html"
   → browser receives response → triggers download via <a download> element
+  → [target behavior, v0.14 planned — in progress] user opens the downloaded file → browser
+    executes the embedded mermaid.js bundle → diagrams render with correct labels and viewBox,
+    exactly as the live whiteboard does. Until v0.14 ships, Mermaid is still rendered server-side
+    via happy-dom (see bug B4) and may show invisible labels, wrong viewBox, or thrown errors.
 ```
 
 ### Node Click Flow (Phase 2 — Sprint 12 plain click)
@@ -564,7 +583,7 @@ agent-whiteboard/
 │   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
 │   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18)
 │   ├── step-frames-builder.ts  # in-memory map of id → partial step-frames state; TTL cleanup (v0.8)
-│   ├── export-html.ts    # server-side rendering + HTML assembly for POST /export-html (v0.13)
+│   ├── export-html.ts    # HTML assembly for POST /export-html (v0.13). Server-side rendering for katex/vega-lite/svg/html; Mermaid embedded + rendered client-side (v0.14, see bug B4 in `01`)
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/
@@ -585,7 +604,7 @@ agent-whiteboard/
 │   │   └── click-demo.js        # manual click/popup demo
 │   └── unit/
 │       ├── server/
-│       │   └── app.test.ts      # Vitest integration tests (64 tests)
+│       │   └── app.test.ts      # Vitest integration tests (see `npm test` output for current count)
 │       └── client/              # placeholder — Svelte component unit tests (future)
 ├── test-results/         # Playwright artifact output (generated, not source)
 ├── docs/
@@ -614,7 +633,7 @@ Two test layers:
 
 **Layer 1 — Server integration tests (Vitest)**
 
-`tests/unit/server/app.test.ts` — 72 tests covering all REST endpoints. Runs with `npm test`. Scoped via `vitest.config.ts`.
+`tests/unit/server/app.test.ts` — covers all REST endpoints (test count grows over time; run `npm test` for the current count, currently 161). Runs with `npm test`. Scoped via `vitest.config.ts`.
 
 MCP tool handlers are thin wrappers over the same session logic exercised by the REST tests. MCP correctness verified manually: `export()`, `render()`, and `clear()` confirmed working end-to-end (MCP → WebSocket → browser) on 2026-05-31.
 
@@ -651,3 +670,4 @@ Covered scenarios:
 
 - The server must be running before Claude Code connects — `npm run dev` starts it.
 - Port `3000` is the default; overridable via `PORT` environment variable.
+- Binding address defaults to `localhost`; overridable via `HOST` environment variable (see `server/index.ts`). See A1 (`02`) for the local-only deployment rationale.
