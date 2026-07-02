@@ -1,6 +1,6 @@
 # Milestone v0.15 — Agent-Facing HTML Export (Sprint 28)
 
-**Status:** in progress
+**Status:** released
 
 > Objective: make the self-contained HTML export (F17, v0.13/v0.14) available to the agent, not just the browser HistoryPanel. The agent needs to (1) list a workspace's snapshots to discover what it can export, and (2) request an export of 1..N of them. Addressing is by snapshot `id` (UUID), not filename — see decision L5 in `02_assumptions-and-risks.md`.
 
