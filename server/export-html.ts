@@ -1,7 +1,6 @@
 import { readFileSync } from "fs";
 import { createRequire } from "module";
 import { Window } from "happy-dom";
-import mermaid from "mermaid";
 import katex from "katex";
 import * as vl from "vega-lite";
 import * as vega from "vega";
@@ -70,99 +69,8 @@ function restoreGlobals(saved: Map<GlobalKey, unknown>): void {
 
 // ── Renderers ──────────────────────────────────────────────────────────────
 
-async function renderMermaid(payload: string, win: Window): Promise<string> {
-  const id = `mermaid-export-${Math.random().toString(36).slice(2)}`;
-  mermaid.initialize({ startOnLoad: false });
-
-  // DOMPurify methods (sanitize, addHook, …) are absent on the shared Node.js
-  // module export because it was created without a DOM at import time. Temporarily
-  // copy all methods from a properly-initialized instance onto the shared export so
-  // mermaid can call them, then restore originals in the finally block.
-  const sharedDp = DOMPurify as unknown as Record<string, unknown>;
-  const tempPurify = DOMPurify(win as unknown as Window & typeof globalThis) as unknown as Record<string, unknown>;
-  const savedDpProps = new Map<string, unknown>();
-  for (const key of Object.keys(tempPurify)) {
-    savedDpProps.set(key, sharedDp[key]);
-    const val = tempPurify[key];
-    sharedDp[key] = typeof val === "function" ? (val as (...a: unknown[]) => unknown).bind(tempPurify) : val;
-  }
-
-  // Intercept Element.remove() to capture the full rendered SVG before
-  // mermaid removes its temporary container div.
-  const elementProto = (win as unknown as Record<string, Record<string, unknown>>)["Element"]["prototype"] as Record<string, unknown>;
-  const origRemove = elementProto["remove"] as (() => void) | undefined;
-  let capturedSvg: string | null = null;
-
-  elementProto["remove"] = function (this: unknown) {
-    const el = this as Element;
-    if (el.tagName === "DIV") {
-      const svg = el.querySelector?.("svg");
-      if (svg) capturedSvg = (svg as Element).outerHTML ?? null;
-    }
-    origRemove?.call(this);
-  };
-
-  let resultSvg: string | null = null;
-  try {
-    const result = await mermaid.render(id, payload);
-    // Use result.svg if it contains real content (> 300 chars is a non-trivial SVG).
-    if (result?.svg && result.svg.length > 300) resultSvg = result.svg;
-  } catch (err) {
-    if (!capturedSvg) throw err;
-  } finally {
-    for (const [key, prev] of savedDpProps) {
-      if (prev === undefined) {
-        delete sharedDp[key];
-      } else {
-        sharedDp[key] = prev;
-      }
-    }
-    if (origRemove !== undefined) {
-      elementProto["remove"] = origRemove;
-    } else {
-      delete elementProto["remove"];
-    }
-  }
-
-  const svgOutput = resultSvg ?? capturedSvg;
-  if (svgOutput) return fixSvgViewBox(svgOutput);
-  throw new Error("mermaid render produced no SVG output");
-}
-
-function fixSvgViewBox(svg: string): string {
-  // Remove the max-width inline style that mermaid sets based on zero layout
-  let result = svg.replace(/style="max-width:\s*[^"]*"/, 'style="max-width: 100%"');
-
-  // Collect all x/y/width/height from rect elements to compute a real viewBox
-  const rectMatches = [...result.matchAll(/<rect[^>]+>/g)];
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  let hasCoords = false;
-
-  for (const m of rectMatches) {
-    const tag = m[0];
-    const x = parseFloat(tag.match(/\bx="([^"]+)"/)?.[1] ?? "NaN");
-    const y = parseFloat(tag.match(/\by="([^"]+)"/)?.[1] ?? "NaN");
-    const w = parseFloat(tag.match(/\bwidth="([^"]+)"/)?.[1] ?? "NaN");
-    const h = parseFloat(tag.match(/\bheight="([^"]+)"/)?.[1] ?? "NaN");
-    if (!isNaN(x) && !isNaN(y) && !isNaN(w) && !isNaN(h)) {
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x + w);
-      maxY = Math.max(maxY, y + h);
-      hasCoords = true;
-    }
-  }
-
-  if (hasCoords && isFinite(minX)) {
-    const pad = 16;
-    const vbX = Math.floor(minX - pad);
-    const vbY = Math.floor(minY - pad);
-    const vbW = Math.ceil(maxX - minX + pad * 2);
-    const vbH = Math.ceil(maxY - minY + pad * 2);
-    result = result.replace(/viewBox="[^"]*"/, `viewBox="${vbX} ${vbY} ${vbW} ${vbH}"`);
-  }
-
-  return result;
+function renderMermaidContainer(payload: string): string {
+  return `<pre class="mermaid">${escapeHtml(payload)}</pre>`;
 }
 
 function renderKatex(payload: string): string {
@@ -204,12 +112,11 @@ interface RenderedItem {
 async function renderByType(
   type: string,
   payload: string,
-  win: Window,
   purify: ReturnType<typeof DOMPurify>
 ): Promise<string> {
   switch (type) {
     case "mermaid":
-      return renderMermaid(payload, win);
+      return renderMermaidContainer(payload);
     case "katex":
       return renderKatex(payload);
     case "vega-lite":
@@ -226,7 +133,6 @@ async function renderByType(
 async function renderContent(
   type: string,
   payload: string,
-  win: Window,
   purify: ReturnType<typeof DOMPurify>
 ): Promise<RenderedContent> {
   if (type === "step-frames") {
@@ -239,7 +145,7 @@ async function renderContent(
     const frames: RenderedFrame[] = [];
     for (const frame of spec.frames) {
       try {
-        const html = await renderByType(spec.frame_type, frame.payload, win, purify);
+        const html = await renderByType(spec.frame_type, frame.payload, purify);
         frames.push({ label: frame.label, html });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -250,7 +156,7 @@ async function renderContent(
   }
 
   try {
-    const html = await renderByType(type, payload, win, purify);
+    const html = await renderByType(type, payload, purify);
     return { kind: "html", html };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -292,6 +198,15 @@ function getKatexCss(): string {
   }
 }
 
+function getMermaidBundle(): string {
+  const req = createRequire(import.meta.url);
+  const bundlePath = req.resolve("mermaid/dist/mermaid.min.js");
+  const source = readFileSync(bundlePath, "utf-8");
+  // Guard against a literal "</script" sequence inside the bundle prematurely
+  // closing the inline <script> tag when parsed as HTML.
+  return source.replace(/<\/script/gi, "<\\/script");
+}
+
 const LAYOUT_CSS = `
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; margin: 0; display: flex; background: #f9f9f9; }
@@ -316,7 +231,7 @@ const LAYOUT_CSS = `
   svg { max-width: 100%; height: auto; }
 `.trim();
 
-function assembleHtml(items: RenderedItem[], hasKatex: boolean): string {
+function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: boolean): string {
   // Group by workspace, order workspaces by earliest item timestamp.
   const wsMap = new Map<string, RenderedItem[]>();
   for (const item of items) {
@@ -375,6 +290,16 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean): string {
   }
 
   const katexBlock = hasKatex ? `<style>${getKatexCss()}</style>\n` : "";
+  const mermaidBlock = hasMermaid
+    ? `<script>${getMermaidBundle()}</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  mermaid.initialize({ startOnLoad: false });
+  mermaid.run({ querySelector: ".mermaid" });
+});
+</script>
+`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -390,7 +315,7 @@ ${katexBlock}</head>
 <ul>${tocHtml}</ul>
 </nav>
 <main>${mainHtml}</main>
-</body>
+${mermaidBlock}</body>
 </html>`;
 }
 
@@ -410,6 +335,19 @@ function buildDownloadFilename(workspaces: string[]): string {
   return `export-${ts}.html`;
 }
 
+function itemsIncludeType(items: ValidatedExportItem[], type: string): boolean {
+  return items.some(({ record }) => {
+    if (record.type === type) return true;
+    if (record.type === "step-frames") {
+      try {
+        const spec = JSON.parse(record.payload) as { frame_type?: string };
+        return spec.frame_type === type;
+      } catch { return false; }
+    }
+    return false;
+  });
+}
+
 // ── Public entrypoint ──────────────────────────────────────────────────────
 
 export async function generateExportHtml(
@@ -424,7 +362,7 @@ export async function generateExportHtml(
   const rendered: RenderedItem[] = [];
   try {
     for (const { workspace, record } of items) {
-      const content = await renderContent(record.type, record.payload, win, purify);
+      const content = await renderContent(record.type, record.payload, purify);
       rendered.push({
         workspace,
         type: record.type,
@@ -438,18 +376,10 @@ export async function generateExportHtml(
     win.close();
   }
 
-  const hasKatex = items.some(({ record }) => {
-    if (record.type === "katex") return true;
-    if (record.type === "step-frames") {
-      try {
-        const spec = JSON.parse(record.payload) as { frame_type?: string };
-        return spec.frame_type === "katex";
-      } catch { return false; }
-    }
-    return false;
-  });
+  const hasKatex = itemsIncludeType(items, "katex");
+  const hasMermaid = itemsIncludeType(items, "mermaid");
 
-  const html = assembleHtml(rendered, hasKatex);
+  const html = assembleHtml(rendered, hasKatex, hasMermaid);
   const uniqueWorkspaces = [...new Set(items.map((i) => i.workspace))];
   const downloadFilename = buildDownloadFilename(uniqueWorkspaces);
 
