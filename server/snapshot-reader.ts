@@ -8,6 +8,7 @@ export interface WorkspaceGroup {
 }
 
 export interface SnapshotEntry {
+  id?: string;
   filename: string;
   timestamp: string;
   type: string;
@@ -30,6 +31,7 @@ export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
     try {
       const raw = readFileSync(join(workspaceDir, filename), "utf-8");
       const parsed = JSON.parse(raw) as {
+        id?: unknown;
         timestamp?: unknown;
         type?: unknown;
         options?: { title?: unknown };
@@ -45,6 +47,10 @@ export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
         timestamp: parsed.timestamp,
         type: parsed.type,
       };
+
+      if (typeof parsed.id === "string") {
+        entry.id = parsed.id;
+      }
 
       const title = parsed.options?.title;
       if (typeof title === "string" && title.length > 0) {
@@ -139,6 +145,63 @@ export function findSnapshotById(id: string, dir: string): string | null {
       } catch {
         // Skip unreadable or malformed files.
       }
+    }
+  }
+
+  return null;
+}
+
+export interface SnapshotRecord {
+  type: string;
+  payload: string;
+  timestamp: string;
+  options?: { title?: string };
+}
+
+/**
+ * Scan a single workspace directory for a snapshot whose `id` field matches.
+ * Returns the full parsed record (type, payload, timestamp, options) needed by
+ * the export pipeline, or null if no match (or the workspace directory is absent).
+ * Old snapshots without an `id` field are silently skipped.
+ */
+export function findSnapshotByIdInWorkspace(workspace: string, id: string, dir: string): SnapshotRecord | null {
+  const workspaceDir = join(dir, workspace);
+
+  let files: string[];
+  try {
+    files = readdirSync(workspaceDir).filter((f) => f.endsWith("_screen.json"));
+  } catch {
+    return null;
+  }
+
+  for (const filename of files) {
+    try {
+      const raw = readFileSync(join(workspaceDir, filename), "utf-8");
+      const parsed = JSON.parse(raw) as {
+        id?: unknown;
+        type?: unknown;
+        payload?: unknown;
+        timestamp?: unknown;
+        options?: { title?: unknown };
+      };
+      if (
+        parsed.id === id &&
+        typeof parsed.type === "string" &&
+        typeof parsed.payload === "string" &&
+        typeof parsed.timestamp === "string"
+      ) {
+        const record: SnapshotRecord = {
+          type: parsed.type,
+          payload: parsed.payload,
+          timestamp: parsed.timestamp,
+        };
+        if (typeof parsed.options?.title === "string") {
+          record.options = { title: parsed.options.title };
+        }
+        return record;
+      }
+    } catch {
+      // Skip unreadable or malformed files.
     }
   }
 

@@ -12,8 +12,10 @@ import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validat
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
 import { saveSnapshot } from "./snapshot.js";
-import { findSnapshotById } from "./snapshot-reader.js";
+import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
+import { generateExportHtml, writeExportHtmlToDisk } from "./export-html.js";
+import type { ValidatedExportItem } from "./export-html.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -673,6 +675,143 @@ export function createMcpServer(): McpServer {
           { type: "text", text: JSON.stringify({ ok: true, data }) },
         ],
       };
+    }
+  );
+
+  // list_snapshots(workspace) — list a workspace's snapshots for agent-driven export selection.
+  server.registerTool(
+    "list_snapshots",
+    {
+      description:
+        "List the snapshots stored for a workspace, so you can choose which ones to export via export_html().\n" +
+        'Returns { "ok": true, "snapshots": [{ "id", "timestamp", "type", "title"? }] }, sorted newest-first.\n' +
+        "Returns an empty array if the workspace has no snapshots or does not exist.\n" +
+        'Example: list_snapshots({ workspace: "my-course" })',
+      inputSchema: z.object({
+        workspace: z
+          .string()
+          .describe(
+            "REQUIRED. Workspace name to list snapshots for. " +
+            "Alphanumeric, dashes, underscores, dots, spaces — no path separators or '..'."
+          ),
+      }),
+    },
+    ({ workspace }) => {
+      if (!workspace) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workspace is required" }) }],
+        };
+      }
+      if (!isValidWorkspaceName(workspace)) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: false,
+              error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
+            }),
+          }],
+        };
+      }
+      const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+      const snapshots = listSnapshots(workspace, root);
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true, snapshots }) }],
+      };
+    }
+  );
+
+  // export_html(workspace, ids, output_path?) — agent-facing HTML export, written to disk.
+  server.registerTool(
+    "export_html",
+    {
+      description:
+        "Export 1..N snapshots from a workspace to a single self-contained HTML file " +
+        "(agent-facing equivalent of the browser HistoryPanel's 'Export selected'). " +
+        "Discover snapshot ids first with list_snapshots(workspace).\n" +
+        "The assembled HTML is NOT returned inline (it can be several MB once the mermaid.js bundle is embedded) " +
+        "— the server writes it to disk and returns the file path.\n" +
+        "output_path (optional): if provided, parent directories are created as needed and the file is written there. " +
+        "Relative paths resolve against the server process's working directory, not yours — pass an absolute path for a specific location.\n" +
+        "If omitted, defaults to <snapshots_dir>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html.\n" +
+        'Returns { "ok": true, "path": "<absolute path>" }.\n' +
+        'Example: export_html({ workspace: "my-course", ids: ["<uuid-1>", "<uuid-2>"] })',
+      inputSchema: z.object({
+        workspace: z
+          .string()
+          .describe(
+            "REQUIRED. Workspace the snapshot ids belong to. " +
+            "Alphanumeric, dashes, underscores, dots, spaces — no path separators or '..'."
+          ),
+        ids: z
+          .array(z.string())
+          .min(1)
+          .describe("Non-empty array of snapshot UUIDs (from list_snapshots()), all scoped to workspace."),
+        output_path: z
+          .string()
+          .optional()
+          .describe(
+            "Optional absolute path to write the HTML file to (parent directories created as needed). " +
+            "Defaults to <snapshots_dir>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html."
+          ),
+      }),
+    },
+    async ({ workspace, ids, output_path }) => {
+      if (!workspace) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workspace is required" }) }],
+        };
+      }
+      if (!isValidWorkspaceName(workspace)) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: false,
+              error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
+            }),
+          }],
+        };
+      }
+      if (ids.length === 0) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "ids must be a non-empty array" }) }],
+        };
+      }
+
+      const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+      const validItems: ValidatedExportItem[] = [];
+      for (const id of ids) {
+        const record = findSnapshotByIdInWorkspace(workspace, id, root);
+        if (record !== null) {
+          validItems.push({ workspace, id, record });
+        }
+      }
+
+      if (validItems.length === 0) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "no valid items to export" }) }],
+        };
+      }
+
+      const { html, downloadFilename } = await generateExportHtml(validItems);
+
+      try {
+        const path = writeExportHtmlToDisk(workspace, html, downloadFilename, output_path, root);
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: true, path }) }],
+        };
+      } catch (err) {
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              ok: false,
+              error: `failed to write export file: ${err instanceof Error ? err.message : String(err)}`,
+            }),
+          }],
+        };
+      }
     }
   );
 
