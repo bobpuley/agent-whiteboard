@@ -322,6 +322,9 @@ Decision (2026-06-30): "Clear workspace" (delete files, keep directory, leave em
 **FR13 — Recycle bin icon + history panel header layout**
 Add a recycle bin (trash) icon button to the history panel's header. This button controls the delete action (e.g. enters delete/selection mode). All action buttons in the header (recycle bin, lock/unlock, and any future controls) should be aligned to the right, with a vertical separator between the action button group and the close button.
 
+**FR15 — Agent-facing HTML export**
+The self-contained HTML export (FR14, v0.13) should also be callable by the agent, not only from the browser's HistoryPanel. The agent needs a way to list a workspace's snapshots in order to build the export request, and a way to specify which snapshots to export (minimum 1, maximum all of the workspace's snapshots). Workspace is mandatory for every request, as usual. Open question: should the export request identify snapshots by filename or by `id`, and what should the snapshot-list return data look like?
+
 **FR14 — Export selected snapshots to self-contained HTML**
 From the HistoryPanel in selection mode, an "Export selected" button appears in the select-bar alongside "Delete selected", visible only when at least one item is checked. Clicking it POSTs the selected `{ workspace, filename }` pairs to `POST /export-html`, receives a self-contained HTML file, and triggers a browser download. The HTML file contains all selected snapshots rendered as static content — Mermaid as inline SVG, KaTeX as HTML string, Vega-Lite as inline SVG, SVG/HTML as sanitized markup. Step-frames sequences are expanded into frame sub-sections. The file requires no external network requests (all CSS inline; KaTeX CSS only when ≥1 KaTeX items are present). New server-side dependency: `happy-dom` for Mermaid rendering and DOMPurify. Per-item render failure shows an inline error message — the overall export continues.
 

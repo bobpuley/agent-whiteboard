@@ -15,8 +15,8 @@
 | MCP transport              | SSE (HTTP + Server-Sent Events)                                                                                                                                                                                                                                                                              | Server has its own lifecycle (also drives browser); SSE avoids a second process. stdio ruled out — requires Claude Code to spawn the server, but server must already be running for the browser.                                                       |
 | Frontend framework         | Svelte                                                                                                                                                                                                                                                                                                       | Minimal bundle, reactive by default, no virtual DOM overhead; replaceable at low cost given thin v1 UX                                                                                                                                                 |
 | Rendering libraries        | Mermaid.js ^11, KaTeX, vega-lite + vega-embed, DOMPurify (all npm, bundled by Vite)                                                                                                                                                                                                                         | Mermaid pinned to ^11 (breaking changes between major versions make floating risky). KaTeX, Vega-Lite, SVG/HTML (DOMPurify) added in Sprint 5 ✅. D2 and D3 deferred (D2 requires server-side render process; D3 is post-Phase-2 nice-to-have). |
-| Server-side rendering (export) | `happy-dom` (npm, server-only, v0.13) | DOM host for `DOMPurify` (SVG/HTML sanitization) during HTML export. One `Window` instance per export call, torn down after all items are rendered. KaTeX and Vega-Lite do not require `happy-dom` (no DOM dependency). **Mermaid usage planned for removal (v0.14, in progress — not yet implemented):** `happy-dom` lacks real text-layout/font-metrics APIs, so `mermaid.render()` inside it produces invisible labels, wrong viewBox, or thrown errors (bug B4, see `01`/`02` L1). As of this writing, `server/export-html.ts` still renders Mermaid via `happy-dom`; the fix (embed + render client-side) is designed but not yet coded. |
-| Client-side rendering (export, Mermaid only) | Embedded `mermaid.js` bundle inline in exported HTML (v0.14, planned — in progress) | Mermaid needs real browser text-layout to size nodes/edges correctly — `happy-dom` cannot provide this. Embedding the full library source (not a CDN `<script src>`) preserves the "opens correctly offline" requirement (F17) while getting real layout from whatever browser opens the file. |
+| Server-side rendering (export) | `happy-dom` (npm, server-only, v0.13) | DOM host for `DOMPurify` (SVG/HTML sanitization) during HTML export. One `Window` instance per export call, torn down after all items are rendered. KaTeX and Vega-Lite do not require `happy-dom` (no DOM dependency). **Mermaid usage removed (v0.14, shipped):** `happy-dom` lacks real text-layout/font-metrics APIs, so `mermaid.render()` inside it produced invisible labels, wrong viewBox, or thrown errors (bug B4, see `01`/`02` L1). `server/export-html.ts` no longer imports `mermaid` or renders it server-side; `happy-dom` is retained only for the KaTeX/Vega-Lite/SVG/HTML paths. |
+| Client-side rendering (export, Mermaid only) | Embedded `mermaid.js` bundle inline in exported HTML (v0.14, shipped) | Mermaid needs real browser text-layout to size nodes/edges correctly — `happy-dom` cannot provide this. Embedding the full library source (read from `mermaid/dist/mermaid.min.js`, not a CDN `<script src>`) preserves the "opens correctly offline" requirement (F17) while getting real layout from whatever browser opens the file. |
 | Transport (server→browser) | WebSocket                                                                                                                                                                                                                                                                                                    | Real-time incremental updates                                                                                                                                                                                                                          |
 | Packaging (v1)             | `npm run dev` — dev-only, no distribution concern yet                                                                                                                                                                                                                                                        | No remote repo yet; packaging deferred                                                                                                                                                                                                                 |
 | Dev server                 | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies `/render`, `/stream`, `/mcp` to Node. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2                                                                                                                                                  |
@@ -103,6 +103,8 @@
 | `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
 | `append_frame(id, payload, label?)` *(v0.8; live preview v0.9)* | Looks up the builder entry by ID. Validates `payload` against `frame_type` (same hard gate as `render()`). Appends `{ label?, payload }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (same event format as `render(type="step-frames", ...)`, `currentFrame` set to N-1 so the browser shows the latest frame). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
 | `commit_step_frames(id)` *(v0.8; finalization-only v0.9)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
+| `list_snapshots(workspace)` *(v0.15)* | Validates `workspace` (same safety check as `render()`). Calls `listSnapshots(workspace, dir)` in `server/snapshot-reader.ts` (the same function `GET /snapshots` uses). Returns `{ ok: true, snapshots: [{ id, timestamp, type, title? }] }`, newest-first. Empty array if the workspace has no snapshots. |
+| `export_html(workspace, ids, output_path?)` *(v0.15)* | Validates `workspace` (same safety check as `render()`) and that `ids` is a non-empty array. Builds `items = ids.map(id => ({ workspace, id }))` and calls the same `generateExportHtml()` pipeline as `POST /export-html` (`server/export-html.ts`), extended to resolve `{ workspace, id }` items via a new `findSnapshotByIdInWorkspace(workspace, id, dir)` lookup (scoped variant of `findSnapshotById`, restricted to one workspace directory). Unresolvable ids are skipped; if none resolve, returns `{ ok: false, error: "no valid items to export" }`. On success, writes the assembled HTML to `output_path` (creating parent directories as needed) or, if omitted, to `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html` (reusing `buildDownloadFilename()`). Returns `{ ok: true, path: "<absolute path>" }`, or `{ ok: false, error: "..." }` on a write failure. |
 
 ### Validation — two layers
 
@@ -144,6 +146,8 @@ On success:
 | `init_step_frames` | `{ "ok": true, "id": "<uuid>" }` | `{ "ok": false, "error": "..." }` — unsupported `frame_type` or missing/invalid `workspace` |
 | `append_frame` | `{ "ok": true, "frame_count": N }` | `{ "ok": false, "error": "..." }` — unknown/expired ID or invalid payload |
 | `commit_step_frames` | `{ "ok": true, "id": "<uuid>" }` — UUID of the snapshot written; `id` omitted if snapshot write failed (v0.11 ✅). | `{ "ok": false, "error": "..." }` — unknown/expired ID or zero frames |
+| `list_snapshots` | `{ "ok": true, "snapshots": [...] }` (empty array if none) | `{ "ok": false, "error": "..." }` — missing/invalid `workspace` |
+| `export_html` | `{ "ok": true, "path": "<absolute path>" }` | `{ "ok": false, "error": "..." }` — missing/invalid `workspace`, empty `ids`, no ids resolvable, or disk write failure |
 
 **Browser-side render errors:** if the payload passes server validation but the renderer fails (e.g. Mermaid.js throws), the browser displays the error message inline on the canvas in place of the diagram.
 
@@ -165,7 +169,7 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /slideshow` failure behavior: If validation fails for any slide in the playlist, the server returns `{ ok: false, error: "..." }`. No timer is started, and the canvas state is unchanged (remains as the last successful `render()` or `clear()`). If a slideshow is already running and a new `POST /slideshow` request fails, the running slideshow continues unaffected (error returned, new request rejected).
 
-`GET /snapshots` — v0.4 (Sprint 17). No body. Reads `<WHITEBOARD_SNAPSHOTS_DIR>/<lastWorkspace>/` (where `lastWorkspace` is the workspace from the most recent successful `render()` call in the session; see G2c) and returns `{ ok: true, snapshots: [{ filename, timestamp, type, title? }] }` sorted newest-first. Empty array if directory absent or no `render()` has been called yet. Unreadable/malformed files silently skipped (warning to stderr).
+`GET /snapshots` — v0.4 (Sprint 17); extended v0.15 (Sprint 28). No body. Optional `?workspace=<name>` query param (v0.15, validated with the same safety check as `POST /snapshots/load`); if omitted, reads `<WHITEBOARD_SNAPSHOTS_DIR>/<lastWorkspace>/` (where `lastWorkspace` is the workspace from the most recent successful `render()` call in the session; see G2c) — this is the browser's existing call pattern, unchanged. Returns `{ ok: true, snapshots: [{ id, filename, timestamp, type, title? }] }` sorted newest-first (`id` field added v0.15 — purely additive, the browser ignores it). Empty array if directory absent or no `render()` has been called yet. Unreadable/malformed files silently skipped (warning to stderr). The `list_snapshots(workspace)` MCP tool calls this endpoint's underlying `listSnapshots()` function directly with an explicit, mandatory `workspace`.
 
 `GET /snapshots/all` — v0.5 (Sprint 18). No body. Scans all subdirectories of `WHITEBOARD_SNAPSHOTS_DIR`, reads each workspace's `*_screen.json` files, and returns them grouped. Response: `{ ok: true, workspaces: [{ name, isCurrent, snapshots: [{ filename, timestamp, type, title? }] }] }`. Each workspace's list sorted newest-first. `isCurrent: true` for the workspace matching `lastWorkspace` (in-memory, updated on every successful `render()`; see G2c). Workspaces with no readable snapshots omitted. Returns `{ ok: true, workspaces: [] }` if root absent.
 
@@ -175,7 +179,7 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /snapshots/delete-workspace` — v0.12. Body: `{ "workspace": "…" }`. Workspace safety check. Removes the entire workspace directory and all its contents (`rmdirSync` recursive). If the deleted workspace matches `lastWorkspace`, resets `lastWorkspace` to `""`. Returns `{ ok: true }`. Non-existent workspace returns `{ ok: false, error: "workspace not found" }`.
 
-`POST /export-html` — v0.13. Body: `{ "items": [{ "workspace": "…", "filename": "…" }] }`. Workspace and filename safety checks same as `POST /snapshots/load`. Renders each valid snapshot server-side (Mermaid via `mermaid.render()` + `happy-dom`; KaTeX via `katex.renderToString()`; Vega-Lite via `vega.View().toSVG()`; SVG/HTML via DOMPurify + `happy-dom`; step-frames expanded per frame). Unreadable or malformed snapshots silently skipped. Assembles a single self-contained HTML file (no external references, all CSS inline). Returns `Content-Type: text/html; charset=utf-8` with `Content-Disposition: attachment; filename="<name>-YYYYMMDD-HHmmss.html"` on success; `{ ok: false, error: "no valid items to export" }` (400) if no valid items remain after skipping. Implemented in `server/export-html.ts`.
+`POST /export-html` — v0.13; extended v0.15 (Sprint 28). Body: `{ "items": [{ "workspace": "…", "filename": "…" }, ...] }` (browser) — each item may instead be `{ "workspace": "…", "id": "…" }` (v0.15, agent) — both forms may appear in the same request. Workspace and filename safety checks same as `POST /snapshots/load`; `id` items are resolved by scanning the workspace directory for a matching `id` field (scoped variant of `findSnapshotById`). Renders each valid snapshot server-side (Mermaid → embedded client-side, see F17 fix v0.14; KaTeX via `katex.renderToString()`; Vega-Lite via `vega.View().toSVG()`; SVG/HTML via DOMPurify + `happy-dom`; step-frames expanded per frame). Unreadable, malformed, or unresolvable (`id` not found) items are silently skipped. Assembles a single self-contained HTML file (no external references, all CSS inline). Returns `Content-Type: text/html; charset=utf-8` with `Content-Disposition: attachment; filename="<name>-YYYYMMDD-HHmmss.html"` on success; `{ ok: false, error: "no valid items to export" }` (400) if no valid items remain after skipping. Implemented in `server/export-html.ts`. The `export_html(workspace, ids, output_path?)` MCP tool builds `{ workspace, id }` items from `ids` and calls this same endpoint's underlying `generateExportHtml()`, then writes the response body to disk itself instead of returning it inline (see `02` L6).
 
 ---
 
@@ -445,11 +449,37 @@ user enters export mode → clicks "Export workspace" on a workspace accordion h
   → return response: Content-Type: text/html; charset=utf-8
                       Content-Disposition: attachment; filename="<name>-YYYYMMDD-HHmmss.html"
   → browser receives response → triggers download via <a download> element
-  → [target behavior, v0.14 planned — in progress] user opens the downloaded file → browser
-    executes the embedded mermaid.js bundle → diagrams render with correct labels and viewBox,
-    exactly as the live whiteboard does. Until v0.14 ships, Mermaid is still rendered server-side
-    via happy-dom (see bug B4) and may show invisible labels, wrong viewBox, or thrown errors.
+  → user opens the downloaded file → browser executes the embedded mermaid.js bundle →
+    diagrams render with correct labels and viewBox, exactly as the live whiteboard does
+    (v0.14, shipped — see bug B4)
 ```
+
+### Agent-Facing HTML Export (v0.15)
+
+```
+agent calls list_snapshots(workspace="my-course")
+  → server validates workspace (same safety check as render())
+  → calls listSnapshots(workspace, dir)  [snapshot-reader.ts — same function GET /snapshots uses]
+  → returns { ok: true, snapshots: [{ id, timestamp, type, title? }, ...] }  (newest-first)
+
+agent calls export_html(workspace="my-course", ids=["<uuid-1>", "<uuid-2>"], output_path?="/abs/path/out.html")
+  → server validates workspace and that ids is a non-empty array
+  → builds items = ids.map(id => ({ workspace, id }))
+  → calls generateExportHtml(items)  [export-html.ts — same pipeline as POST /export-html]
+      → each { workspace, id } item resolved via findSnapshotByIdInWorkspace(workspace, id, dir)
+        (scoped variant of findSnapshotById, restricted to one workspace directory)
+      → ids that don't resolve are skipped, same as unreadable files in the v0.13 flow
+      → IF zero items resolve: returns { ok: false, error: "no valid items to export" }
+  → on success, writes the assembled HTML string to disk instead of returning it in the response:
+      → IF output_path provided: mkdir -p its parent directory, write there
+        (no path restriction — see L6 in `02`; relative paths resolve against the
+        server process's cwd, not the agent's)
+      → ELSE: write to <WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html
+        (same buildDownloadFilename() naming convention as the browser download)
+  → returns { ok: true, path: "<absolute path>" }
+```
+
+**Relationship to the v0.13 browser flow:** both `list_snapshots`/`export_html` and the HistoryPanel's export mode ultimately call the same `generateExportHtml()` — the only difference is how items are addressed (`id` vs `filename`) and how the result is delivered (written to disk vs returned as an HTTP response body for browser download). See L5 (`02`) for why the two addressing schemes coexist rather than being unified in this milestone.
 
 ### Node Click Flow (Phase 2 — Sprint 12 plain click)
 
@@ -581,9 +611,9 @@ agent-whiteboard/
 │   ├── validate.ts       # Mermaid keyword + parse validation
 │   ├── ws.ts             # WebSocket push to browser
 │   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
-│   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18)
+│   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17; id field + explicit workspace param v0.15); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18); findSnapshotById() for export(id) (v0.11); findSnapshotByIdInWorkspace() for agent-facing POST /export-html { workspace, id } items (v0.15)
 │   ├── step-frames-builder.ts  # in-memory map of id → partial step-frames state; TTL cleanup (v0.8)
-│   ├── export-html.ts    # HTML assembly for POST /export-html (v0.13). Server-side rendering for katex/vega-lite/svg/html; Mermaid embedded + rendered client-side (v0.14, see bug B4 in `01`)
+│   ├── export-html.ts    # HTML assembly for POST /export-html (v0.13). Server-side rendering for katex/vega-lite/svg/html; Mermaid embedded + rendered client-side (v0.14, see bug B4 in `01`). Items addressable by filename (v0.13) or id (v0.15) — also used by the export_html MCP tool, which writes the result to disk instead of returning it in the HTTP response.
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/
