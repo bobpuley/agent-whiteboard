@@ -34,7 +34,7 @@ Raw idea (FR15, `01`): "the export as self-contained html should be also availab
 - [x] **T5 — `server/mcp.ts`:** register `list_snapshots(workspace)` MCP tool — validates `workspace`, calls `listSnapshots()`, returns `{ ok: true, snapshots }`.
 - [x] **T6 — `server/mcp.ts` + `server/export-html.ts`:** register `export_html(workspace, ids, output_path?)` MCP tool — validates `workspace` and non-empty `ids`, builds `{ workspace, id }` items, calls `generateExportHtml()`, writes the result to `output_path` (mkdir -p, no restriction) or the default `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html` (reuse `buildDownloadFilename()`), returns `{ ok: true, path }`.
 - [x] **T7 — `tests/unit/server/app.test.ts`:** unit tests for `GET /snapshots?workspace=` (explicit param, id field present, fallback to lastWorkspace preserved), `POST /export-html` with `{ workspace, id }` items (found, not-found/skipped, mixed filename+id in one request), and the two new MCP tool handlers (`list_snapshots`, `export_html` — success, empty ids, unresolvable ids, custom `output_path`, default path).
-- [ ] **T8 — Manual verification:** call `list_snapshots()` then `export_html()` against a real workspace via Claude Code; confirm the returned path exists, opens correctly, and matches the diagrams selected by id.
+- [x] **T8 — Manual verification:** call `list_snapshots()` then `export_html()` against a real workspace via Claude Code; confirm the returned path exists, opens correctly, and matches the diagrams selected by id.
 
 ---
 
