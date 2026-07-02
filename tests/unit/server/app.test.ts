@@ -2516,4 +2516,115 @@ describe("POST /export-html (v0.13)", () => {
     const disposition = res.headers.get("Content-Disposition") ?? "";
     expect(disposition).toMatch(/export-/);
   });
+
+  // v0.14 — Mermaid export fix (Sprint 27): server no longer pre-renders
+  // Mermaid via happy-dom; raw source is embedded and rendered client-side.
+  const VALID_MERMAID_RECORD = JSON.stringify({
+    type: "mermaid",
+    payload: "graph TD; A --> B",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  });
+
+  const STEP_FRAMES_MERMAID_RECORD = JSON.stringify({
+    type: "step-frames",
+    payload: JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        { label: "Phase 1", payload: "graph LR\n  A([Push]) --> B[Install deps]" },
+        { label: "Phase 2", payload: "graph LR\n  A([Push]) --> B[Install deps] --> C[Typecheck]" },
+      ],
+    }),
+    timestamp: "2026-01-01T00:00:00.000Z",
+  });
+
+  // Regression: previously threw "Could not find a suitable point for the
+  // given distance" under happy-dom (edge labels + cylinder node shape).
+  const EDGE_LABEL_CYLINDER_RECORD = JSON.stringify({
+    type: "mermaid",
+    payload: "graph TD\n  FE[Frontend]\n  BE[Backend]\n  DB[(Database)]\n  FE -->|HTTP| BE\n  BE -->|Query| DB",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  });
+
+  it("embeds raw mermaid source in a .mermaid container instead of a pre-rendered SVG", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_MERMAID_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('<pre class="mermaid">graph TD; A --&gt; B</pre>');
+    expect(body).not.toContain('<p class="export-error">');
+  });
+
+  it("embeds the mermaid.js bundle and bootstrap script when mermaid items are present", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_MERMAID_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+
+    const body = await res.text();
+    expect(body).toContain("mermaid.initialize({ startOnLoad: false })");
+    expect(body).toContain('mermaid.run({ querySelector: ".mermaid" })');
+    expect(body).not.toMatch(/<script src=["']https?:/);
+  });
+
+  it("does not embed the mermaid bundle when no mermaid items are present", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_KATEX_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+
+    const body = await res.text();
+    expect(body).not.toContain("mermaid.initialize");
+  });
+
+  it("renders each mermaid frame of a step-frames sequence as its own container, with no export-error", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(STEP_FRAMES_MERMAID_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+
+    const body = await res.text();
+    expect(body).not.toContain('<p class="export-error">');
+    expect((body.match(/<pre class="mermaid">/g) ?? []).length).toBe(2);
+    expect(body).toContain("mermaid.initialize");
+  });
+
+  it("does not error on a mermaid diagram with edge labels and a cylinder node (regression)", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(EDGE_LABEL_CYLINDER_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).not.toContain('<p class="export-error">');
+    expect(body).toContain('<pre class="mermaid">');
+  });
 });
