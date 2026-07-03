@@ -41,9 +41,9 @@ Use AskUserQuestion to ask:
    - If yes: update stack decisions, system diagram, tool contracts, data flows, or project structure as needed
    - Use AskUserQuestion for any trade-off that needs a decision
    - If no change needed: explicitly note "no architecture impact" and move on
-5. **Milestone file** — Add one or more sprint tasks for this feature. (template: `.claude/templates/milestone.template.md`)
+5. **Milestone file** — Add one or more sprint tasks for this feature.
    - Find the in-progress milestone from the registry in `05_dev-plan.md` and append the tasks to its file.
-   - If this belongs to a future milestone: add the milestone to the registry in `05_dev-plan.md` (status: **planned**), create `docs/milestones/Milestone_vX.Y.md` with a header and status stub, and add the task there. Update the File column in the registry row.
+   - If this belongs to a future milestone: add the milestone to the registry in `05_dev-plan.md` (status: **planned**), create `docs/milestones/Milestone_vX.Y.md` (template: `.claude/templates/milestone.template.md`). Update the File column in the registry row.
    - Write a clear DoD for each new task.
 6. State what changed across all files in one concise summary line per file.
 
