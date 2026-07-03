@@ -1,3 +1,11 @@
+## 0.17.0 — 2026-07-03
+
+- **Step-frames per-frame validation parity (bug B5):** `render(type="step-frames", ...)` now validates every frame's payload against its effective type before accepting the sequence — previously it only checked payload shape, so a malformed mermaid or vega-lite frame was silently accepted and only failed when the user stepped or seeked to it. `append_frame()` already validated per frame; both creation paths now give the same guarantee, enforced by a single shared code path in `validatePayload()` (`server/validate.ts`) that also covers `POST /slideshow` and `POST /snapshots/load` for free
+- **Per-frame `type` override:** `StepFrame` gains an optional `type` field; a step-frames sequence can now mix content types (e.g. a mermaid frame followed by a katex frame) via `type` on individual frames in the one-shot payload, or as a new optional 4th argument to `append_frame(id, payload, label?, type?)` / `POST /step-frames/:id/frame` body / the MCP `append_frame` tool
+- **Broadcasts use each frame's own type:** `ws.ts`, `app.ts` (render/step/seek/snapshots-load), `mcp.ts` (render/step/seek), and `slideshow.ts` (tick/slide expansion) all send `frame.type ?? frameType` instead of the sequence-level type, so navigating or auto-advancing through a mixed-type sequence renders each frame with its correct renderer
+- **`mcp.ts`'s `render` tool step-frames branch refactored** to delegate to the shared `validatePayload()` instead of duplicating shape-check logic inline
+- 10 new unit tests across `app.test.ts`, `mcp.test.ts`, and `step-frames-builder.test.ts` (220 total), plus one new Playwright e2e test proving a mixed mermaid+katex sequence renders correctly in a live browser (28/29 e2e; 1 pre-existing unrelated Done-button flake)
+
 ## 0.16.0 — 2026-07-03
 
 - **Delete/export controls moved to the right-side controls panel:** the recycle-bin and export icons are removed from the history panel header; two new icon buttons (delete, export) appear in the always-visible right-side controls panel, grouped with a divider between the history-toggle and Done buttons
