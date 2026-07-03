@@ -35,7 +35,9 @@ export function createMcpServer(): McpServer {
         '  • "html"        — HTML/CSS fragment. Example: render({ type: "html", payload: "<h1>Hello</h1>" })\n' +
         '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
         '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{\"$schema\":\"...\",\"mark\":\"bar\",...}" })\n' +
-        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate.\n' +
+        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate. ' +
+        'Best for small, fully-known-upfront sequences (one call). Caveat: individual frame payloads are NOT validated against frame_type here — a malformed frame is accepted and only fails when the user steps/seeks to it. ' +
+        'For long or complex sequences, when you want each frame validated as you build it, or when you want the user to review and acknowledge each frame before the next appears, use init_step_frames()/append_frame()/commit_step_frames() instead (see below) — it validates every frame at append time and composes with wait_done() for paced, user-acknowledged reveal.\n' +
         'options: { "workspace": "my-course", "title": "My diagram" }. workspace is REQUIRED — snapshot routing fails without it. title is optional.\n' +
         'options.workspace: workspace name for snapshot routing. Must be alphanumeric with dashes, underscores, dots, or spaces — no path separators. No env var fallback: always pass explicitly.\n' +
         'Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "course_2", title: "System flow" } })',
@@ -515,8 +517,10 @@ export function createMcpServer(): McpServer {
         "Begin an incremental step-frames sequence. Use this when you want to build a step-through diagram one frame at a time.\n" +
         "Creates an empty skeleton in server memory, pushes a 0-frame placeholder to the browser, and returns a unique ID.\n" +
         "Protocol: init_step_frames() → append_frame() × N (browser updates after each append) → commit_step_frames() (finalizes snapshot + state).\n" +
-        "frame_type: content type shared by all frames (e.g. 'mermaid'). workspace: same rules as render() — required.\n" +
+        "frame_type: content type shared by all frames (e.g. 'mermaid') — every frame in the sequence must currently be this same type.\n" +
+        "workspace: same rules as render() — required.\n" +
         "The ID expires after 30 minutes of inactivity (no append_frame or commit_step_frames call).\n" +
+        "Prefer this over passing a full payload to render(type=\"step-frames\", ...) in one call whenever: the sequence is long or complex (each append_frame() validates its own frame — the one-shot render() path does not validate individual frame content); or you want the user to review and acknowledge each frame before the next appears — interleave wait_done() after each append_frame() call for paced, user-acknowledged reveal. For a short, fully-known-upfront sequence, render(type=\"step-frames\", ...) in one call is fewer round-trips.\n" +
         'Returns { "ok": true, "id": "<uuid>" }. Error if workspace is missing/invalid or frame_type is unsupported.\n' +
         'Example: init_step_frames({ frame_type: "mermaid", workspace: "my-course", title: "TCP Handshake" })',
       inputSchema: z.object({

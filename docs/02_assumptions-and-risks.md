@@ -161,6 +161,13 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 - `lastWorkspace` starts as an empty string; history endpoints return empty/no-isCurrent until the first `render()` call in a session.
 - No new config surface, no client changes needed.
 
+**G2d — npx distribution is a packaging change only, not an architecture change (FR17)**
+> ⚠️ ASSUMPTION: shipping `npx agent-whiteboard` does not require rearchitecting the server, MCP transport, or client — only release/packaging work. Not yet validated by implementation.
+- Blocker 1: `package.json` currently has `"private": true` and `"version": "0.1.0"`, both placeholders that predate any real release; must be decided (real starting version, `private: false`) before a first publish.
+- Blocker 2: no `bin` entry / CLI wrapper exists. The only start path today is `npm run dev` (`concurrently`: `tsx watch server/index.ts` + Vite dev server + browser auto-open). An installable CLI needs its own entry point.
+- Blocker 3 (real architecture gap, confirmed by reading `server/app.ts` / `server/index.ts` during the review): the Hono app has no static-file-serving route wired in for the production client build — `npm run build` produces `dist/client/`, but nothing serves it. The `04_architecture.md` "Dev server" row already flagged "production static build deferred to Phase 2" — this is that phase.
+- Risk: until these are resolved, `npx agent-whiteboard` cannot work; the idea is captured here so it isn't lost, but no work is scheduled (see FR17 in `01`, deferred to backlog per user decision 2026-07-03).
+
 **G3 — No snapshot cleanup policy in v1**
 > ✅ DECISION: Files accumulate indefinitely by design. No TTL, quota, or rotation is defined, and none is planned for v1.
 - Risk: unbounded disk growth over long-lived projects.
@@ -188,6 +195,11 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 
 **I5 — `append_frame()` renders an incremental partial step-frames preview**
 > ✅ DECISION (v0.9): After each valid `append_frame()` call, the server immediately pushes the full accumulated partial step-frames sequence to the browser via WebSocket — the same format as `render(type="step-frames", ...)` but with only the frames appended so far, positioned at the latest frame (index N-1). The user sees the sequence grow one frame at a time. The in-memory canvas state is NOT updated on `append_frame()` — only `commit_step_frames()` updates it. Invalid payloads are rejected before any broadcast; prior frames and the browser state are preserved.
+
+**I6 — False assumption: validation parity between the one-shot and incremental step-frames paths (B5, found 2026-07-03)**
+> ❌ INVALIDATED: it was implicitly assumed (never explicitly stated as a decision, which is itself the gap) that `render(type="step-frames", ...)` and `append_frame()` gave the same validation guarantee per frame, since both ultimately produce the same `StepFrame[]` shape. In fact `append_frame()` calls `validatePayload(entry.frame_type, payload)` per frame (I1, v0.8) while the one-shot path only checks payload shape (`frame_type` is a string, `frames` non-empty, each `frame.payload` is a string) — it never runs `parseMermaid()` or the vega-lite JSON check against individual frames. A malformed frame in a one-shot payload is accepted and only fails when the user navigates to it.
+> - Risk: any future change to the incremental builder's validation that assumes "the one-shot path already does this too" would be building on a false premise — the two paths must be checked independently until unified.
+> - Not yet fixed or scheduled to a milestone (see F3a-gap in `03`, B5 in `01`, and the architecture note in `04`). Also surfaced a related idea: extending `StepFrame` with an optional per-frame `type` would fix this gap and additionally allow mixed-type sequences — deferred, not yet scheduled.
 
 ---
 
