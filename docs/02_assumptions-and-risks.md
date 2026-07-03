@@ -245,6 +245,14 @@ Risks from moving the three test roots:
 - Risk: if non-snapshot files exist inside a workspace directory (e.g. user placed other files there), "Workspace delete" removes them too.
 - Decision: document clearly in UI that the operation removes all contents of the workspace folder. No scanning or selective removal in v1.
 
+**K3 — Delete/export modal redesign (FR16, planned v0.16)**
+> ✅ DECISION (2026-07-03, via `/grill-me` interview during intake — first pass got no response while the user was away, defaults were adopted provisionally; user then explicitly requested a re-grill and confirmed all 5 points live, unchanged from the provisional defaults):
+> 1. **Full replacement:** the 2-step delete/export modal (see FR16 in `01`, prototyped in `mockup/whiteboard-view-v2.html`) replaces the entire inline selection UI in `HistoryPanel.svelte` — header recycle-bin/export icons, per-row checkboxes, select-bar, and per-workspace action bar are all removed. This narrows subset-selection from "any items across any workspaces in one action" (old UI) to "a subset within one workspace per action" (new modal, "zoom in" framing) — confirmed as an intentional scope reduction.
+> 2. **Per-row single-delete button removed:** the always-visible hover-trash icon on each snapshot row is removed. Deleting one snapshot now goes through the modal (pick workspace → check 1 → "Delete selected"). One delete affordance, not two.
+> 3. **Whole-workspace delete keeps a confirmation step**, consistent with K1's existing mitigation — the modal's "Delete entire workspace" and "Delete selected" actions require a second confirming interaction before they execute (e.g. a "click again to confirm" button state, replacing the old `window.confirm()`). Export actions ("Export entire workspace" / "Export selected") need no confirmation (non-destructive, no data loss).
+> 4. **Step 1 (choose workspace) is skipped when exactly one workspace has snapshots** — the modal opens directly into step 2 for that workspace (back arrow hidden in this case, since there's no step 1 to return to). Step 1 shows normally whenever ≥2 workspaces exist.
+> 5. **Pure client-side refactor:** no new REST endpoints or server-side changes. `POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, and `POST /export-html` (all filename-keyed, per L5's decision not to retrofit browser endpoints to `id`-based addressing) already cover everything the modal needs.
+
 **J1 — Snapshot schema gains an `id` field (FR7, v0.11 ✅)**
 > ✅ IMPLEMENTED (v0.11): Each snapshot JSON file includes an `id` UUID field generated at write time. Old snapshot files written before v0.11 do not have this field — the server handles `id: undefined` gracefully (treated as non-exportable by ID). The `render()` and `commit_step_frames()` success responses include the generated `id` field. Adding a new field to the snapshot schema and MCP response is backward-compatible: existing consumers ignore unknown fields.
 

@@ -19,5 +19,6 @@
 | v0.13 | HTML Export & Clear Workspace Removal | 26 | released    | [Milestone_v0.13.md](./milestones/Milestone_v0.13.md) |
 | v0.14 | Mermaid Export Fix | 27 | released    | [Milestone_v0.14.md](./milestones/Milestone_v0.14.md) |
 | v0.15 | Agent-Facing HTML Export | 28 | released    | [Milestone_v0.15.md](./milestones/Milestone_v0.15.md) |
+| v0.16 | Delete/Export Modal Redesign | 29 | in progress | [Milestone_v0.16.md](./milestones/Milestone_v0.16.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.

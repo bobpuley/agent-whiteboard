@@ -328,6 +328,9 @@ The self-contained HTML export (FR14, v0.13) should also be callable by the agen
 **FR14 — Export selected snapshots to self-contained HTML**
 From the HistoryPanel in selection mode, an "Export selected" button appears in the select-bar alongside "Delete selected", visible only when at least one item is checked. Clicking it POSTs the selected `{ workspace, filename }` pairs to `POST /export-html`, receives a self-contained HTML file, and triggers a browser download. The HTML file contains all selected snapshots rendered as static content — Mermaid as inline SVG, KaTeX as HTML string, Vega-Lite as inline SVG, SVG/HTML as sanitized markup. Step-frames sequences are expanded into frame sub-sections. The file requires no external network requests (all CSS inline; KaTeX CSS only when ≥1 KaTeX items are present). New server-side dependency: `happy-dom` for Mermaid rendering and DOMPurify. Per-item render failure shows an inline error message — the overall export continues.
 
+**FR16 — Move delete/export controls to the right-side panel; replace inline selection UI with a 2-step modal**
+Raw request: "upgrade the view to whiteboard-view-v2.html style." Move the delete and export icon buttons out of the history panel header (U7f/U7g) and into the right-side controls panel, alongside the existing history-toggle and Done buttons (U7d). Clicking either icon opens a modal instead of toggling inline selection mode: **step 1** — the user picks a workspace from a list; **step 2** — the view zooms into that workspace, where the user either deletes/exports the entire workspace in one action, or checks a subset of its snapshots and deletes/exports just those. Goal (user's words): "the history panel is cleaner and the UI for delete and export will be clearer and easier to use." Prototyped as a working static mockup: `mockup/whiteboard-view-v2.html` (and `mockup/whiteboard-view.html` for the prior/baseline UI).
+
 ---
 
 ## Bug Reports

@@ -54,11 +54,11 @@
     │  • Done button → POST /user-done → signalDone() → wakes wait_done() tool
     │  • History panel (v0.4): toggle button → GET /snapshots → list; click entry → POST /snapshots/load → canvas updated
     │  • History panel workspace accordion (v0.5): toggle button → GET /snapshots/all → accordion grouped by workspace (current auto-expanded); click entry → POST /snapshots/load { workspace, filename } → canvas updated
-    │  • Right-side controls panel (v0.10): small fixed panel on right edge; contains history toggle + Done button (icon-only); replaces footer/bottom-right placement from v0.2–v0.9
+    │  • Right-side controls panel (v0.10): small fixed panel on right edge; contains history toggle + Done button (icon-only); replaces footer/bottom-right placement from v0.2–v0.9. **v0.16:** gains delete and export icon buttons (see below) — panel now reads top-to-bottom as history, delete, export, done.
     │  • History panel lock/unlock (v0.10): toggle in panel header; locked = panel stays open after snapshot load
     │  • Done button conditional visibility (v0.12): button hidden by default; shown only when server emits { action: "set_done_armed", armed: true }; hidden again on armed: false; server pushes current state to every new WebSocket connection
-    │  • History panel delete (v0.12; simplified v0.13): recycle bin icon in header activates selection mode; single/multi-select delete via POST /snapshots/delete-files; "Workspace delete" via POST /snapshots/delete-workspace. "Clear workspace" (POST /snapshots/clear-workspace) removed in v0.13.
-    │  • History panel export (v0.13): dedicated export icon in header enters export mode (parallel to delete mode, same checkbox-on-rows view); "Export selected" in select-bar for checked items; "Export workspace" on each workspace accordion header for one-click full-workspace export; both POST to POST /export-html and trigger browser download
+    │  • History panel delete/export — REPLACED in v0.16 (see below). Superseded design (v0.12–v0.13, kept here for change history): recycle bin + export icons in the panel header toggled inline selection mode with checkboxes on every row across all workspace accordions at once, a per-workspace "Delete folder"/"Export workspace" action bar, and an always-visible per-row hover-delete button. All of this UI is removed in v0.16.
+    │  • Delete/export modal (v0.16, planned — see FR16 in `01`, K3 in `02`): clicking the new delete or export icon in the right-side controls panel opens a 2-step modal instead of toggling inline selection mode. Step 1: pick a workspace from a list (skipped, opening directly to step 2, when only one workspace has snapshots). Step 2: zoomed into that workspace — a single "Delete/Export entire workspace" action, or check a subset of its snapshots and act on just those via a footer "N selected" bar. Whole-workspace delete requires a second confirming interaction (replaces the old `window.confirm()`); whole-workspace export does not. Calls the same server endpoints as before (`POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, `POST /export-html`) — pure client-side UI change, no new endpoints. Prototyped in `mockup/whiteboard-view-v2.html`.
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -619,7 +619,8 @@ agent-whiteboard/
 │   ├── src/
 │   │   ├── App.svelte
 │   │   ├── ws.ts         # WebSocket client
-│   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17)
+│   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17). v0.16: inline selection-mode UI (header icons, per-row checkboxes, select-bar, ws-actions-bar) removed — becomes pure browse/load.
+│   │   ├── DeleteExportModal.svelte  # 2-step delete/export modal (v0.16, planned) — workspace picker → zoomed-in whole-workspace / subset action. Triggered from App.svelte's controls panel.
 │   │   └── renderers/    # one file per content type
 │   │       ├── Mermaid.svelte
 │   │       ├── Html.svelte

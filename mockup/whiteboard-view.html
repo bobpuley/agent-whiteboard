@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agent Whiteboard — view mockup</title>
+<style>
+  /* ============================================================
+     Copied 1:1 from client/src/App.svelte + HistoryPanel.svelte.
+     When a change here looks right, port it back to those files.
+     ============================================================ */
+  body {
+    margin: 0;
+    background: #fff;
+    font-family: sans-serif;
+  }
+
+  main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+
+  .banner {
+    background: #c0392b;
+    color: #fff;
+    padding: 10px 16px;
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 12px;
+    border-radius: 4px;
+  }
+
+  .banner code {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .canvas-frame {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #d8d8d8;
+    border-radius: 6px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .canvas-title {
+    padding: 10px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 1px solid #e8e8e8;
+    background: #fafafa;
+    user-select: none;
+  }
+
+  .canvas {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .placeholder {
+    color: #aaa;
+    font-size: 16px;
+    user-select: none;
+  }
+
+  .step-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 10px 16px;
+    background: #f7f7f7;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .step-btn {
+    padding: 6px 16px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .step-btn:hover:not(:disabled) {
+    background: #f0f0f0;
+  }
+
+  .step-btn:disabled {
+    color: #bbb;
+    border-color: #e0e0e0;
+    cursor: default;
+  }
+
+  .step-label {
+    font-size: 14px;
+    color: #444;
+    flex: 1;
+    text-align: center;
+  }
+
+  .controls-panel {
+    position: fixed;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 8px;
+    background: #fff;
+    border: 1px solid #d8d8d8;
+    border-right: none;
+    border-radius: 6px 0 0 6px;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
+    z-index: 50;
+  }
+
+  .history-btn {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    color: #555;
+    transition: background 0.1s;
+    line-height: 1;
+  }
+
+  .history-btn:hover {
+    background: #f0f0f0;
+  }
+
+  .history-btn[aria-pressed="true"] {
+    background: #e8f4fd;
+    border-color: #2980b9;
+    color: #2980b9;
+  }
+
+  .done-btn {
+    padding: 6px 8px;
+    border: 1px solid #27ae60;
+    border-radius: 4px;
+    background: #fff;
+    color: #27ae60;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.1s;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .done-btn:hover:not(:disabled) {
+    background: #f0fff4;
+  }
+
+  .done-btn:disabled {
+    border-color: #aaa;
+    color: #aaa;
+    cursor: default;
+  }
+
+  /* -- renderer inner styles (client/src/renderers/*.svelte) -- */
+  .html-renderer {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+  }
+
+  .html-renderer svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .katex-renderer {
+    font-size: 28px;
+    color: #222;
+  }
+
+  .vega-lite-renderer {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* -- HistoryPanel.svelte -- */
+  .history-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 320px;
+    height: 100vh;
+    background: #fff;
+    border-left: 1px solid #d8d8d8;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    box-sizing: border-box;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #e8e8e8;
+    background: #fafafa;
+    gap: 4px;
+  }
+
+  .panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    flex: 1;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .action-btn {
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    color: #999;
+    padding: 3px 5px;
+    border-radius: 3px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .action-btn:hover {
+    background: #f0f0f0;
+    color: #555;
+  }
+
+  .action-btn.active,
+  .action-btn.locked {
+    color: #2980b9;
+    border-color: #2980b9;
+    background: #e8f4fd;
+  }
+
+  .header-sep {
+    width: 1px;
+    height: 18px;
+    background: #d0d0d0;
+    margin: 0 4px;
+    flex-shrink: 0;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #888;
+    padding: 2px 6px;
+    border-radius: 3px;
+    line-height: 1;
+  }
+
+  .close-btn:hover {
+    background: #f0f0f0;
+    color: #444;
+  }
+
+  .select-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: #fff8e1;
+    border-bottom: 1px solid #ffe082;
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  .select-bar.export-bar {
+    background: #e8f4fd;
+    border-bottom-color: #90caf9;
+  }
+
+  .select-count {
+    color: #555;
+    flex: 1;
+  }
+
+  .select-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .delete-selected-btn {
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .delete-selected-btn:hover {
+    background: #c0392b;
+  }
+
+  .export-selected-btn {
+    background: #2980b9;
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+
+  .export-selected-btn:hover {
+    background: #1f6699;
+  }
+
+  .cancel-select-btn {
+    background: none;
+    color: #555;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .cancel-select-btn:hover {
+    background: #f0f0f0;
+  }
+
+  .ws-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px 4px 28px;
+    background: #fafafa;
+    border-bottom: 1px solid #ececec;
+    font-size: 11px;
+  }
+
+  .ws-actions-label {
+    color: #999;
+    flex: 1;
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .panel-message {
+    color: #888;
+    font-size: 13px;
+    padding: 16px;
+    margin: 0;
+    text-align: center;
+  }
+
+  .panel-error {
+    color: #c0392b;
+  }
+
+  .workspace-group {
+    border-bottom: 1px solid #ececec;
+  }
+
+  .workspace-group:last-child {
+    border-bottom: none;
+  }
+
+  .workspace-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    background: #fafafa;
+    list-style: none;
+    user-select: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+  }
+
+  .workspace-summary:hover {
+    background: #f0f0f0;
+  }
+
+  .workspace-summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .workspace-summary::before {
+    content: "▶";
+    font-size: 9px;
+    color: #999;
+    transition: transform 0.15s;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  details[open] > .workspace-summary::before {
+    transform: rotate(90deg);
+  }
+
+  .workspace-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .current-badge {
+    font-size: 10px;
+    background: #e8f4fd;
+    color: #2980b9;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .ws-action-btn {
+    font-size: 10px;
+    padding: 1px 7px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
+    cursor: pointer;
+    color: #555;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .ws-action-btn:hover {
+    background: #f0f0f0;
+  }
+
+  .ws-action-delete {
+    border-color: #e74c3c;
+    color: #e74c3c;
+  }
+
+  .ws-action-delete:hover {
+    background: #fdf0f0;
+  }
+
+  .ws-action-export {
+    border-color: #2980b9;
+    color: #2980b9;
+  }
+
+  .ws-action-export:hover {
+    background: #e8f4fd;
+  }
+
+  .snapshot-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .snapshot-item {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+  }
+
+  .snapshot-item.selected {
+    background: #fff8e1;
+  }
+
+  .snapshot-item:hover .row-delete-btn {
+    opacity: 1;
+  }
+
+  .snapshot-checkbox-label {
+    display: flex;
+    align-items: center;
+    padding: 0 4px 0 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .snapshot-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    padding: 10px 8px 10px 28px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s;
+  }
+
+  .snapshot-item.selected .snapshot-row,
+  .snapshot-item.has-checkbox .snapshot-row {
+    padding-left: 8px;
+  }
+
+  .snapshot-row:hover {
+    background: #f5f5f5;
+  }
+
+  .snapshot-title {
+    font-size: 13px;
+    color: #222;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .snapshot-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .type-badge {
+    font-size: 11px;
+    background: #e8f4fd;
+    color: #2980b9;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .snapshot-time {
+    font-size: 11px;
+    color: #999;
+  }
+
+  .row-delete-btn {
+    opacity: 0;
+    transition: opacity 0.1s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #bbb;
+    padding: 6px 10px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .row-delete-btn:hover {
+    color: #e74c3c;
+  }
+
+  /* ============================================================
+     Mockup-only chrome below this line — not part of the real app.
+     Lets you flip between every view state instantly. Delete this
+     block (and the <div id="mockup-toolbar">...) when porting styles
+     back; everything above it is 1:1 with the Svelte source.
+     ============================================================ */
+  #mockup-toolbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 200;
+    background: #1e1e1e;
+    color: #ddd;
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    padding: 10px 12px;
+    border-bottom-right-radius: 8px;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.25);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    align-items: center;
+    max-width: calc(100vw - 20px);
+  }
+  #mockup-toolbar .group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  #mockup-toolbar label {
+    color: #999;
+  }
+  #mockup-toolbar select,
+  #mockup-toolbar button {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #555;
+    background: #2b2b2b;
+    color: #ddd;
+    cursor: pointer;
+  }
+  #mockup-toolbar button.on {
+    background: #2980b9;
+    border-color: #2980b9;
+    color: #fff;
+  }
+  #mockup-toolbar .badge {
+    background: #444;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div id="mockup-toolbar">
+  <span class="badge">MOCKUP — not the real app</span>
+
+  <div class="group">
+    <label for="sel-canvas">canvas</label>
+    <select id="sel-canvas">
+      <option value="empty">empty</option>
+      <option value="step-frames-placeholder">step-frames placeholder</option>
+      <option value="mermaid" selected>mermaid</option>
+      <option value="svg">svg</option>
+      <option value="html">html</option>
+      <option value="katex">katex</option>
+      <option value="vega-lite">vega-lite</option>
+    </select>
+  </div>
+
+  <div class="group">
+    <button id="btn-title" class="on">title</button>
+    <button id="btn-stepbar">step-bar</button>
+    <button id="btn-banner">disconnected banner</button>
+    <button id="btn-done">done armed</button>
+    <button id="btn-clickable">clickable nodes</button>
+  </div>
+
+  <div class="group">
+    <button id="btn-history">history panel</button>
+  </div>
+
+  <div class="group" id="history-controls" style="display:none">
+    <label for="sel-history-state">history</label>
+    <select id="sel-history-state">
+      <option value="populated" selected>populated</option>
+      <option value="loading">loading</option>
+      <option value="error">error</option>
+      <option value="empty">no snapshots</option>
+    </select>
+    <select id="sel-selection-mode">
+      <option value="none" selected>no selection</option>
+      <option value="delete">delete mode</option>
+      <option value="export">export mode</option>
+    </select>
+  </div>
+</div>
+
+<main>
+  <div id="banner" class="banner" style="display:none">
+    Server disconnected. Restart <code>npm run dev</code>.
+  </div>
+
+  <div class="canvas-frame">
+    <header id="canvas-title" class="canvas-title">Photosynthesis — overview</header>
+
+    <div class="canvas" id="canvas-body">
+      <!-- swapped by JS based on #sel-canvas -->
+    </div>
+  </div>
+
+  <div id="step-bar" class="step-bar" style="display:none">
+    <button class="step-btn" aria-label="Previous frame">&#8592; Prev</button>
+    <span class="step-label">Frame 2 of 5 — Light reactions</span>
+    <button class="step-btn" aria-label="Next frame">Next &#8594;</button>
+  </div>
+
+  <div class="controls-panel">
+    <button id="history-btn" class="history-btn" aria-label="Toggle history panel" aria-pressed="false">&#128337;</button>
+    <button id="done-btn" class="done-btn" style="display:none" title="Done">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </button>
+  </div>
+</main>
+
+<div id="history-panel" class="history-panel" role="dialog" aria-label="Snapshot history" style="display:none">
+  <div class="panel-header">
+    <span class="panel-title">History</span>
+    <div class="header-actions">
+      <button id="mode-delete" class="action-btn" aria-label="Enter delete mode" title="Delete snapshots">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <button id="mode-export" class="action-btn" aria-label="Enter export mode" title="Export snapshots to HTML">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+      <button id="lock-btn" class="action-btn" aria-label="Lock history panel" aria-pressed="false" title="Unlocked — panel closes after load">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+        </svg>
+      </button>
+      <div class="header-sep" aria-hidden="true"></div>
+      <button class="close-btn" id="close-history-btn" aria-label="Close history panel">&#10005;</button>
+    </div>
+  </div>
+
+  <div id="select-bar" class="select-bar" style="display:none">
+    <span class="select-count" id="select-count-label">Select snapshots to delete</span>
+    <div class="select-bar-actions">
+      <button class="delete-selected-btn" id="delete-selected-btn" style="display:none">Delete selected</button>
+      <button class="export-selected-btn" id="export-selected-btn" style="display:none">Export selected</button>
+      <button class="cancel-select-btn" id="cancel-select-btn">Cancel</button>
+    </div>
+  </div>
+
+  <div class="panel-body" id="panel-body">
+    <!-- swapped by JS based on #sel-history-state -->
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  // ---- sample content for each canvas type ----
+  const canvasSamples = {
+    empty: '<p class="placeholder">Waiting for content…</p>',
+    "step-frames-placeholder": '<p class="placeholder">Building step-frames… 5 frames</p>',
+    mermaid: `
+      <svg width="360" height="180" viewBox="0 0 360 180" style="max-width:100%;height:auto">
+        <rect x="10" y="10" width="140" height="50" rx="6" fill="#e8f4fd" stroke="#2980b9"/>
+        <text x="80" y="40" font-size="13" text-anchor="middle" fill="#222">Sunlight</text>
+        <rect x="210" y="10" width="140" height="50" rx="6" fill="#e8f4fd" stroke="#2980b9"/>
+        <text x="280" y="40" font-size="13" text-anchor="middle" fill="#222">Chlorophyll</text>
+        <rect x="110" y="110" width="140" height="50" rx="6" fill="#e8f4fd" stroke="#2980b9"/>
+        <text x="180" y="140" font-size="13" text-anchor="middle" fill="#222">Glucose + O2</text>
+        <line x1="150" y1="35" x2="210" y2="35" stroke="#999" marker-end="url(#arrow)"/>
+        <line x1="180" y1="60" x2="180" y2="110" stroke="#999" marker-end="url(#arrow)"/>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 z" fill="#999"/>
+          </marker>
+        </defs>
+      </svg>`,
+    svg: `
+      <svg width="200" height="200" viewBox="0 0 200 200" style="max-width:100%;height:auto">
+        <circle cx="100" cy="100" r="80" fill="#e8f4fd" stroke="#2980b9" stroke-width="3"/>
+        <circle cx="100" cy="100" r="45" fill="#fff8e1" stroke="#ffb300" stroke-width="2"/>
+      </svg>`,
+    html: `
+      <div style="font-family:sans-serif;max-width:420px">
+        <h2 style="margin:0 0 8px;color:#222">Cell membrane</h2>
+        <p style="margin:0;color:#555;line-height:1.5">
+          A selectively permeable barrier made of a phospholipid bilayer,
+          embedded with proteins that regulate what passes in and out.
+        </p>
+      </div>`,
+    katex: `x = \\dfrac{-b \\pm \\sqrt{b^2-4ac}}{2a}`,
+    "vega-lite": `
+      <div style="display:flex;align-items:flex-end;gap:10px;height:160px">
+        <div style="width:36px;height:60%;background:#2980b9;border-radius:3px 3px 0 0"></div>
+        <div style="width:36px;height:90%;background:#2980b9;border-radius:3px 3px 0 0"></div>
+        <div style="width:36px;height:40%;background:#2980b9;border-radius:3px 3px 0 0"></div>
+        <div style="width:36px;height:75%;background:#2980b9;border-radius:3px 3px 0 0"></div>
+        <div style="width:36px;height:55%;background:#2980b9;border-radius:3px 3px 0 0"></div>
+      </div>`,
+  };
+
+  function renderCanvas() {
+    const type = $("sel-canvas").value;
+    const body = $("canvas-body");
+    if (type === "katex") {
+      body.innerHTML = `<div class="katex-renderer">${canvasSamples.katex}</div>`;
+    } else if (type === "vega-lite") {
+      body.innerHTML = `<div class="vega-lite-renderer">${canvasSamples["vega-lite"]}</div>`;
+    } else if (type === "mermaid" || type === "svg" || type === "html") {
+      body.innerHTML = `<div class="html-renderer">${canvasSamples[type]}</div>`;
+    } else {
+      body.innerHTML = canvasSamples[type];
+    }
+    $("canvas-title").style.display = (type === "empty") ? "none" : "";
+  }
+
+  $("sel-canvas").addEventListener("change", renderCanvas);
+  renderCanvas();
+
+  function toggle(btnId, els, onFn, offFn) {
+    const btn = $(btnId);
+    let on = btn.classList.contains("on");
+    btn.addEventListener("click", () => {
+      on = !on;
+      btn.classList.toggle("on", on);
+      (on ? onFn : offFn)();
+    });
+  }
+
+  toggle("btn-title",
+    null,
+    () => { $("canvas-title").style.display = ""; },
+    () => { $("canvas-title").style.display = "none"; }
+  );
+  toggle("btn-stepbar",
+    null,
+    () => { $("step-bar").style.display = ""; },
+    () => { $("step-bar").style.display = "none"; }
+  );
+  toggle("btn-banner",
+    null,
+    () => { $("banner").style.display = ""; },
+    () => { $("banner").style.display = "none"; }
+  );
+  toggle("btn-done",
+    null,
+    () => { $("done-btn").style.display = ""; },
+    () => { $("done-btn").style.display = "none"; }
+  );
+  toggle("btn-clickable", null, () => {}, () => {}); // visual-only flag, no sample click wiring
+
+  const historyBtn = $("history-btn");
+  const historyPanel = $("history-panel");
+  const historyControls = $("history-controls");
+
+  function setHistoryOpen(open) {
+    historyPanel.style.display = open ? "" : "none";
+    historyBtn.setAttribute("aria-pressed", String(open));
+    historyControls.style.display = open ? "" : "none";
+    $("btn-history").classList.toggle("on", open);
+  }
+  historyBtn.addEventListener("click", () => setHistoryOpen(historyPanel.style.display === "none"));
+  $("btn-history").addEventListener("click", () => setHistoryOpen($("btn-history").classList.contains("on")));
+  $("close-history-btn").addEventListener("click", () => setHistoryOpen(false));
+
+  const sampleWorkspaces = [
+    {
+      name: "biology-101",
+      isCurrent: true,
+      snapshots: [
+        { filename: "s1.json", title: "Photosynthesis — overview", type: "mermaid", timestamp: "2026-07-03T14:02:00Z" },
+        { filename: "s2.json", title: "Cell membrane", type: "html", timestamp: "2026-07-03T14:05:00Z" },
+        { filename: "s3.json", title: "Quadratic formula", type: "katex", timestamp: "2026-07-03T14:08:00Z" },
+      ],
+    },
+    {
+      name: "chem-201",
+      isCurrent: false,
+      snapshots: [
+        { filename: "s1.json", title: "Molarity chart", type: "vega-lite", timestamp: "2026-07-01T09:11:00Z" },
+      ],
+    },
+  ];
+
+  function fmtTime(iso) {
+    return new Date(iso).toLocaleString(undefined, {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+  }
+
+  function renderHistoryBody() {
+    const state = $("sel-history-state").value;
+    const body = $("panel-body");
+    if (state === "loading") {
+      body.innerHTML = `<p class="panel-message">Loading…</p>`;
+      return;
+    }
+    if (state === "error") {
+      body.innerHTML = `<p class="panel-message panel-error">Network error loading snapshots</p>`;
+      return;
+    }
+    if (state === "empty") {
+      body.innerHTML = `<p class="panel-message">No snapshots yet.</p>`;
+      return;
+    }
+
+    const mode = $("sel-selection-mode").value; // none | delete | export
+    body.innerHTML = sampleWorkspaces.map((group) => `
+      <details class="workspace-group" ${group.isCurrent ? "open" : ""}>
+        <summary class="workspace-summary">
+          <span class="workspace-name">${group.name}</span>
+          ${group.isCurrent ? '<span class="current-badge">current</span>' : ""}
+        </summary>
+        ${mode !== "none" ? `
+          <div class="ws-actions-bar">
+            <span class="ws-actions-label">Workspace:</span>
+            ${mode === "delete"
+              ? '<button class="ws-action-btn ws-action-delete">Delete folder</button>'
+              : '<button class="ws-action-btn ws-action-export">Export workspace</button>'}
+          </div>` : ""}
+        <ul class="snapshot-list">
+          ${group.snapshots.map((s) => `
+            <li class="snapshot-item ${mode !== 'none' ? 'has-checkbox' : ''}">
+              ${mode !== "none" ? `
+                <label class="snapshot-checkbox-label">
+                  <input type="checkbox" aria-label="Select snapshot ${s.title}" />
+                </label>` : ""}
+              <button class="snapshot-row">
+                <span class="snapshot-title">${s.title}</span>
+                <span class="snapshot-meta">
+                  <span class="type-badge">${s.type}</span>
+                  <span class="snapshot-time">${fmtTime(s.timestamp)}</span>
+                </span>
+              </button>
+              ${mode === "none" ? `
+                <button class="row-delete-btn" aria-label="Delete this snapshot" title="Delete snapshot">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                  </svg>
+                </button>` : ""}
+            </li>`).join("")}
+        </ul>
+      </details>
+    `).join("");
+  }
+
+  function setSelectionMode(mode) {
+    $("sel-selection-mode").value = mode;
+    const selectBar = $("select-bar");
+    selectBar.style.display = mode === "none" ? "none" : "";
+    selectBar.classList.toggle("export-bar", mode === "export");
+    $("select-count-label").textContent = mode === "delete"
+      ? "Select snapshots to delete"
+      : "Select snapshots to export";
+    $("delete-selected-btn").style.display = mode === "delete" ? "" : "none";
+    $("export-selected-btn").style.display = mode === "export" ? "" : "none";
+    $("mode-delete").classList.toggle("active", mode === "delete");
+    $("mode-export").classList.toggle("active", mode === "export");
+    renderHistoryBody();
+  }
+
+  $("mode-delete").addEventListener("click", () => setSelectionMode($("mode-delete").classList.contains("active") ? "none" : "delete"));
+  $("mode-export").addEventListener("click", () => setSelectionMode($("mode-export").classList.contains("active") ? "none" : "export"));
+  $("cancel-select-btn").addEventListener("click", () => setSelectionMode("none"));
+  $("sel-selection-mode").addEventListener("change", (e) => setSelectionMode(e.target.value));
+
+  let locked = false;
+  $("lock-btn").addEventListener("click", () => {
+    locked = !locked;
+    $("lock-btn").classList.toggle("locked", locked);
+    $("lock-btn").setAttribute("aria-pressed", String(locked));
+  });
+
+  $("sel-history-state").addEventListener("change", renderHistoryBody);
+  renderHistoryBody();
+</script>
+
+</body>
+</html>
