@@ -83,7 +83,7 @@ export function createApp(): Hono {
       setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame);
       broadcast({
         action: "replace",
-        type: spec.frame_type,
+        type: frames[0].type ?? spec.frame_type,
         payload: frames[0].payload,
         frameLabel: frames[0].label,
         stepFrames: true,
@@ -128,7 +128,7 @@ export function createApp(): Hono {
       const frame = state.frames[result.currentFrame];
       broadcast({
         action: "replace",
-        type: state.frameType,
+        type: frame.type ?? state.frameType,
         payload: frame.payload,
         frameLabel: frame.label,
         stepFrames: true,
@@ -157,7 +157,7 @@ export function createApp(): Hono {
     const frame = state.frames[body.frame];
     broadcast({
       action: "replace",
-      type: state.frameType,
+      type: frame.type ?? state.frameType,
       payload: frame.payload,
       frameLabel: frame.label,
       stepFrames: true,
@@ -257,13 +257,14 @@ export function createApp(): Hono {
 
   app.post("/step-frames/:id/frame", async (c) => {
     const id = c.req.param("id");
-    const body = await c.req.json<{ payload?: unknown; label?: unknown }>();
+    const body = await c.req.json<{ payload?: unknown; label?: unknown; type?: unknown }>();
 
     if (typeof body.payload !== "string") {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
     }
     const label = typeof body.label === "string" ? body.label : undefined;
-    const result = await appendFrame(id, body.payload, label);
+    const type = typeof body.type === "string" ? body.type : undefined;
+    const result = await appendFrame(id, body.payload, label, type);
     if (!result.ok) {
       return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
     }
@@ -460,7 +461,7 @@ export function createApp(): Hono {
       setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame);
       broadcast({
         action: "replace",
-        type: spec.frame_type,
+        type: spec.frames[0].type ?? spec.frame_type,
         payload: spec.frames[0].payload,
         frameLabel: spec.frames[0].label,
         stepFrames: true,

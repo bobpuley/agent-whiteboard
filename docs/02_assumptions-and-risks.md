@@ -198,8 +198,8 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 
 **I6 — False assumption: validation parity between the one-shot and incremental step-frames paths (B5, found 2026-07-03)**
 > ❌ INVALIDATED: it was implicitly assumed (never explicitly stated as a decision, which is itself the gap) that `render(type="step-frames", ...)` and `append_frame()` gave the same validation guarantee per frame, since both ultimately produce the same `StepFrame[]` shape. In fact `append_frame()` calls `validatePayload(entry.frame_type, payload)` per frame (I1, v0.8) while the one-shot path only checks payload shape (`frame_type` is a string, `frames` non-empty, each `frame.payload` is a string) — it never runs `parseMermaid()` or the vega-lite JSON check against individual frames. A malformed frame in a one-shot payload is accepted and only fails when the user navigates to it.
-> - Risk: any future change to the incremental builder's validation that assumes "the one-shot path already does this too" would be building on a false premise — the two paths must be checked independently until unified.
-> - Scheduled: v0.17 (see F3a-gap in `03`, B5 in `01`, and the architecture note in `04`) — extends `StepFrame` with an optional per-frame `type`, closing this gap and additionally allowing mixed-type sequences.
+> - Risk (historical): any future change to the incremental builder's validation that assumed "the one-shot path already does this too" would have been building on a false premise — the two paths had to be checked independently until unified.
+> - ✅ Resolved v0.17 (see F3a-gap in `03`, B5 in `01`, and the architecture note in `04`): `validatePayload()`'s `step-frames` branch now validates every frame, unifying the two paths — both `render(type="step-frames")` and `append_frame()` give the same validation guarantee per frame. `StepFrame` also gained an optional per-frame `type`, additionally allowing mixed-type sequences.
 
 ---
 

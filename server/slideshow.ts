@@ -66,7 +66,7 @@ function broadcastTick(tick: Tick): void {
   }
   broadcast({
     action: "replace",
-    type: frameType,
+    type: frames[frameIndex].type ?? frameType,
     payload: frames[frameIndex].payload,
     frameLabel: frames[frameIndex].label,
     stepFrames: true,
@@ -84,7 +84,7 @@ function broadcastSlide(slide: Slide): void {
     setStepFrames(frames, frame_type, slide.payload, slide.title);
     broadcast({
       action: "replace",
-      type: frame_type,
+      type: frames[0].type ?? frame_type,
       payload: frames[0].payload,
       frameLabel: frames[0].label,
       stepFrames: true,

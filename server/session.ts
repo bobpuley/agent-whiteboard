@@ -6,6 +6,8 @@ export type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
 export interface StepFrame {
   label?: string;
   payload: string;
+  /** Optional per-frame content type override; defaults to the sequence's frameType when absent. */
+  type?: string;
 }
 
 export type CanvasState =

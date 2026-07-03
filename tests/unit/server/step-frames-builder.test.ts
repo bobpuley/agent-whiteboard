@@ -97,6 +97,31 @@ describe("appendFrame", () => {
     });
   });
 
+  it("accepts a per-frame type override that differs from the sequence's frame_type", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    const result = await appendFrame(id, "E = mc^2", undefined, "katex");
+    expect(result).toMatchObject({ ok: true, frame_count: 1 });
+    if (result.ok) {
+      expect(result.frames[0].type).toBe("katex");
+    }
+  });
+
+  it("validates against the per-frame type override, not the sequence's frame_type", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE); // frame_type: mermaid
+    const result = await appendFrame(id, "not json", undefined, "vega-lite");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/vega-lite/);
+  });
+
+  it("falls back to the sequence's frame_type when no per-frame type is given", async () => {
+    const id = createBuilder(FRAME_TYPE, WORKSPACE);
+    const result = await appendFrame(id, PAYLOAD_A);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect("type" in result.frames[0]).toBe(false);
+    }
+  });
+
   it("returns error for expired ID and does not add frame", async () => {
     vi.useFakeTimers();
     const id = createBuilder(FRAME_TYPE, WORKSPACE);

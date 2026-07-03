@@ -76,6 +76,58 @@ describe("MCP tool: list_snapshots (v0.15)", () => {
   });
 });
 
+describe("MCP tool: render — step-frames per-frame validation (v0.17, B5 regression)", () => {
+  const server = createMcpServer();
+
+  it("rejects a frame whose payload fails validation for its effective type", async () => {
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        { label: "Step 1", payload: "graph TD; A" },
+        { label: "Step 2", payload: "not a valid diagram" },
+      ],
+    });
+    const result = await callTool(server, "render", { type: "step-frames", payload, options: { workspace: "my-course" } });
+    expect(result).toMatchObject({ ok: false });
+    expect((result as { error: string }).error).toMatch(/mermaid/);
+  });
+
+  it("accepts and broadcasts a mixed-type sequence using each frame's own type", async () => {
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+    spy.mockClear();
+
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        { label: "Step 1", type: "katex", payload: "E = mc^2" },
+        { label: "Step 2", payload: "graph TD; A" },
+      ],
+    });
+    const result = await callTool(server, "render", { type: "step-frames", payload, options: { workspace: "my-course" } });
+    expect(result).toMatchObject({ ok: true });
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0][0]).toMatchObject({ type: "katex", payload: "E = mc^2" });
+  });
+});
+
+describe("MCP tool: append_frame — per-frame type (v0.17)", () => {
+  const server = createMcpServer();
+
+  it("accepts an optional per-frame type override", async () => {
+    const init = (await callTool(server, "init_step_frames", { frame_type: "mermaid", workspace: "my-course" })) as { id: string };
+    const result = await callTool(server, "append_frame", { id: init.id, payload: "E = mc^2", type: "katex" });
+    expect(result).toMatchObject({ ok: true, frame_count: 1 });
+  });
+
+  it("rejects a frame whose type override fails validation, even though frame_type would pass", async () => {
+    const init = (await callTool(server, "init_step_frames", { frame_type: "mermaid", workspace: "my-course" })) as { id: string };
+    const result = await callTool(server, "append_frame", { id: init.id, payload: "not json", type: "vega-lite" });
+    expect(result).toMatchObject({ ok: false });
+    expect((result as { error: string }).error).toMatch(/vega-lite/);
+  });
+});
+
 describe("MCP tool: export_html (v0.15)", () => {
   const server = createMcpServer();
   let tmpRoot: string;
