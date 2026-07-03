@@ -12,8 +12,8 @@
 <what can happen if not fixed>
 
 ### Affected Files
-- path/to/file1.cpp
-- path/to/file2.hpp
+- path/to/file1.js
+- path/to/file2.ts
 
 ### Recommended Fix
 <concrete remediation steps>
