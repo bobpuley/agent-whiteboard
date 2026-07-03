@@ -220,8 +220,17 @@ test("step-frames: a mixed mermaid+katex sequence renders each frame with its ow
 
 // ── Done button ───────────────────────────────────────────────────────────────
 
-test("Done button: shows 'Sent ✓' after click and reverts", async ({ page }) => {
+test("Done button: hidden until wait_done() is armed", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("button", { name: "Done" })).not.toBeVisible();
+});
+
+test("Done button: shows 'Sent ✓' after click, then disappears (v0.12 conditional visibility)", async ({ page, request }) => {
+  await page.goto("/");
+
+  // wait_done() long-polls until clicked (or a 10-min timeout) — fire without awaiting.
+  const waitDone = request.post(`${SERVER}/wait-done`);
+
   const btn = page.getByRole("button", { name: "Done" });
   await expect(btn).toBeVisible();
   await expect(btn).toBeEnabled();
@@ -230,8 +239,11 @@ test("Done button: shows 'Sent ✓' after click and reverts", async ({ page }) =
   await expect(page.getByRole("button", { name: /Sent/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Sent/ })).toBeDisabled();
 
-  // After 2 seconds the button reverts to "Done".
-  await expect(page.getByRole("button", { name: "Done" })).toBeVisible({ timeout: 5_000 });
+  // The button is un-armed by the click and disappears entirely after the
+  // 2s "Sent ✓" confirmation window — it does not revert to a visible "Done".
+  await expect(page.getByRole("button", { name: /Sent|Done/ })).not.toBeVisible({ timeout: 5_000 });
+
+  await waitDone;
 });
 
 // ── History panel ─────────────────────────────────────────────────────────────

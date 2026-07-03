@@ -61,8 +61,10 @@
       nodeActions = cmd.enabled ? (cmd.node_actions ?? {}) : undefined;
       if (cmd.enabled) nodeToFrameEnabled = false;
     } else if (cmd.action === "set_done_armed") {
+      // Don't cancel an in-flight "Sent ✓" confirmation just because the
+      // server unarmed immediately after resolving this click's wait_done()
+      // call — doneSent's own 2s timer (handleDone) owns that lifecycle.
       doneArmed = cmd.armed;
-      if (!doneArmed) { doneSent = false; if (doneTimer) { clearTimeout(doneTimer); doneTimer = null; } }
     }
   }
 
@@ -209,7 +211,7 @@
       </svg>
     </button>
 
-    {#if doneArmed}
+    {#if doneArmed || doneSent}
       <div class="panel-sep"></div>
       <button class="done-btn" on:click={handleDone} disabled={doneSent} title="Done">
         {#if doneSent}
