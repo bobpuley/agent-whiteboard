@@ -1,6 +1,6 @@
 # Milestone v0.17 — Step-Frames Per-Frame Type & Validation Parity (Sprint 30)
 
-**Status:** planned
+**Status:** in progress
 
 > Objective: close the validation gap between the two step-frames creation paths (B5) by giving `StepFrame` an optional per-frame `type`, validating every frame — in both `render(type="step-frames")` and `append_frame()` — against its effective type (`frame.type ?? frame_type`), and broadcasting that effective type per frame. This makes the incremental builder path a strict superset of the one-shot path and, as a side effect, allows a single step-frames sequence to mix content types (e.g. a mermaid frame followed by a katex frame). Full scope per the analysis already captured in `03_requirements.md` (F3a-gap), `02_assumptions-and-risks.md` (I6), and `04_architecture.md` (L109 note) — not a narrower validation-only fix.
 

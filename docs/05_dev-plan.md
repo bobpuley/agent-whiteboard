@@ -20,6 +20,6 @@
 | v0.14 | Mermaid Export Fix | 27 | released    | [Milestone_v0.14.md](./milestones/Milestone_v0.14.md) |
 | v0.15 | Agent-Facing HTML Export | 28 | released    | [Milestone_v0.15.md](./milestones/Milestone_v0.15.md) |
 | v0.16 | Delete/Export Modal Redesign | 29 | released    | [Milestone_v0.16.md](./milestones/Milestone_v0.16.md) |
-| v0.17 | Step-Frames Per-Frame Type & Validation Parity | 30 | planned    | [Milestone_v0.17.md](./milestones/Milestone_v0.17.md) |
+| v0.17 | Step-Frames Per-Frame Type & Validation Parity | 30 | in progress | [Milestone_v0.17.md](./milestones/Milestone_v0.17.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
