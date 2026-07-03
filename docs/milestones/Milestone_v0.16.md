@@ -1,6 +1,6 @@
 # Milestone v0.16 — Delete/Export Modal Redesign (Sprint 29)
 
-**Status:** in progress
+**Status:** released
 
 > Objective: move the history panel's delete and export controls out of its header and into the right-side controls panel, and replace the inline checkboxes-on-rows selection UI with a 2-step modal (pick a workspace → act on the whole workspace or a checked subset of its snapshots). Purely a client-side (Svelte) UX redesign — no server or MCP changes. Prototyped in `mockup/whiteboard-view-v2.html`.
 
