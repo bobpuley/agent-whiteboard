@@ -1,3 +1,13 @@
+## 0.16.0 — 2026-07-03
+
+- **Delete/export controls moved to the right-side controls panel:** the recycle-bin and export icons are removed from the history panel header; two new icon buttons (delete, export) appear in the always-visible right-side controls panel, grouped with a divider between the history-toggle and Done buttons
+- **New 2-step delete/export modal (`client/src/DeleteExportModal.svelte`):** clicking either icon opens a modal — step 1 lists workspaces to choose from (name + snapshot count), auto-skipped straight to step 2 when only one workspace has snapshots; step 2 shows a single "Delete/Export entire workspace (N snapshots)" action plus a checkbox list of that workspace's snapshots, with a footer "N selected" bar for acting on a subset
+- **Confirmation for destructive actions:** "Delete entire workspace" and "Delete selected" require a second confirming click (button relabels to "Click again to confirm" for ~3s) before executing, replacing the old `window.confirm()`; export actions execute immediately since they're non-destructive
+- **History panel simplified (`client/src/HistoryPanel.svelte`):** removed the recycle-bin/export header icons, per-row checkboxes, select-bar, per-workspace action bar, and the always-visible per-row hover-delete button — the panel is now pure browse/load (header: title, lock/unlock, close); `fetchSnapshots()` is exported so `App.svelte` can refresh the list after a modal delete completes while the panel is open
+- **Shared client types/utilities extracted:** `client/src/lib/snapshotTypes.ts` (`SnapshotEntry`, `WorkspaceGroup`) and `client/src/lib/download.ts` (`triggerDownload()`) — used by both the modal and the history panel
+- No server/API changes — the modal calls the existing `POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, and `POST /export-html` endpoints
+- Verified end-to-end with Playwright against a live dev server (real Chrome): controls-panel layout, both modal steps, whole-workspace/subset delete confirmation flow, immediate export with file download, single-workspace step-1 skip (via mocked data), and unaffected history browse/load, with no console errors
+
 ## 0.15.0 — 2026-07-02
 
 - **`list_snapshots(workspace)` MCP tool:** lists a workspace's snapshots (`id`, `timestamp`, `type`, optional `title`), newest-first, so an agent can discover what it can export without going through the browser HistoryPanel; wraps the same `listSnapshots()` used by `GET /snapshots`
