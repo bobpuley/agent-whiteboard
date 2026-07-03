@@ -336,6 +336,20 @@ Raw request: "upgrade the view to whiteboard-view-v2.html style." Move the delet
 
 ---
 
+## Design Debt Log
+
+> Non-behavioral findings from a Node.js/TS + Svelte/TS frontend code review pass (2026-07-04). These don't violate any requirement or produce observed-wrong behavior today, so they don't go through the bug-report protocol — logged here only as candidates to revisit when scoping a future milestone (see pointer in `05_dev-plan.md`). No propagation to `02`–`05` is forced by this log; promote an item explicitly if/when it's scheduled.
+
+- **Business logic duplicated between `server/app.ts` and `server/mcp.ts`** — `render`, step-frames create/append/commit, and workspace-validation flows are implemented twice (HTTP + MCP). Root cause of the workspace-validation drift that produced the `workspace: "."` bug (see Bug Reports below) — worth a shared "core" module extraction.
+- **Sparse/zero unit test coverage** — client has zero unit tests (only e2e); server modules `export-html.ts`, `slideshow.ts`, `events.ts`, `ws.ts`, `channel.ts`, `session.ts` have none; `mcp.ts` is thin (15 cases) relative to `app.ts` (181 cases).
+- **No linter configured** — neither client nor server has ESLint; several review findings (a11y issues, unsafe casts) are exactly the class of thing `eslint-plugin-svelte` + `@typescript-eslint` catch automatically.
+- **Heavy visualization libraries eagerly bundled** — Mermaid + KaTeX + Vega-Embed all load on first paint regardless of which canvas type is active; candidate for dynamic imports.
+- **`App.svelte` is a god component** — WebSocket routing, canvas state, step-frame nav, modal orchestration, and Done-button lifecycle all live in one 420-line file with no store/reducer extraction.
+- **No CSP, no explicit Mermaid `securityLevel`** — defense-in-depth hardening, not a live gap given the client-side DOMPurify layer (see `02` C1 clarification).
+- **Version drift** — Vite pinned to `^4.5.10` (several majors behind), `tsx` pinned to `^3.14.0`, `@types/katex` a minor behind installed `katex`.
+- **Minor a11y/style polish** — placeholder/zoom-hint text contrast below WCAG AA, no `aria-live` on the disconnect banner / Done button, one non-keyed `each` block in the Mermaid popup menu.
+- **Backend hygiene** — redundant `try/catch` around `saveSnapshot()` (which already handles its own errors), a couple of silent `catch {}` blocks with no logging, `getMermaidBundle()`/`getKatexCss()` re-read from disk on every export instead of being memoized, client and server dependencies share one `package.json`.
+
 ## Bug Reports
 
 **B1 — Slideshow step-frames slide renders nothing (Sprint 9)**
@@ -358,3 +372,39 @@ Raw request: "upgrade the view to whiteboard-view-v2.html style." Move the delet
 - Observed: `render(type="step-frames", ...)` (both the MCP tool and `POST /render`) only checks that `frame_type` is a string, `frames` is a non-empty array, and each `frame.payload` is a string. It never calls `validatePayload(frame_type, frame.payload)` per frame — so a mermaid frame with invalid syntax (or a malformed vega-lite JSON frame) is silently accepted and only fails, or silently mis-renders, when the user steps or seeks to it. By contrast, `append_frame()` (the incremental builder, `step-frames-builder.ts`) already calls `validatePayload(entry.frame_type, payload)` on every frame at append time — the two creation paths for the same payload shape have different validation guarantees today, which was never a deliberate decision (see F3a, F15 in `03`).
 - Expected: every frame in a `step-frames` sequence — built one-shot via `render()` or incrementally via `append_frame()` — should be validated against its effective type before being accepted, consistent with F3a's hard-gate rule for all payloads.
 - Related idea (logged together because a proper fix touches the same code path): `frame_type` is currently one string for the *entire* sequence (`StepFrame` has no `type` field; `session.ts`, `step-frames-builder.ts`, `validate.ts`, `ws.ts` all thread a single shared type through). This was never a deliberate constraint — it's an artifact of the original v0.1 payload shape, unexamined when the incremental builder was added in v0.8. Making the incremental builder validate (and broadcast) **per-frame type** instead of one shared `frame_type` would fix B5 and let a single step-frames sequence mix content types (e.g. a mermaid frame followed by a katex frame). Analysis (2026-07-03): the incremental builder, once per-frame-typed, becomes a strict superset of the one-shot path — same rendering, same live preview, stronger validation, plus mixed types — the only thing the one-shot path keeps is fewer tool calls for small, fully-known-upfront sequences (not a functional capability, an ergonomics tradeoff). `slideshow()` already supports fully independent per-slide types and is unaffected by any of this. Scheduled: v0.17 (see `05`).
+
+**B6 — `workspace: "."` bypasses the delete-path guard and can wipe the entire snapshot store (found 2026-07-04, Node.js/TS code review)**
+- Observed: `validateWorkspaceForDelete()` (`server/app.ts:488-500`) blocks `/`, `\`, null bytes, and the literal `".."`, but not a bare `"."`. `path.join(root, ".")` normalizes to `root` itself, so `POST /snapshots/delete-workspace` with `{"workspace": "."}` passes validation and `rmSync` recursively deletes the entire snapshots root — every workspace, every history entry — in one call, no confirmation, no undo.
+- Expected: the same workspace-name safety check used elsewhere (`isValidWorkspaceName()` in `validate.ts`, which already rejects this class of input) should gate this endpoint too, and the resolved path should be asserted to stay strictly inside the snapshots root before any delete.
+
+**B7 — Snapshot filenames collide within the same second, silently overwriting prior history (found 2026-07-04, Node.js/TS code review)**
+- Observed: `saveSnapshot()` (`server/snapshot.ts:18-19,36`) derives the on-disk filename from a second-precision timestamp only, with no counter, random suffix, or millisecond precision. Two snapshot writes landing in the same wall-clock second (e.g. a `render()` immediately followed by `commit_step_frames()`) silently overwrite the same file — no error, no warning, nothing in logs.
+- Expected: two snapshot writes must never collide under normal fast-paced agent usage; the filename should include a disambiguating component (the snapshot's own `id` UUID, a counter, or millisecond precision).
+
+**B8 — Async rendering race condition can display a stale diagram/formula/chart (found 2026-07-04, frontend code review)**
+- Observed: all four renderer components (`Mermaid.svelte`, `Katex.svelte`, `VegaLite.svelte`, `Html.svelte`) set `lastRendered = source` synchronously but kick off an async render with no ordering guard. If `source` changes twice in quick succession (e.g. rapid step-frames navigation), an earlier render's promise can resolve after a later one, overwriting current content with stale content — silently, with no error or loading state.
+- Expected: a render that starts before a more recent one must never overwrite the DOM after the more recent one has resolved; stale results should be discarded.
+
+**B9 — `handleDone()` has no error handling; a failed request silently breaks the Done button's state machine (found 2026-07-04, frontend code review)**
+- Observed: `App.svelte`'s `handleDone()` (`client/src/App.svelte:128-134`) calls `fetch("/user-done", { method: "POST" })` with no `try`/`catch`. If the fetch rejects (plausible exactly when the "Server disconnected" banner is already showing), it becomes an unhandled promise rejection and `doneSent` never flips — the button's own state never recovers.
+- Expected: `handleDone()` should catch a failed request and either retry, surface an error, or otherwise leave the button in a recoverable state instead of silently stalling.
+
+**B10 — Client TypeScript is excluded from the build's type-check gate; a real type error already shipped as a result (found 2026-07-04, frontend code review)**
+- Observed: root `tsconfig.json` excludes `client`, and `npm run build` only runs `tsc` against `server/`; there is no `svelte-check` step. As a concrete consequence, `HistoryPanel.svelte:24` calls `res.json<{...}>()` — `Response.json()` takes zero type parameters, a compile error under real type-checking — and has shipped undetected.
+- Expected: type errors anywhere under `client/` should fail the build, the same guarantee the server already has; `HistoryPanel.svelte:24`'s invalid generic call should be fixed as part of closing the gap.
+
+**B11 — WebSocket render commands are cast with no runtime validation; unknown/malformed messages fail silently (found 2026-07-04, frontend code review; reframed from the reviewer's security framing to a robustness/DX issue — see `02` C1 clarification for why)**
+- Observed: `ws.ts` parses incoming messages with `JSON.parse` + a blind type assertion; `App.svelte` further casts `cmd.type as CanvasType` with no check against the known set of renderer types. If `cmd.type` doesn't match any `{#if}` branch (a future server/client version skew, or a bug elsewhere), the canvas silently renders nothing — no error, no log.
+- Expected: an unrecognized message type should be logged/surfaced explicitly instead of failing the `{#if}` chain silently, so a mismatch is diagnosable without opening devtools and inspecting raw WS traffic.
+
+**B12 — Delete/Export and History dialogs are not keyboard-trappable and have no Escape handling (found 2026-07-04, frontend code review)**
+- Observed: `DeleteExportModal.svelte` and `HistoryPanel.svelte` are marked `role="dialog"` but neither sets `aria-modal`, traps focus, moves initial focus on open, restores focus on close, or handles `Escape`. `DeleteExportModal` gates a destructive delete action.
+- Expected: both dialogs should be closable via `Escape`, trap `Tab`/`Shift+Tab` within their focusable elements, and manage focus on open/close — standard modal-dialog behavior, most valuable on the destructive delete flow.
+
+**B13 — Duplicated snapshot-fetch logic between `App.svelte` and `HistoryPanel.svelte`; one path silently swallows failures (found 2026-07-04, frontend code review)**
+- Observed: both components independently call `GET /snapshots/all` and independently handle failure — `HistoryPanel.svelte` shows an inline error, but `App.svelte`'s `openModal()` silently falls back to an empty workspace list with no indication anything went wrong.
+- Expected: a failed fetch should be visibly surfaced to the user in both call sites, ideally via one shared fetch helper instead of two independently-maintained copies.
+
+**B14 — Concurrent `export-html` calls race on a globally-mutated DOM object (found 2026-07-04, Node.js/TS code review)**
+- Observed: `generateExportHtml()` (`server/export-html.ts:379-400`) saves and overwrites `global.document`/`global.window`/etc. with a fresh `happy-dom` `Window`, does `await`-ing render work, and restores the original globals in a `finally` block at the end — with no lock/queue. It's reachable concurrently from two independent entry points (`POST /export-html` and the `export_html` MCP tool), which a single agent session could plausibly trigger close together (e.g. a browser-initiated export overlapping an agent-initiated one).
+- Expected: two overlapping `generateExportHtml()` calls must not corrupt each other's output; calls should be serialized (e.g. a simple async queue) since global monkey-patching is inherently non-reentrant.

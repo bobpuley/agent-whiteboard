@@ -185,6 +185,24 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
 ---
 
+## 5c. Known Gaps (from code review intake, 2026-07-04)
+
+> Found during a Node.js/TS + frontend code review pass (2026-07-04); logged as B6–B14 in `01_input-ideas.md`. Fixes scheduled in Milestone v0.18 (`05_dev-plan.md`). These are gaps against existing (correct) requirements, not new scope.
+
+| Bug | Requirement touched | Gap |
+|-----|---------------------|-----|
+| B6 | §3 Transport table, `POST /snapshots/delete-workspace` ("Validates workspace (safe-name check, must exist)") | The endpoint's actual workspace check is a weaker ad hoc inline check, not the correct `isValidWorkspaceName()` — it doesn't reject a bare `"."`, which resolves to the snapshots root and gets recursively deleted. |
+| B7 | F10 (Render snapshot persistence) | Filename is timestamp-only (second precision) with no uniqueness guarantee; two writes in the same second collide and silently overwrite. |
+| B8 | V1 / V5 (Diagram rendering, step-through frames) | No requirement states that an in-flight async render must be discarded if a newer one starts before it resolves; renderers can display stale content with no ordering guard. |
+| B9 | U4a (Done button) | No requirement covers failure handling for the `POST /user-done` call; a rejected fetch has no recovery path today. |
+| B10 | Implied by `04`'s `strict: true` TypeScript config (documented for server only) | The strict-typing guarantee was never extended to the client; nothing type-checks `client/` in the build today. |
+| B11 | §3 Transport, WebSocket message contract | No requirement specifies handling for an unrecognized/malformed `type` in a WS message; behavior today is a silent no-op. |
+| B12 | U7 / U7i (History panel, delete/export modal) | No requirement specifies keyboard-accessibility behavior (focus trap, Escape) for dialogs, including the destructive delete flow. |
+| B13 | U7 (History panel) | No requirement specifies that a failed `GET /snapshots/all` must be surfaced to the user at every call site; `App.svelte`'s copy currently fails silently. |
+| B14 | F17 (`POST /export-html`) | No requirement addresses concurrent export calls; `generateExportHtml()`'s global DOM patching is not documented as, or made, reentrant-safe. |
+
+---
+
 ## 6. Out of Scope for v1
 
 - Multiple named panels/tabs: planned (one canvas at a time in v1)

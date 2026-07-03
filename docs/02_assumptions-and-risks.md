@@ -50,6 +50,7 @@ Claude Code is the sole agent runtime for v1. It supports MCP natively. Multi-ag
 **C1 — Declarative specs are sufficient**
 The agent generates structured payloads (Mermaid source, Vega-Lite JSON, step-frame arrays, raw SVG/HTML). The renderer handles visualization. The agent does not write executable JS for rendering; raw HTML/SVG is explicitly supported via `type="html"` and `type="svg"` (Sprint 5 ✅) and sanitized by DOMPurify in the browser.
 - Risk: some teaching scenarios may require custom visual logic that doesn't fit any declarative format — forcing either a new renderer type or relying on the html/svg escape hatch.
+- **Clarification (2026-07-04, from Node.js/frontend code review intake):** DOMPurify-in-the-browser (`client/src/renderers/Html.svelte`) is the **sole** sanitization layer for live `html`/`svg` renders — there is no server-side hard gate (F6 in `03` is deliberate: the server passes `html`/`svg` payloads through unvalidated). This is an accepted single-layer design given the local-only, single-trusted-user model (A1) — anyone who can reach the unauthenticated API to inject malicious HTML already has local code execution, so this isn't a privilege-escalation vector. Residual risk is defense-in-depth only: any future renderer path for `html`/`svg` must not skip the DOMPurify call, or content reaches the DOM unsanitized with no second layer to catch it.
 
 **C2 — Client-side rendering is fast enough**
 Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline needed.
@@ -168,6 +169,11 @@ A channel is a **separate stdio MCP server** (not SSE) spawned by Claude Code as
 - Blocker 3 (real architecture gap, confirmed by reading `server/app.ts` / `server/index.ts` during the review): the Hono app has no static-file-serving route wired in for the production client build — `npm run build` produces `dist/client/`, but nothing serves it. The `04_architecture.md` "Dev server" row already flagged "production static build deferred to Phase 2" — this is that phase.
 - Risk: until these are resolved, `npx agent-whiteboard` cannot work; the idea is captured here so it isn't lost, but no work is scheduled (see FR17 in `01`, deferred to backlog per user decision 2026-07-03).
 
+**G1b — Snapshot filenames are not guaranteed unique (gap found 2026-07-04, B7 in `01`)**
+> ❌ INVALIDATED (implicit assumption): it was implicitly assumed that a second-precision timestamp filename (`<yyyyMMdd_HHmmss>_screen.json`) was sufficient to identify a snapshot uniquely on disk. In practice, two writes in the same wall-clock second (e.g. `render()` immediately followed by `commit_step_frames()`, or two rapid `render()` calls) collide and the second write silently overwrites the first — no error, no warning. Each snapshot's own `id` field (UUID, since v0.11) is unique, but the filename it's written to is not.
+- Risk: silent, undetected loss of whiteboard history under ordinary fast-paced agent usage — not an edge case.
+- **Decision (v0.18, planned):** include a disambiguating component (the snapshot's own `id`, a counter, or millisecond precision) in the filename so two writes never collide.
+
 **G3 — No snapshot cleanup policy in v1**
 > ✅ DECISION: Files accumulate indefinitely by design. No TTL, quota, or rotation is defined, and none is planned for v1.
 - Risk: unbounded disk growth over long-lived projects.
@@ -251,6 +257,7 @@ Risks from moving the three test roots:
 > ⚠️ ASSUMPTION: Deleting a snapshot or workspace from the history panel permanently removes files from the user's `~/.agent-whiteboard/` directory. There is no undo, no trash/recycle bin, and no soft-delete mechanism.
 - Risk: accidental bulk deletion (e.g. "Workspace delete") destroys snapshots that cannot be recovered.
 - Mitigation: require a confirmation step for the "Workspace delete" action; single-item delete may proceed without confirmation. ("Clear workspace" no longer exists — removed in v0.13, see K2.)
+- **Gap found 2026-07-04 (B6 in `01`, code review):** the confirmation-step mitigation only covers the browser UI path. `POST /snapshots/delete-workspace` itself has a validation gap — `workspace: "."` passes its weaker ad hoc safety check and resolves to the snapshots root, so a direct call (bypassing the UI confirmation entirely) deletes every workspace's history in one shot. Fix scheduled v0.18 (`05`): reuse `isValidWorkspaceName()` and assert the resolved path stays inside the snapshots root.
 
 **K2 — Workspace delete removes the OS directory (FR12, v0.12; Clear workspace removed v0.13)**
 > ✅ DECISION (v0.13): "Clear workspace" is removed — it has the same high-level effect as "Workspace delete" with the added complexity of leaving behind an empty directory and an empty accordion row. `POST /snapshots/clear-workspace` server endpoint and corresponding UI button are removed. Only one bulk workspace operation remains: "Workspace delete", which calls `fs.rmdirSync` (or equivalent) and removes the directory and all its contents.
@@ -288,6 +295,7 @@ Risks from moving the three test roots:
 
 **L4 — DOMPurify sanitization shares the `happy-dom` Window with Mermaid rendering**
 > ✅ DECISION: One `happy-dom` Window instance is created per export call and reused for both `mermaid.render()` and `DOMPurify` (with `USE_PROFILES: { svg: true }` for SVG payloads, `{ html: true }` for HTML payloads). The Window is torn down after all items are rendered.
+- **Gap found 2026-07-04 (B14 in `01`, code review):** the per-export Window is smuggled through Node's `global.*` object (`saveGlobals()`/`setGlobals()`/`restoreGlobals()` in `export-html.ts`), with no lock preventing two calls to `generateExportHtml()` from overlapping. It's reachable concurrently from two independent entry points — `POST /export-html` (browser) and the `export_html` MCP tool (agent) — which a single session could plausibly trigger close together. An overlapping second call's globals stomp on the first call's mid-flight state, and the first call's `finally` block restores globals out from under the second. Risk: corrupted export HTML or spurious exceptions, not data loss (source snapshots are untouched). Fix scheduled v0.18 (`05`): serialize `generateExportHtml()` calls with a simple async queue.
 
 **L5 — Agent-facing export addresses snapshots by `id`; browser-facing endpoints stay filename-based (FR15, v0.15)**
 > ✅ DECISION (2026-07-02, via `/grill-me` interview during intake): the objection to `id`-based addressing (some old snapshots lacked `id`) no longer applies — `saveSnapshot()` has generated an `id` unconditionally since v0.11 (never optional), and `scripts/backfill-snapshot-ids.py` has since been run against `~/.agent-whiteboard/`, so every snapshot on disk now has an `id`. Decisions:
