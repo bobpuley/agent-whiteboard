@@ -1,3 +1,9 @@
+## 0.17.1 — 2026-07-03
+
+- **Fix: Done button confirmation never rendered (client only, no server change):** `set_done_armed: false` arrives over the WebSocket almost immediately after a click — the server unarms as part of resolving `wait_done()` — and was hiding the whole Done button and force-resetting `doneSent` before the "Sent ✓" text ever had a chance to render, confirmed via live DOM instrumentation in a real browser. `client/src/App.svelte` now shows the button on `doneArmed || doneSent`, letting `doneSent`'s own 2-second timer own its lifecycle instead of being cut short by the unarm broadcast
+- **Fix: Done button e2e test was stale since v0.12 (Sprint 25):** the test predated conditional Done-button visibility and asserted the pre-v0.12 always-visible-button behavior, so it had been silently failing every `npm run test:e2e` run since; split into two tests — hidden-until-`wait_done()`-armed, and click-shows-Sent-then-disappears (no longer "reverts to visible Done")
+- 220 unit tests / 30 e2e tests all pass (previously 28/29 e2e — this release fixes the last failing one)
+
 ## 0.17.0 — 2026-07-03
 
 - **Step-frames per-frame validation parity (bug B5):** `render(type="step-frames", ...)` now validates every frame's payload against its effective type before accepting the sequence — previously it only checked payload shape, so a malformed mermaid or vega-lite frame was silently accepted and only failed when the user stepped or seeked to it. `append_frame()` already validated per frame; both creation paths now give the same guarantee, enforced by a single shared code path in `validatePayload()` (`server/validate.ts`) that also covers `POST /slideshow` and `POST /snapshots/load` for free
