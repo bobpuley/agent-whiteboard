@@ -4,3 +4,5 @@ node_modules/
 dist/
 *.tsbuildinfo
 .claude/settings.local.json
+scripts/backfill-snapshot-ids.py
+test-results/.last-run.json
