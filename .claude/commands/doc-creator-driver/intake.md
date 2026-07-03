@@ -63,7 +63,6 @@ Use AskUserQuestion to ask:
    - Find the in-progress milestone from the registry in `05_dev-plan.md` and append the fix there.
    - Label it clearly as a fix (e.g. `fix: <short description>`)
    - Write a DoD that describes the corrected behaviour
-   - Create a task list entry (TaskCreate) for the fix
 5. **`02_assumptions-and-risks.md`** — Ask: does this bug reveal a false assumption?
    - If yes: update or remove the relevant assumption
 6. State what changed across all files in one concise summary line per file.
@@ -75,7 +74,6 @@ Use AskUserQuestion to ask:
 - Never skip a propagation step — even a "no change" is a deliberate check
 - Never update a later document without first checking the earlier ones
 - Use AskUserQuestion for any decision, trade-off, or ambiguity — do not guess
-- Use TaskCreate for every new sprint item added to a milestone file
 - After all files are updated, ask the user: "Anything else to add, or shall we continue?"
 
 ## Required skills
