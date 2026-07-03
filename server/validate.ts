@@ -122,6 +122,13 @@ export async function validatePayload(type: string, payload: string): Promise<st
     if (frames.some((f) => typeof f.payload !== "string")) {
       return 'invalid payload: each frame must have a "payload" string';
     }
+    for (let i = 0; i < frames.length; i++) {
+      const frame = frames[i];
+      const frameError = await validatePayload(frame.type ?? spec.frame_type, frame.payload);
+      if (frameError) {
+        return `frame[${i}]: ${frameError}`;
+      }
+    }
   }
   return null;
 }

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { StepFrame } from "./session.js";
 import { broadcast, broadcastStepFrames } from "./ws.js";
-import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid } from "./validate.js";
+import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
 import { saveSnapshot } from "./snapshot.js";
@@ -35,9 +35,10 @@ export function createMcpServer(): McpServer {
         '  • "html"        — HTML/CSS fragment. Example: render({ type: "html", payload: "<h1>Hello</h1>" })\n' +
         '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
         '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{\"$schema\":\"...\",\"mark\":\"bar\",...}" })\n' +
-        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A" }, ...] }. Displays frame 0; use step() to navigate. ' +
-        'Best for small, fully-known-upfront sequences (one call). Caveat: individual frame payloads are NOT validated against frame_type here — a malformed frame is accepted and only fails when the user steps/seeks to it. ' +
-        'For long or complex sequences, when you want each frame validated as you build it, or when you want the user to review and acknowledge each frame before the next appears, use init_step_frames()/append_frame()/commit_step_frames() instead (see below) — it validates every frame at append time and composes with wait_done() for paced, user-acknowledged reveal.\n' +
+        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A", "type": "mermaid" }, ...] }. Displays frame 0; use step() to navigate. ' +
+        'Every frame is validated against its effective type (frame.type ?? frame_type) before anything is accepted — an invalid frame anywhere in the sequence rejects the whole call with { ok: false, error } and nothing is rendered. ' +
+        'frame.type is optional per frame — omit it to use frame_type; set it to mix content types within one sequence (e.g. a mermaid frame followed by a katex frame). ' +
+        'Best for small, fully-known-upfront sequences (one call). For long or complex sequences, or when you want the user to review and acknowledge each frame before the next appears, use init_step_frames()/append_frame()/commit_step_frames() instead (see below) — same per-frame validation, plus incremental live preview and composes with wait_done() for paced, user-acknowledged reveal.\n' +
         'options: { "workspace": "my-course", "title": "My diagram" }. workspace is REQUIRED — snapshot routing fails without it. title is optional.\n' +
         'options.workspace: workspace name for snapshot routing. Must be alphanumeric with dashes, underscores, dots, or spaces — no path separators. No env var fallback: always pass explicitly.\n' +
         'Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "course_2", title: "System flow" } })',
@@ -139,59 +140,19 @@ export function createMcpServer(): McpServer {
       }
 
       if (type === "step-frames") {
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(payload);
-        } catch {
+        const stepFramesError = await validatePayload("step-frames", payload);
+        if (stepFramesError) {
           return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: "invalid payload: step-frames payload must be valid JSON",
-                }),
-              },
-            ],
+            content: [{ type: "text", text: JSON.stringify({ ok: false, error: stepFramesError }) }],
           };
         }
-        const spec = parsed as { frame_type?: string; frames?: unknown[] };
-        if (
-          typeof spec.frame_type !== "string" ||
-          !Array.isArray(spec.frames) ||
-          spec.frames.length === 0
-        ) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'invalid payload: step-frames must have "frame_type" (string) and "frames" (non-empty array)',
-                }),
-              },
-            ],
-          };
-        }
-        const frames = spec.frames as StepFrame[];
-        if (frames.some((f) => typeof f.payload !== "string")) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'invalid payload: each frame must have a "payload" string',
-                }),
-              },
-            ],
-          };
-        }
+        const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
+        const frames = spec.frames;
         cancelSlideshow();
         setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame);
         broadcast({
           action: "replace",
-          type: spec.frame_type,
+          type: frames[0].type ?? spec.frame_type,
           payload: frames[0].payload,
           frameLabel: frames[0].label,
           stepFrames: true,
@@ -255,7 +216,7 @@ export function createMcpServer(): McpServer {
         const frame = state.frames[result.currentFrame];
         broadcast({
           action: "replace",
-          type: state.frameType,
+          type: frame.type ?? state.frameType,
           payload: frame.payload,
           frameLabel: frame.label,
           stepFrames: true,
@@ -309,7 +270,7 @@ export function createMcpServer(): McpServer {
       const f = state.frames[frame];
       broadcast({
         action: "replace",
-        type: state.frameType,
+        type: f.type ?? state.frameType,
         payload: f.payload,
         frameLabel: f.label,
         stepFrames: true,
@@ -520,7 +481,7 @@ export function createMcpServer(): McpServer {
         "frame_type: content type shared by all frames (e.g. 'mermaid') — every frame in the sequence must currently be this same type.\n" +
         "workspace: same rules as render() — required.\n" +
         "The ID expires after 30 minutes of inactivity (no append_frame or commit_step_frames call).\n" +
-        "Prefer this over passing a full payload to render(type=\"step-frames\", ...) in one call whenever: the sequence is long or complex (each append_frame() validates its own frame — the one-shot render() path does not validate individual frame content); or you want the user to review and acknowledge each frame before the next appears — interleave wait_done() after each append_frame() call for paced, user-acknowledged reveal. For a short, fully-known-upfront sequence, render(type=\"step-frames\", ...) in one call is fewer round-trips.\n" +
+        "Both this and the one-shot render(type=\"step-frames\", ...) path validate every frame the same way. Prefer this over a single render() call whenever: the sequence is long or complex and you want each frame validated as you build it, one round-trip at a time, instead of assembling the whole payload upfront; or you want the user to review and acknowledge each frame before the next appears — interleave wait_done() after each append_frame() call for paced, user-acknowledged reveal. For a short, fully-known-upfront sequence, render(type=\"step-frames\", ...) in one call is fewer round-trips.\n" +
         'Returns { "ok": true, "id": "<uuid>" }. Error if workspace is missing/invalid or frame_type is unsupported.\n' +
         'Example: init_step_frames({ frame_type: "mermaid", workspace: "my-course", title: "TCP Handshake" })',
       inputSchema: z.object({
@@ -572,19 +533,24 @@ export function createMcpServer(): McpServer {
     {
       description:
         "Append one frame to an in-progress step-frames sequence identified by id.\n" +
-        "payload is validated against the sequence's frame_type (same hard gate as render()).\n" +
+        "payload is validated against type ?? the sequence's frame_type (same hard gate as render()).\n" +
         "After each valid append, immediately pushes the accumulated partial step-frames sequence to the browser (live preview positioned at the latest frame).\n" +
         "Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved — fix and retry the frame.\n" +
         'Returns { "ok": true, "frame_count": N }. Error if id is unknown/expired or payload fails validation.\n' +
-        'Example: append_frame({ id: "<uuid>", payload: "graph TD; A --> B", label: "Step 1" })',
+        'Example: append_frame({ id: "<uuid>", payload: "graph TD; A --> B", label: "Step 1" })\n' +
+        'Example — mixing types in one sequence: append_frame({ id: "<uuid>", payload: "E = mc^2", type: "katex" }) inside a sequence whose frame_type is "mermaid".',
       inputSchema: z.object({
         id: z.string().describe("Builder ID returned by init_step_frames()."),
-        payload: z.string().describe("Frame content — validated against the sequence's frame_type."),
+        payload: z.string().describe("Frame content — validated against type ?? the sequence's frame_type."),
         label: z.string().optional().describe("Optional display caption for this frame."),
+        type: z
+          .enum(["mermaid", "svg", "html", "katex", "vega-lite"])
+          .optional()
+          .describe("Optional per-frame type override. Defaults to the sequence's frame_type when omitted — set this to mix content types within one sequence."),
       }),
     },
-    async ({ id, payload, label }) => {
-      const result = await appendFrame(id, payload, label);
+    async ({ id, payload, label, type }) => {
+      const result = await appendFrame(id, payload, label, type);
       if (result.ok) {
         // Live preview: push the accumulated partial sequence to the browser.
         const { frames, frame_type, title } = result;

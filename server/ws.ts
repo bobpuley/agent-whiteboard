@@ -29,14 +29,14 @@ export function broadcast(message: object): void {
 
 /** Broadcast a step-frames event. Used by both append_frame (partial) and commit_step_frames (final). */
 export function broadcastStepFrames(
-  frames: Array<{ payload: string; label?: string }>,
+  frames: Array<{ payload: string; label?: string; type?: string }>,
   frameType: string,
   currentFrame: number,
   title?: string
 ): void {
   broadcast({
     action: "replace",
-    type: frameType,
+    type: frames[currentFrame].type ?? frameType,
     payload: frames[currentFrame].payload,
     frameLabel: frames[currentFrame].label,
     stepFrames: true,

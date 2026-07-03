@@ -92,21 +92,21 @@
 
 | Tool                              | Server-side action                                                                                                                                                                                                                  |
 |-----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options.title` (optional string, MVP) displays a label above the canvas. `options.theme` and action variants are Phase 2. For `step-frames`: loads all frames, displays frame 0, stores full payload. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call. `id` is omitted if the snapshot write fails (non-fatal). |
+| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options.title` (optional string, MVP) displays a label above the canvas. `options.theme` and action variants are Phase 2. For `step-frames`: every frame is validated against its effective type (`frame.type ?? frame_type`, v0.17) before anything is accepted; loads all frames, displays frame 0 using its effective type, stores full payload. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call. `id` is omitted if the snapshot write fails (non-fatal). |
 | `clear()`                         | Resets in-memory canvas state and step cursor; sends clear command to browser                                                                                                                                                       |
 | `export([id])`                    | Without `id`: returns the last submitted source payload verbatim as a string (current behavior). With optional `id` (UUID, v0.11 ✅): scans all workspace snapshot files for a record whose `id` field matches and returns its payload. Empty string if canvas is empty or cleared (no-id case). Error `{ ok: false, error: "graph not found" }` if id provided but no matching snapshot found. Old snapshots without an `id` field are not addressable. See F16 (`03`). Implemented in `server/snapshot-reader.ts` (`findSnapshotById`). |
-| `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
-| `seek(frame)` *(Sprint 13)*       | Jumps the step-frame cursor to an arbitrary frame index. Useful for random-access navigation without repeated `step()` calls. Returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no `step-frames` sequence is loaded or frame is out of range. (Phase 2 — Sprint 13) |
+| `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Broadcasts the target frame using its effective type (`frame.type ?? frameType`, v0.17). Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
+| `seek(frame)` *(Sprint 13)*       | Jumps the step-frame cursor to an arbitrary frame index. Broadcasts the target frame using its effective type (`frame.type ?? frameType`, v0.17). Useful for random-access navigation without repeated `step()` calls. Returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no `step-frames` sequence is loaded or frame is out of range. (Phase 2 — Sprint 13) |
 | `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
 | `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label, action: null }` on click (`action` is always present; null in Sprint 12 because no popup menu exists yet); `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
 | `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action }` — `action` is **always present**: null when no popup was shown or when user clicked without selecting a menu item; string value when a menu item was selected. (Phase 2 — Sprint 14) |
 | `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
-| `append_frame(id, payload, label?)` *(v0.8; live preview v0.9)* | Looks up the builder entry by ID. Validates `payload` against `frame_type` (same hard gate as `render()`). Appends `{ label?, payload }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (same event format as `render(type="step-frames", ...)`, `currentFrame` set to N-1 so the browser shows the latest frame). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
+| `append_frame(id, payload, label?, type?)` *(v0.8; live preview v0.9; per-frame `type` v0.17)* | Looks up the builder entry by ID. Validates `payload` against `type ?? frame_type` (same hard gate as `render()`). Appends `{ label?, payload, type? }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (same event format as `render(type="step-frames", ...)`, `currentFrame` set to N-1 so the browser shows the latest frame, using that frame's effective type). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
 | `commit_step_frames(id)` *(v0.8; finalization-only v0.9)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
 | `list_snapshots(workspace)` *(v0.15)* | Validates `workspace` (same safety check as `render()`). Calls `listSnapshots(workspace, dir)` in `server/snapshot-reader.ts` (the same function `GET /snapshots` uses). Returns `{ ok: true, snapshots: [{ id, timestamp, type, title? }] }`, newest-first. Empty array if the workspace has no snapshots. |
 | `export_html(workspace, ids, output_path?)` *(v0.15)* | Validates `workspace` (same safety check as `render()`) and that `ids` is a non-empty array. Builds `items = ids.map(id => ({ workspace, id }))` and calls the same `generateExportHtml()` pipeline as `POST /export-html` (`server/export-html.ts`), extended to resolve `{ workspace, id }` items via a new `findSnapshotByIdInWorkspace(workspace, id, dir)` lookup (scoped variant of `findSnapshotById`, restricted to one workspace directory). Unresolvable ids are skipped; if none resolve, returns `{ ok: false, error: "no valid items to export" }`. On success, writes the assembled HTML to `output_path` (creating parent directories as needed) or, if omitted, to `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html` (reusing `buildDownloadFilename()`). Returns `{ ok: true, path: "<absolute path>" }`, or `{ ok: false, error: "..." }` on a write failure. |
 
-**Known gap + planned fix (B5, found 2026-07-03, scheduled: v0.17, see `05`):** `StepFrame` (`session.ts`) has no `type` field — `frame_type` is one string shared by the whole sequence, threaded as-is through `session.ts`, `step-frames-builder.ts`, `validate.ts`, and `ws.ts`. This has two consequences: (1) the one-shot `render(type="step-frames")` path never calls `validatePayload(frame_type, frame.payload)` per frame — only append_frame() does — so malformed frame content in a one-shot payload is silently accepted (see F3a-gap in `03`); (2) a step-frames sequence cannot mix content types, since there is nowhere to store a per-frame override. A fix would add an optional `type` to `StepFrame`, validate each frame against `frame.type ?? frame_type` in both creation paths, and broadcast `frame.type ?? frameType` per push (`ws.ts` already sends a `type` field per broadcast, so the client needs no changes — it already re-selects a renderer per WebSocket message with zero cross-frame assumptions). This would make the incremental builder a strict superset of the one-shot path.
+**Resolved (v0.17, was B5, found 2026-07-03):** `StepFrame` (`session.ts`) gained an optional `type?: string` field. Every frame is now validated against its effective type (`frame.type ?? frame_type`) — `validatePayload()`'s `step-frames` branch (`validate.ts`) loops over `spec.frames` and validates each one, so `render(type="step-frames")`, `append_frame()`, `POST /slideshow`, and `POST /snapshots/load` (all of which route step-frames validation through `validatePayload()`) reject a malformed frame anywhere in the sequence before anything is accepted (closes F3a-gap in `03`). Every broadcast site that pushes a step-frame to the browser — `ws.ts`'s `broadcastStepFrames()`, `app.ts`'s `POST /render`/`POST /step`/`POST /seek`/`POST /snapshots/load`, `mcp.ts`'s `render`/`step`/`seek` tool handlers, and `slideshow.ts`'s tick/slide expansion — sends `frame.type ?? frameType` instead of the sequence-level type. `ws.ts` already sent a `type` field per broadcast, so the browser client needed no changes — it already re-selects a renderer per WebSocket message with zero cross-frame assumptions. A step-frames sequence can now mix content types (e.g. a mermaid frame followed by a katex frame) across both creation paths, and the incremental builder (`append_frame(id, payload, label?, type?)`) is a strict superset of the one-shot path.
 
 ### Validation — two layers
 
@@ -291,8 +291,8 @@ agent calls slideshow(slides=[...], delay_ms=1000)
       for non-step-frames slides:
         { action: "replace", type: slide_type, payload: slide_payload, title?: slide_title }
       for step-frames slides (expanded into frame ticks):
-        frame N: { action: "replace", type: frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frames[N].label }
-        (each frame broadcast at delay_ms intervals; frame labels shown as titles, not original slide title)
+        frame N: { action: "replace", type: frames[N].type ?? frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frames[N].label }
+        (each frame broadcast at delay_ms intervals, using its own effective type — v0.17; frame labels shown as titles, not original slide title)
   → browser renders each slide in sequence
   → after last slide, slideshow stops (no loop in v1)
   → MCP tool returns { ok: true }
@@ -391,7 +391,7 @@ Interaction with clear():
 
 **REST fallback endpoints (v0.8; live preview v0.9):**
 - `POST /step-frames/init` — body: `{ frame_type, workspace, title? }` → `{ ok: true, id }`
-- `POST /step-frames/:id/frame` — body: `{ payload, label? }` → `{ ok: true, frame_count: N }`. v0.9: also pushes partial step-frames to browser after each valid append (same as MCP `append_frame()`).
+- `POST /step-frames/:id/frame` — body: `{ payload, label?, type? }` → `{ ok: true, frame_count: N }`. v0.9: also pushes partial step-frames to browser after each valid append (same as MCP `append_frame()`). v0.17: optional `type` overrides the sequence's `frame_type` for this one frame.
 - `POST /step-frames/:id/commit` — no body → `{ ok: true }`. v0.9: finalization only (snapshot, in-memory state, slideshow cancel, builder cleanup); final broadcast still sent for consistency.
 
 ### HTML Export (v0.13)
@@ -580,7 +580,7 @@ Step-through is a two-tool protocol:
 
 `clear()` resets the step cursor along with the canvas.
 
-### Step-frames payload shape (MVP — Sprint 7 ✅)
+### Step-frames payload shape (MVP — Sprint 7 ✅; per-frame `type` v0.17)
 
 ```json
 {
@@ -588,14 +588,15 @@ Step-through is a two-tool protocol:
   "frames": [
     { "label": "Step 1 — initial node", "payload": "graph TD; A" },
     { "label": "Step 2 — add edge",     "payload": "graph TD; A --> B" },
-    { "label": "Step 3 — complete",     "payload": "graph TD; A --> B --> C" }
+    { "label": "Step 3 — formula",      "payload": "E = mc^2", "type": "katex" }
   ]
 }
 ```
 
-- `frame_type` — single type shared by all frames in v1; per-frame type is later.
+- `frame_type` — default type for frames that omit their own `type`; every frame in a sequence used to share this in v1.
 - `label` — optional string; displayed in the UI as a step caption.
-- `payload` — same format as a regular `render` payload for the given `frame_type`.
+- `payload` — same format as a regular `render` payload for the frame's effective type (`type` if present, else `frame_type`).
+- `type` (v0.17, optional) — per-frame override of `frame_type`. Lets one sequence mix content types (e.g. a mermaid frame followed by a katex frame). Every frame's payload is validated against its effective type before the sequence is accepted.
 
 ---
 

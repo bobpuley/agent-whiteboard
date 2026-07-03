@@ -345,6 +345,64 @@ describe("POST /render (step-frames)", () => {
     expect(body.ok).toBe(false);
   });
 
+  it("rejects a frame whose payload fails validation for its effective type (B5 regression)", async () => {
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+    spy.mockClear();
+
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        { label: "Step 1", payload: "graph TD; A" },
+        { label: "Step 2", payload: "not a valid diagram" },
+      ],
+    });
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
+    });
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/mermaid/);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("accepts a mixed-type sequence when each frame's own type is valid", async () => {
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        { label: "Step 1", payload: "graph TD; A" },
+        { label: "Step 2", type: "katex", payload: "E = mc^2" },
+      ],
+    });
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("rejects a mixed-type sequence when a per-frame type override fails validation", async () => {
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        { label: "Step 1", payload: "graph TD; A" },
+        { label: "Step 2", type: "vega-lite", payload: "not json" },
+      ],
+    });
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
+    });
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/vega-lite/);
+  });
+
   it("export returns the original frames JSON after loading", async () => {
     await app.request("/render", {
       method: "POST",
@@ -454,6 +512,34 @@ describe("POST /step", () => {
     });
     const body = await res.json<{ ok: boolean }>();
     expect(body.ok).toBe(false);
+  });
+
+  it("broadcasts a frame's own type override, not the sequence-wide frame_type", async () => {
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    const mixedSequence = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [
+        { label: "Step 1", payload: "graph TD; A" },
+        { label: "Step 2", type: "katex", payload: "E = mc^2" },
+      ],
+    });
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: mixedSequence, options: { workspace: WORKSPACE } }),
+    });
+
+    spy.mockClear();
+    await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0][0]).toMatchObject({ type: "katex", payload: "E = mc^2" });
   });
 });
 
@@ -1874,6 +1960,30 @@ describe("POST /step-frames/:id/frame", () => {
     expect(body.error).toMatch(/diagram keyword/);
   });
 
+  it("accepts a per-frame type override that differs from the sequence's frame_type", async () => {
+    const id = await initBuilder(); // frame_type: mermaid
+    const res = await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "E = mc^2", type: "katex" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, frame_count: 1 });
+  });
+
+  it("returns 400 when a per-frame type override fails validation", async () => {
+    const id = await initBuilder(); // frame_type: mermaid
+    const res = await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "not json", type: "vega-lite" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/vega-lite/);
+  });
+
   it("returns 400 when payload is not a string", async () => {
     const id = await initBuilder();
     const res = await app.request(`/step-frames/${id}/frame`, {
@@ -1933,6 +2043,47 @@ describe("POST /step-frames/:id/commit", () => {
       body: JSON.stringify({ direction: "next" }),
     });
     expect(await stepRes.json()).toEqual({ ok: true, current_frame: 1, total_frames: 3 });
+  });
+
+  it("a mermaid+katex sequence built via append_frame renders each frame's own type on step/seek", async () => {
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    const initRes = await app.request("/step-frames/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame_type: "mermaid", workspace: WORKSPACE }),
+    });
+    const { id } = await initRes.json<{ ok: boolean; id: string }>();
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "graph TD; A", label: "Diagram" }),
+    });
+    await app.request(`/step-frames/${id}/frame`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payload: "E = mc^2", label: "Formula", type: "katex" }),
+    });
+    await app.request(`/step-frames/${id}/commit`, { method: "POST" });
+
+    spy.mockClear();
+    const stepRes = await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+    expect(await stepRes.json()).toEqual({ ok: true, current_frame: 1, total_frames: 2 });
+    expect(spy.mock.calls[0][0]).toMatchObject({ type: "katex", payload: "E = mc^2" });
+
+    spy.mockClear();
+    const seekRes = await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: 0 }),
+    });
+    expect(await seekRes.json()).toEqual({ ok: true, current_frame: 0, total_frames: 2 });
+    expect(spy.mock.calls[0][0]).toMatchObject({ type: "mermaid", payload: "graph TD; A" });
   });
 
   it("returns 404 for unknown id", async () => {

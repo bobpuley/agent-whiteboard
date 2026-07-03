@@ -196,6 +196,28 @@ test("step-frames: Next disabled on last frame", async ({ page, request }) => {
   await expect(page.getByRole("button", { name: "Previous frame" })).toBeEnabled();
 });
 
+test("step-frames: a mixed mermaid+katex sequence renders each frame with its own renderer (v0.17)", async ({ page, request }) => {
+  const mixedFrames = JSON.stringify({
+    frame_type: "mermaid",
+    frames: [
+      { label: "Diagram", payload: "graph TD; A --> B" },
+      { label: "Formula", payload: "E = mc^2", type: "katex" },
+    ],
+  });
+  await page.goto("/");
+  await request.post(`${SERVER}/render`, {
+    data: { type: "step-frames", payload: mixedFrames, options: { workspace: WS } },
+  });
+
+  await expect(page.locator(".mermaid-container svg")).toBeVisible();
+
+  await page.getByRole("button", { name: "Next frame" }).click();
+
+  await expect(page.locator(".step-label")).toHaveText("Formula");
+  await expect(page.locator(".katex-renderer .katex")).toBeVisible();
+  await expect(page.locator(".mermaid-container svg")).not.toBeVisible();
+});
+
 // ── Done button ───────────────────────────────────────────────────────────────
 
 test("Done button: shows 'Sent ✓' after click and reverts", async ({ page }) => {

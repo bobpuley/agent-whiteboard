@@ -9,6 +9,7 @@ const TTL_MS = 30 * 60 * 1000; // 30 minutes
 export interface BuilderFrame {
   payload: string;
   label?: string;
+  type?: string;
 }
 
 interface BuilderEntry {
@@ -37,21 +38,22 @@ export type AppendResult =
   | { ok: true; frame_count: number; frames: BuilderFrame[]; frame_type: string; title?: string }
   | { ok: false; error: string };
 
-/** Append a frame to an existing builder entry. Validates payload against frame_type. */
+/** Append a frame to an existing builder entry. Validates payload against type ?? entry.frame_type. */
 export async function appendFrame(
   id: string,
   payload: string,
-  label?: string
+  label?: string,
+  type?: string
 ): Promise<AppendResult> {
   const entry = builders.get(id);
   if (!entry) {
     return { ok: false, error: "step-frames session not found or expired" };
   }
-  const validationError = await validatePayload(entry.frame_type, payload);
+  const validationError = await validatePayload(type ?? entry.frame_type, payload);
   if (validationError) {
     return { ok: false, error: validationError };
   }
-  entry.frames.push({ payload, ...(label !== undefined ? { label } : {}) });
+  entry.frames.push({ payload, ...(label !== undefined ? { label } : {}), ...(type !== undefined ? { type } : {}) });
   // Reset TTL.
   clearTimeout(entry.timer);
   entry.timer = setTimeout(() => expireBuilder(id), TTL_MS);
