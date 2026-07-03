@@ -7,6 +7,8 @@
   import KatexRenderer from "./renderers/Katex.svelte";
   import VegaLiteRenderer from "./renderers/VegaLite.svelte";
   import HistoryPanel from "./HistoryPanel.svelte";
+  import DeleteExportModal from "./DeleteExportModal.svelte";
+  import type { WorkspaceGroup } from "./lib/snapshotTypes";
 
   type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
 
@@ -91,6 +93,30 @@
   }
 
   let historyOpen = false;
+  let historyPanelRef: HistoryPanel;
+
+  // Delete/export modal — opened from the controls panel (v0.16).
+  let modalMode: "delete" | "export" | null = null;
+  let modalWorkspaces: WorkspaceGroup[] = [];
+
+  async function openModal(mode: "delete" | "export") {
+    try {
+      const res = await fetch("/snapshots/all");
+      const data = await res.json();
+      modalWorkspaces = data.ok ? data.workspaces : [];
+    } catch {
+      modalWorkspaces = [];
+    }
+    modalMode = mode;
+  }
+
+  function closeModal() {
+    modalMode = null;
+  }
+
+  function handleModalDeleted() {
+    if (historyOpen) historyPanelRef?.fetchSnapshots();
+  }
 
   // Done button — shown only while wait_done() is armed on the server.
   let doneArmed = false;
@@ -106,7 +132,15 @@
   }
 </script>
 
-<HistoryPanel bind:open={historyOpen} on:close={() => { historyOpen = false; }} />
+<HistoryPanel bind:this={historyPanelRef} bind:open={historyOpen} on:close={() => { historyOpen = false; }} />
+
+<DeleteExportModal
+  mode={modalMode ?? "delete"}
+  open={modalMode !== null}
+  workspaces={modalWorkspaces}
+  on:close={closeModal}
+  on:deleted={handleModalDeleted}
+/>
 
 <main>
   {#if disconnected}
@@ -158,10 +192,25 @@
   {/if}
 
   <div class="controls-panel">
-    <button class="history-btn" on:click={() => { historyOpen = !historyOpen; }} aria-label="Toggle history panel" aria-pressed={historyOpen}>
+    <button class="panel-icon-btn" on:click={() => { historyOpen = !historyOpen; }} aria-label="Toggle history panel" aria-pressed={historyOpen}>
       &#128337;
     </button>
+
+    <div class="panel-sep"></div>
+
+    <button class="panel-icon-btn delete-btn" on:click={() => openModal("delete")} aria-label="Delete snapshots" title="Delete snapshots">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+      </svg>
+    </button>
+    <button class="panel-icon-btn export-btn" on:click={() => openModal("export")} aria-label="Export snapshots" title="Export snapshots to HTML">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+
     {#if doneArmed}
+      <div class="panel-sep"></div>
       <button class="done-btn" on:click={handleDone} disabled={doneSent} title="Done">
         {#if doneSent}
           Sent ✓
@@ -294,7 +343,7 @@
     z-index: 50;
   }
 
-  .history-btn {
+  .panel-icon-btn {
     padding: 6px 8px;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -304,16 +353,39 @@
     color: #555;
     transition: background 0.1s;
     line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
   }
 
-  .history-btn:hover {
+  .panel-icon-btn:hover {
     background: #f0f0f0;
   }
 
-  .history-btn[aria-pressed="true"] {
+  .panel-icon-btn[aria-pressed="true"] {
     background: #e8f4fd;
     border-color: #2980b9;
     color: #2980b9;
+  }
+
+  .panel-icon-btn.delete-btn:hover {
+    background: #fdf0f0;
+    border-color: #e74c3c;
+    color: #e74c3c;
+  }
+
+  .panel-icon-btn.export-btn:hover {
+    background: #e8f4fd;
+    border-color: #2980b9;
+    color: #2980b9;
+  }
+
+  .panel-sep {
+    height: 1px;
+    background: #e8e8e8;
+    margin: 2px 2px;
   }
 
   .done-btn {

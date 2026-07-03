@@ -1,39 +1,22 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
+  import type { WorkspaceGroup } from "./lib/snapshotTypes";
 
   export let open = false;
-
-  interface SnapshotEntry {
-    filename: string;
-    timestamp: string;
-    type: string;
-    title?: string;
-  }
-
-  interface WorkspaceGroup {
-    name: string;
-    isCurrent: boolean;
-    snapshots: SnapshotEntry[];
-  }
 
   let workspaces: WorkspaceGroup[] = [];
   let loading = false;
   let error = "";
   let locked = false;
-  let selectionMode: "delete" | "export" | null = null;
-  // key: "workspace/filename"
-  let selected = new Set<string>();
 
   const dispatch = createEventDispatcher<{ close: void }>();
 
   // Reset ephemeral state when panel closes.
   $: if (!open) {
     locked = false;
-    selectionMode = null;
-    selected = new Set();
   }
 
-  async function fetchSnapshots() {
+  export async function fetchSnapshots() {
     loading = true;
     error = "";
     try {
@@ -52,10 +35,6 @@
   }
 
   async function loadSnapshot(workspace: string, filename: string) {
-    if (selectionMode !== null) {
-      toggleSelect(workspace, filename);
-      return;
-    }
     try {
       await fetch("/snapshots/load", {
         method: "POST",
@@ -86,113 +65,6 @@
   }
 
   $: hasAnySnapshot = workspaces.some((g) => g.snapshots.length > 0);
-
-  function enterMode(mode: "delete" | "export") {
-    if (selectionMode === mode) {
-      selectionMode = null;
-    } else {
-      selectionMode = mode;
-    }
-    selected = new Set();
-  }
-
-  function toggleSelect(workspace: string, filename: string) {
-    const key = `${workspace}/${filename}`;
-    const next = new Set(selected);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    selected = next;
-  }
-
-  function isSelected(workspace: string, filename: string) {
-    return selected.has(`${workspace}/${filename}`);
-  }
-
-  async function deleteSelected() {
-    const byWorkspace = new Map<string, string[]>();
-    for (const key of selected) {
-      const slash = key.indexOf("/");
-      const ws = key.slice(0, slash);
-      const fn = key.slice(slash + 1);
-      if (!byWorkspace.has(ws)) byWorkspace.set(ws, []);
-      byWorkspace.get(ws)!.push(fn);
-    }
-    for (const [ws, filenames] of byWorkspace) {
-      try {
-        await fetch("/snapshots/delete-files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspace: ws, filenames }),
-        });
-      } catch { /* ignore */ }
-    }
-    workspaces = workspaces.map((g) => ({
-      ...g,
-      snapshots: g.snapshots.filter((s) => !selected.has(`${g.name}/${s.filename}`)),
-    }));
-    selected = new Set();
-    selectionMode = null;
-  }
-
-  async function deleteWorkspace(workspace: string) {
-    const confirmed = window.confirm(
-      `Delete workspace "${workspace}" and all its snapshots? This cannot be undone.`
-    );
-    if (!confirmed) return;
-    try {
-      await fetch("/snapshots/delete-workspace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspace }),
-      });
-    } catch { /* ignore */ }
-    workspaces = workspaces.filter((g) => g.name !== workspace);
-  }
-
-  async function triggerDownload(res: Response) {
-    const contentDisposition = res.headers.get("Content-Disposition") ?? "";
-    const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-    const filename = filenameMatch?.[1] ?? "export.html";
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
-  async function exportItems(items: Array<{ workspace: string; filename: string }>) {
-    try {
-      const res = await fetch("/export-html", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      });
-      if (!res.ok) return;
-      await triggerDownload(res);
-    } catch { /* ignore */ }
-  }
-
-  async function exportSelected() {
-    const items: Array<{ workspace: string; filename: string }> = [];
-    for (const key of selected) {
-      const slash = key.indexOf("/");
-      items.push({ workspace: key.slice(0, slash), filename: key.slice(slash + 1) });
-    }
-    await exportItems(items);
-    selected = new Set();
-    selectionMode = null;
-  }
-
-  async function exportWorkspace(workspace: string) {
-    const group = workspaces.find((g) => g.name === workspace);
-    if (!group) return;
-    const items = group.snapshots.map((s) => ({ workspace, filename: s.filename }));
-    await exportItems(items);
-  }
 </script>
 
 {#if open}
@@ -200,36 +72,6 @@
     <div class="panel-header">
       <span class="panel-title">History</span>
       <div class="header-actions">
-        <!-- Recycle bin: enter/exit delete mode; switches from export mode to delete mode -->
-        <button
-          class="action-btn"
-          class:active={selectionMode === "delete"}
-          on:click={() => enterMode("delete")}
-          aria-label={selectionMode === "delete" ? "Exit delete mode" : "Enter delete mode"}
-          title="Delete snapshots"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-            <path d="M10 11v6"/>
-            <path d="M14 11v6"/>
-            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-          </svg>
-        </button>
-        <!-- Export/download icon: enter/exit export mode; switches from delete mode to export mode -->
-        <button
-          class="action-btn"
-          class:active={selectionMode === "export"}
-          on:click={() => enterMode("export")}
-          aria-label={selectionMode === "export" ? "Exit export mode" : "Enter export mode"}
-          title="Export snapshots to HTML"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-        </button>
         <button
           class="action-btn"
           class:locked
@@ -255,28 +97,6 @@
       </div>
     </div>
 
-    {#if selectionMode !== null}
-      <div class="select-bar" class:export-bar={selectionMode === "export"}>
-        <span class="select-count">
-          {#if selected.size === 0}
-            {selectionMode === "delete" ? "Select snapshots to delete" : "Select snapshots to export"}
-          {:else}
-            {selected.size} selected
-          {/if}
-        </span>
-        <div class="select-bar-actions">
-          {#if selected.size > 0}
-            {#if selectionMode === "delete"}
-              <button class="delete-selected-btn" on:click={deleteSelected}>Delete selected</button>
-            {:else}
-              <button class="export-selected-btn" on:click={exportSelected}>Export selected</button>
-            {/if}
-          {/if}
-          <button class="cancel-select-btn" on:click={() => enterMode(selectionMode)}>Cancel</button>
-        </div>
-      </div>
-    {/if}
-
     <div class="panel-body">
       {#if loading}
         <p class="panel-message">Loading…</p>
@@ -293,37 +113,9 @@
                 <span class="current-badge">current</span>
               {/if}
             </summary>
-            {#if selectionMode !== null}
-              <div class="ws-actions-bar">
-                <span class="ws-actions-label">Workspace:</span>
-                {#if selectionMode === "delete"}
-                  <button
-                    class="ws-action-btn ws-action-delete"
-                    on:click={() => deleteWorkspace(group.name)}
-                    title="Delete workspace folder and all its snapshots"
-                  >Delete folder</button>
-                {:else}
-                  <button
-                    class="ws-action-btn ws-action-export"
-                    on:click={() => exportWorkspace(group.name)}
-                    title="Export all snapshots in this workspace to HTML"
-                  >Export workspace</button>
-                {/if}
-              </div>
-            {/if}
             <ul class="snapshot-list">
               {#each group.snapshots as entry (group.name + "/" + entry.filename)}
-                <li class="snapshot-item" class:selected={isSelected(group.name, entry.filename)}>
-                  {#if selectionMode !== null}
-                    <label class="snapshot-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={isSelected(group.name, entry.filename)}
-                        on:change={() => toggleSelect(group.name, entry.filename)}
-                        aria-label="Select snapshot {entry.title ?? entry.filename}"
-                      />
-                    </label>
-                  {/if}
+                <li class="snapshot-item">
                   <button class="snapshot-row" on:click={() => loadSnapshot(group.name, entry.filename)}>
                     <span class="snapshot-title">{entry.title ?? "—"}</span>
                     <span class="snapshot-meta">
@@ -331,35 +123,6 @@
                       <span class="snapshot-time">{formatTimestamp(entry.timestamp)}</span>
                     </span>
                   </button>
-                  {#if selectionMode === null}
-                    <button
-                      class="row-delete-btn"
-                      on:click|stopPropagation={async () => {
-                        try {
-                          await fetch("/snapshots/delete-files", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ workspace: group.name, filenames: [entry.filename] }),
-                          });
-                        } catch { /* ignore */ }
-                        workspaces = workspaces.map((g) =>
-                          g.name === group.name
-                            ? { ...g, snapshots: g.snapshots.filter((s) => s.filename !== entry.filename) }
-                            : g
-                        );
-                      }}
-                      aria-label="Delete this snapshot"
-                      title="Delete snapshot"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                        <path d="M10 11v6"/>
-                        <path d="M14 11v6"/>
-                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                      </svg>
-                    </button>
-                  {/if}
                 </li>
               {/each}
             </ul>
@@ -425,7 +188,6 @@
     color: #555;
   }
 
-  .action-btn.active,
   .action-btn.locked {
     color: #2980b9;
     border-color: #2980b9;
@@ -454,92 +216,6 @@
   .close-btn:hover {
     background: #f0f0f0;
     color: #444;
-  }
-
-  .select-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 6px 12px;
-    background: #fff8e1;
-    border-bottom: 1px solid #ffe082;
-    font-size: 12px;
-    gap: 8px;
-  }
-
-  .select-bar.export-bar {
-    background: #e8f4fd;
-    border-bottom-color: #90caf9;
-  }
-
-  .select-count {
-    color: #555;
-    flex: 1;
-  }
-
-  .select-bar-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .delete-selected-btn {
-    background: #e74c3c;
-    color: #fff;
-    border: none;
-    border-radius: 3px;
-    padding: 3px 10px;
-    font-size: 12px;
-    cursor: pointer;
-    font-weight: 500;
-  }
-
-  .delete-selected-btn:hover {
-    background: #c0392b;
-  }
-
-  .export-selected-btn {
-    background: #2980b9;
-    color: #fff;
-    border: none;
-    border-radius: 3px;
-    padding: 3px 10px;
-    font-size: 12px;
-    cursor: pointer;
-    font-weight: 500;
-  }
-
-  .export-selected-btn:hover {
-    background: #1f6699;
-  }
-
-  .cancel-select-btn {
-    background: none;
-    color: #555;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    padding: 3px 10px;
-    font-size: 12px;
-    cursor: pointer;
-  }
-
-  .cancel-select-btn:hover {
-    background: #f0f0f0;
-  }
-
-  .ws-actions-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px 4px 28px;
-    background: #fafafa;
-    border-bottom: 1px solid #ececec;
-    font-size: 11px;
-  }
-
-  .ws-actions-label {
-    color: #999;
-    flex: 1;
   }
 
   .panel-body {
@@ -620,40 +296,6 @@
     flex-shrink: 0;
   }
 
-  .ws-action-btn {
-    font-size: 10px;
-    padding: 1px 7px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    background: #fff;
-    cursor: pointer;
-    color: #555;
-    font-weight: 500;
-    flex-shrink: 0;
-  }
-
-  .ws-action-btn:hover {
-    background: #f0f0f0;
-  }
-
-  .ws-action-delete {
-    border-color: #e74c3c;
-    color: #e74c3c;
-  }
-
-  .ws-action-delete:hover {
-    background: #fdf0f0;
-  }
-
-  .ws-action-export {
-    border-color: #2980b9;
-    color: #2980b9;
-  }
-
-  .ws-action-export:hover {
-    background: #e8f4fd;
-  }
-
   .snapshot-list {
     list-style: none;
     margin: 0;
@@ -667,39 +309,18 @@
     position: relative;
   }
 
-  .snapshot-item.selected {
-    background: #fff8e1;
-  }
-
-  .snapshot-item:hover .row-delete-btn {
-    opacity: 1;
-  }
-
-  .snapshot-checkbox-label {
-    display: flex;
-    align-items: center;
-    padding: 0 4px 0 12px;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
   .snapshot-row {
     display: flex;
     flex-direction: column;
     gap: 2px;
     flex: 1;
     min-width: 0;
-    padding: 10px 8px 10px 28px;
+    padding: 10px 8px;
     border: none;
     background: none;
     cursor: pointer;
     text-align: left;
     transition: background 0.1s;
-  }
-
-  .snapshot-item.selected .snapshot-row,
-  .snapshot-item:has(.snapshot-checkbox-label) .snapshot-row {
-    padding-left: 8px;
   }
 
   .snapshot-row:hover {
@@ -734,22 +355,5 @@
   .snapshot-time {
     font-size: 11px;
     color: #999;
-  }
-
-  .row-delete-btn {
-    opacity: 0;
-    transition: opacity 0.1s;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #bbb;
-    padding: 6px 10px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-  }
-
-  .row-delete-btn:hover {
-    color: #e74c3c;
   }
 </style>
