@@ -3,6 +3,14 @@
 // Content types the server can send in a "replace" command.
 export type RendererType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
 
+// Mermaid zoom/pan viewport (v0.19, F19/C3) — positionX/positionY are
+// normalized fractions of the canvas container, not raw pixels.
+export interface Viewport {
+  scale: number;
+  positionX: number;
+  positionY: number;
+}
+
 export type RenderCommand =
   | {
       action: "replace";
@@ -14,6 +22,8 @@ export type RenderCommand =
       currentFrame?: number; // step-frames cursor position (0-indexed)
       totalFrames?: number;  // total frames in the loaded sequence
       nodeToFrame?: Record<string, number>; // node ID → frame index for autonomous navigation
+      id?: string;           // snapshot id (v0.19) — present on new content, echoed on step()/seek() continuations
+      viewport?: Viewport;   // cached zoom/pan to restore instead of auto-fitting (v0.19)
     }
   | {
       action: "replace";

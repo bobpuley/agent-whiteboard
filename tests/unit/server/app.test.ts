@@ -9,6 +9,7 @@ const WORKSPACE = "test-workspace";
 
 vi.mock("../../../server/snapshot.js", () => ({
   saveSnapshot: vi.fn(),
+  generateSnapshotId: vi.fn(() => "test-uuid-generated"),
 }));
 
 vi.mock("../../../server/snapshot-reader.js", () => ({
@@ -1150,7 +1151,7 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     });
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined, workspace: WORKSPACE });
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined, workspace: WORKSPACE }, "test-uuid-generated");
   });
 
   it("calls saveSnapshot with title when options.title is provided", async () => {
@@ -1162,7 +1163,7 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     });
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { workspace: WORKSPACE, title: "My diagram" });
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { workspace: WORKSPACE, title: "My diagram" }, "test-uuid-generated");
   });
 
   it("does NOT call saveSnapshot when render payload is invalid", async () => {
@@ -1196,7 +1197,8 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
       "step-frames",
       THREE_FRAME_SEQUENCE,
-      { title: undefined, node_to_frame: undefined, workspace: WORKSPACE }
+      { title: undefined, node_to_frame: undefined, workspace: WORKSPACE },
+      "test-uuid-generated"
     );
   });
 
@@ -1757,7 +1759,7 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, {
       title: undefined,
       workspace: "course_1",
-    });
+    }, "test-uuid-generated");
   });
 
   it("passes both title and workspace to saveSnapshot", async () => {
@@ -1772,7 +1774,7 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, {
       title: "Lesson 1",
       workspace: "course_2",
-    });
+    }, "test-uuid-generated");
   });
 
   it("rejects an invalid workspace name (path separator)", async () => {
@@ -1832,7 +1834,7 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
       title: undefined,
       node_to_frame: undefined,
       workspace: "course_3",
-    });
+    }, "test-uuid-generated");
   });
 });
 
@@ -2603,6 +2605,327 @@ describe("POST /snapshots/delete-workspace (v0.12)", () => {
     // The snapshots root itself, and the workspace created in beforeEach, must survive.
     expect(existsSync(SNAP_ROOT)).toBe(true);
     expect(existsSync(pathJoin(SNAP_ROOT, "test-ws"))).toBe(true);
+  });
+});
+
+// ── v0.19 — Mermaid viewport persistence (F19/C3) ────────────────────────────
+
+describe("POST /viewport (v0.19)", () => {
+  const SNAP_ROOT = makeSnapRoot("viewport");
+
+  beforeEach(() => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+    try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it("persists a valid viewport and returns { ok: true }", async () => {
+    const res = await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", scale: 1.4, positionX: 0.12, positionY: -0.05 }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const { getViewport } = await import("../../../server/viewport-cache.js");
+    expect(getViewport("snap-1")).toEqual({ scale: 1.4, positionX: 0.12, positionY: -0.05 });
+  });
+
+  it("rejects a missing id", async () => {
+    const res = await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scale: 1, positionX: 0, positionY: 0 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/id/);
+  });
+
+  it("rejects a non-finite scale", async () => {
+    const res = await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", scale: "big", positionX: 0, positionY: 0 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/scale/);
+  });
+
+  it("rejects a missing positionX", async () => {
+    const res = await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", scale: 1, positionY: 0 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.error).toMatch(/positionX/);
+  });
+
+  it("rejects a missing positionY", async () => {
+    const res = await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", scale: 1, positionX: 0 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.error).toMatch(/positionY/);
+  });
+
+  it("overwrites a previous entry for the same id", async () => {
+    await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", scale: 1, positionX: 0, positionY: 0 }),
+    });
+    await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", scale: 2, positionX: 0.3, positionY: 0.4 }),
+    });
+    const { getViewport } = await import("../../../server/viewport-cache.js");
+    expect(getViewport("snap-1")).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
+  });
+});
+
+describe("POST /render — id in broadcast (v0.19)", () => {
+  beforeEach(async () => {
+    const { broadcast } = await import("../../../server/ws.js");
+    vi.mocked(broadcast).mockClear();
+  });
+
+  it("includes id in the broadcast for a plain render", async () => {
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A", options: { workspace: WORKSPACE } }),
+    });
+
+    expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated" });
+  });
+
+  it("includes id in the broadcast for a step-frames render", async () => {
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
+    });
+
+    expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated" });
+  });
+
+  it("step() re-broadcasts the same id the sequence was created with", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
+    });
+
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+    spy.mockClear();
+
+    await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+
+    expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated" });
+  });
+
+  it("seek() re-broadcasts the same id the sequence was created with", async () => {
+    await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
+    });
+
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+    spy.mockClear();
+
+    await app.request("/seek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frame: 2 }),
+    });
+
+    expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated" });
+  });
+});
+
+describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
+  const SNAP_ROOT = makeSnapRoot("load-viewport");
+
+  beforeEach(async () => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+    const { broadcast } = await import("../../../server/ws.js");
+    vi.mocked(broadcast).mockClear();
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockClear();
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+    try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  const SNAPSHOT_WITH_ID = JSON.stringify({
+    id: "loaded-id-1",
+    timestamp: "2026-06-09T14:30:00.000Z",
+    workspace: "agent-whiteboard",
+    type: "mermaid",
+    payload: "graph TD; A --> B",
+  });
+
+  it("includes the loaded snapshot's id in the broadcast", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(SNAPSHOT_WITH_ID);
+
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(spy.mock.calls[0][0]).toMatchObject({ id: "loaded-id-1" });
+  });
+
+  it("includes a cached viewport in the broadcast when one exists for that id", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(SNAPSHOT_WITH_ID);
+    const { setViewport } = await import("../../../server/viewport-cache.js");
+    setViewport("loaded-id-1", { scale: 1.7, positionX: 0.2, positionY: -0.1 });
+
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(spy.mock.calls[0][0]).toMatchObject({
+      id: "loaded-id-1",
+      viewport: { scale: 1.7, positionX: 0.2, positionY: -0.1 },
+    });
+  });
+
+  it("omits viewport when no cache entry exists for that id", async () => {
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(SNAPSHOT_WITH_ID);
+
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(spy.mock.calls[0][0]).not.toHaveProperty("viewport");
+  });
+
+  it("omits id when the loaded snapshot predates v0.11 and has no id field", async () => {
+    const legacySnapshot = JSON.stringify({
+      timestamp: "2026-01-01T00:00:00.000Z",
+      workspace: "agent-whiteboard",
+      type: "mermaid",
+      payload: "graph TD; A",
+    });
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(legacySnapshot);
+
+    const { broadcast } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcast);
+
+    await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260101_000000_screen.json" }),
+    });
+
+    expect(spy.mock.calls[0][0]).not.toHaveProperty("id");
+    expect(spy.mock.calls[0][0]).not.toHaveProperty("viewport");
+  });
+});
+
+describe("viewport-cache cleanup on delete (v0.19)", () => {
+  const SNAP_ROOT = makeSnapRoot("viewport-delete");
+
+  function writeSnapshotWithId(root: string, ws: string, filename: string, id: string) {
+    const dir = pathJoin(root, ws);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      pathJoin(dir, filename),
+      JSON.stringify({ id, timestamp: "2026-01-01T00:00:00.000Z", type: "mermaid", payload: "graph TD; A" })
+    );
+  }
+
+  beforeEach(() => {
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+    try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  it("POST /snapshots/delete-files removes the matching viewport-cache entry", async () => {
+    writeSnapshotWithId(SNAP_ROOT, "test-ws", "20260101_000000_screen.json", "id-to-delete");
+    writeSnapshotWithId(SNAP_ROOT, "test-ws", "20260101_000001_screen.json", "id-to-keep");
+
+    const { setViewport, getViewport } = await import("../../../server/viewport-cache.js");
+    setViewport("id-to-delete", { scale: 1, positionX: 0, positionY: 0 });
+    setViewport("id-to-keep", { scale: 2, positionX: 0.1, positionY: 0.1 });
+
+    const res = await app.request("/snapshots/delete-files", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws", filenames: ["20260101_000000_screen.json"] }),
+    });
+    expect(res.status).toBe(200);
+
+    expect(getViewport("id-to-delete")).toBeUndefined();
+    expect(getViewport("id-to-keep")).toEqual({ scale: 2, positionX: 0.1, positionY: 0.1 });
+  });
+
+  it("POST /snapshots/delete-workspace removes every viewport-cache entry for that workspace", async () => {
+    writeSnapshotWithId(SNAP_ROOT, "test-ws", "20260101_000000_screen.json", "ws-id-1");
+    writeSnapshotWithId(SNAP_ROOT, "test-ws", "20260101_000001_screen.json", "ws-id-2");
+    writeSnapshotWithId(SNAP_ROOT, "other-ws", "20260101_000000_screen.json", "other-ws-id");
+
+    const { setViewport, getViewport } = await import("../../../server/viewport-cache.js");
+    setViewport("ws-id-1", { scale: 1, positionX: 0, positionY: 0 });
+    setViewport("ws-id-2", { scale: 1, positionX: 0, positionY: 0 });
+    setViewport("other-ws-id", { scale: 1, positionX: 0, positionY: 0 });
+
+    const res = await app.request("/snapshots/delete-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "test-ws" }),
+    });
+    expect(res.status).toBe(200);
+
+    expect(getViewport("ws-id-1")).toBeUndefined();
+    expect(getViewport("ws-id-2")).toBeUndefined();
+    expect(getViewport("other-ws-id")).toEqual({ scale: 1, positionX: 0, positionY: 0 });
   });
 });
 

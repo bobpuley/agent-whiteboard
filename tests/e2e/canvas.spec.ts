@@ -218,6 +218,106 @@ test("step-frames: a mixed mermaid+katex sequence renders each frame with its ow
   await expect(page.locator(".mermaid-container svg")).not.toBeVisible();
 });
 
+// ── Mermaid zoom/pan: fit-to-view + persistence (v0.19) ───────────────────────
+
+function parseTransform(style: string | null): { tx: number; ty: number; scale: number } {
+  const match = style?.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([-\d.]+)\)/);
+  if (!match) throw new Error(`could not parse transform from style: ${style}`);
+  return { tx: Number(match[1]), ty: Number(match[2]), scale: Number(match[3]) };
+}
+
+test("mermaid: a new diagram auto-fits within the canvas viewport", async ({ page, request }) => {
+  await page.goto("/");
+  await request.post(`${SERVER}/render`, {
+    data: { type: "mermaid", payload: "graph TD; A --> B --> C --> D", options: { workspace: WS } },
+  });
+  await expect(page.locator(".mermaid-container svg")).toBeVisible();
+
+  const wrapperBox = await page.locator(".mermaid-wrapper").boundingBox();
+  const svgBox = await page.locator(".mermaid-container svg").boundingBox();
+  expect(wrapperBox).not.toBeNull();
+  expect(svgBox).not.toBeNull();
+  if (!wrapperBox || !svgBox) throw new Error("unreachable");
+
+  // Fit-to-view (scale-to-contain + center) means the rendered SVG's box must
+  // lie entirely within the wrapper's box, not overflow it — a 2px tolerance
+  // absorbs sub-pixel rounding.
+  expect(svgBox.x).toBeGreaterThanOrEqual(wrapperBox.x - 2);
+  expect(svgBox.y).toBeGreaterThanOrEqual(wrapperBox.y - 2);
+  expect(svgBox.x + svgBox.width).toBeLessThanOrEqual(wrapperBox.x + wrapperBox.width + 2);
+  expect(svgBox.y + svgBox.height).toBeLessThanOrEqual(wrapperBox.y + wrapperBox.height + 2);
+});
+
+test("mermaid: step()/seek() within a sequence preserves the live zoom/pan", async ({ page, request }) => {
+  await page.goto("/");
+  await request.post(`${SERVER}/render`, {
+    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
+  });
+  await expect(page.locator(".mermaid-container svg")).toBeVisible();
+
+  // Manually zoom in on frame 0.
+  await page.locator(".mermaid-wrapper").hover();
+  await page.mouse.wheel(0, -600);
+
+  const beforeStyle = await page.locator(".mermaid-canvas").getAttribute("style");
+  const before = parseTransform(beforeStyle);
+  expect(before.scale).not.toBeCloseTo(1, 2); // confirms the zoom actually took effect
+
+  await page.getByRole("button", { name: "Next frame" }).click();
+  await expect(page.locator(".step-label")).toHaveText("Step 2 — A→B");
+
+  const afterStyle = await page.locator(".mermaid-canvas").getAttribute("style");
+  const after = parseTransform(afterStyle);
+  expect(after.scale).toBeCloseTo(before.scale, 5);
+  expect(after.tx).toBeCloseTo(before.tx, 5);
+  expect(after.ty).toBeCloseTo(before.ty, 5);
+});
+
+test("mermaid: a manually adjusted viewport is restored when the same snapshot is reloaded from history", async ({ page, request }) => {
+  await page.goto("/");
+  const renderRes = await request.post(`${SERVER}/render`, {
+    data: { type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WS } },
+  });
+  const { id } = await renderRes.json();
+  expect(id).toBeTruthy();
+  await expect(page.locator(".mermaid-container svg")).toBeVisible();
+
+  // Manually zoom/pan. Chromium can animate a synthetic wheel gesture across
+  // several ticks, so settle briefly before sampling the "final" transform.
+  await page.locator(".mermaid-wrapper").hover();
+  await page.mouse.wheel(0, -600);
+  await page.waitForTimeout(200);
+  const adjustedStyle = await page.locator(".mermaid-canvas").getAttribute("style");
+  const adjusted = parseTransform(adjustedStyle);
+  expect(adjusted.scale).not.toBeCloseTo(1, 2);
+
+  // Wait past the client's debounce window so /viewport has been reported.
+  await page.waitForTimeout(1000);
+
+  // Load a different diagram so the canvas no longer shows the adjusted one.
+  await request.post(`${SERVER}/render`, {
+    data: { type: "mermaid", payload: "graph TD; X --> Y --> Z", options: { workspace: WS } },
+  });
+  await expect(page.locator(".mermaid-container svg")).toBeVisible();
+
+  // Reload the original snapshot from history — same id, so the browser
+  // should restore the saved viewport instead of auto-fitting again.
+  const listRes = await request.get(`${SERVER}/snapshots?workspace=${WS}`);
+  const { snapshots } = await listRes.json();
+  const original = snapshots.find((s: { id?: string }) => s.id === id);
+  expect(original).toBeTruthy();
+
+  await request.post(`${SERVER}/snapshots/load`, {
+    data: { workspace: WS, filename: original.filename },
+  });
+
+  await expect(async () => {
+    const restoredStyle = await page.locator(".mermaid-canvas").getAttribute("style");
+    const restored = parseTransform(restoredStyle);
+    expect(restored.scale).toBeCloseTo(adjusted.scale, 1);
+  }).toPass({ timeout: 3000 });
+});
+
 // ── Done button ───────────────────────────────────────────────────────────────
 
 test("Done button: hidden until wait_done() is armed", async ({ page }) => {

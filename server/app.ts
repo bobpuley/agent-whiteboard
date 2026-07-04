@@ -3,7 +3,7 @@
 
 import { homedir } from "os";
 import { join, resolve, sep } from "path";
-import { existsSync, readdirSync, rmSync, unlinkSync } from "fs";
+import { existsSync, readFileSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
 import type { ClickEvent } from "./events.js";
@@ -13,11 +13,13 @@ import { broadcast, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
-import { saveSnapshot } from "./snapshot.js";
+import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
+import { deleteViewports, getViewport, setViewport } from "./viewport-cache.js";
+import type { Viewport } from "./viewport-cache.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -34,6 +36,17 @@ function isNodeActionsValid(v: unknown): v is Record<string, string[]> {
   return Object.values(v as object).every(
     (arr) => Array.isArray(arr) && (arr as unknown[]).every((s) => typeof s === "string")
   );
+}
+
+/** Best-effort read of a snapshot file's `id` field, for viewport-cache cleanup on delete. */
+function readSnapshotIdSafe(fullPath: string): string | undefined {
+  try {
+    const raw = readFileSync(fullPath, "utf-8");
+    const parsed = JSON.parse(raw) as { id?: unknown };
+    return typeof parsed.id === "string" ? parsed.id : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function createApp(): Hono {
@@ -80,7 +93,10 @@ export function createApp(): Hono {
     if (type === "step-frames") {
       const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
       const frames = spec.frames;
-      setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame);
+      // Generate the id before broadcasting so the browser can key its viewport
+      // report on it — a brand-new render() always mints a fresh id (F19/C3).
+      const newId = generateSnapshotId();
+      setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame, newId);
       broadcast({
         action: "replace",
         type: frames[0].type ?? spec.frame_type,
@@ -91,19 +107,21 @@ export function createApp(): Hono {
         totalFrames: frames.length,
         ...(title !== undefined ? { title } : {}),
         ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
+        id: newId,
       });
       setLastWorkspace(workspace);
       let snapshotId: string | undefined;
-      try { snapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
+      try { snapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal */ }
       return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
     }
 
     // svg, html, katex, mermaid, vega-lite
-    setCanvas(type as CanvasType, payload, title);
-    broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
+    const newId = generateSnapshotId();
+    setCanvas(type as CanvasType, payload, title, newId);
+    broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}), id: newId });
     setLastWorkspace(workspace);
     let snapshotId: string | undefined;
-    try { snapshotId = saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
+    try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal */ }
     return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
   });
 
@@ -135,6 +153,9 @@ export function createApp(): Hono {
         currentFrame: result.currentFrame,
         totalFrames: result.totalFrames,
         ...(state.title !== undefined ? { title: state.title } : {}),
+        // Same id as when this sequence was created — tells the browser this is
+        // a continuation, not a new diagram, so it must not re-fit (F19/C3).
+        ...(state.id !== undefined ? { id: state.id } : {}),
       });
     }
     return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });
@@ -165,6 +186,7 @@ export function createApp(): Hono {
       totalFrames: total,
       ...(state.title !== undefined ? { title: state.title } : {}),
       ...(state.nodeToFrame !== undefined ? { nodeToFrame: state.nodeToFrame } : {}),
+      ...(state.id !== undefined ? { id: state.id } : {}),
     });
     return c.json({ ok: true, current_frame: body.frame, total_frames: total });
   });
@@ -269,8 +291,11 @@ export function createApp(): Hono {
       return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
     }
     // Live preview: push the accumulated partial sequence to the browser.
+    // Reuse the builder id so the browser fits-to-view once on the first frame
+    // and then treats subsequent appends as a continuation (F19/C3) — this is
+    // distinct from the final snapshot id minted at commit time.
     const { frames, frame_type, title } = result;
-    broadcastStepFrames(frames, frame_type, frames.length - 1, title);
+    broadcastStepFrames(frames, frame_type, frames.length - 1, title, id);
     return c.json({ ok: true, frame_count: result.frame_count });
   });
 
@@ -285,12 +310,13 @@ export function createApp(): Hono {
     const assembledPayload = JSON.stringify({ frame_type, frames });
 
     cancelSlideshow();
-    setStepFrames(frames, frame_type, assembledPayload, title);
+    const commitId = generateSnapshotId();
+    setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
     setLastWorkspace(workspace);
     let commitSnapshotId: string | undefined;
-    try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }); } catch { /* non-fatal */ }
+    try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId); } catch { /* non-fatal */ }
     // Final broadcast for consistency (handles clear() called between appends).
-    broadcastStepFrames(frames, frame_type, 0, title);
+    broadcastStepFrames(frames, frame_type, 0, title, commitId);
     return c.json({ ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) });
   });
 
@@ -431,7 +457,7 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: `snapshot not found: ${filename}` });
     }
 
-    let snapshot: { type?: unknown; payload?: unknown; options?: { title?: string; node_to_frame?: Record<string, number> } };
+    let snapshot: { id?: unknown; type?: unknown; payload?: unknown; options?: { title?: string; node_to_frame?: Record<string, number> } };
     try {
       snapshot = JSON.parse(raw) as typeof snapshot;
     } catch {
@@ -445,6 +471,10 @@ export function createApp(): Hono {
     const type = snapshot.type;
     const payload = snapshot.payload;
     const options = snapshot.options;
+    // Pre-v0.11 snapshots may lack an id (J1, `02`) — not addressable by the
+    // viewport cache; the browser falls back to treating it as unseen (auto-fit).
+    const snapshotId = typeof snapshot.id === "string" ? snapshot.id : undefined;
+    const viewport = snapshotId !== undefined ? getViewport(snapshotId) : undefined;
 
     const validationError = await validatePayload(type, payload);
     if (validationError) {
@@ -457,7 +487,7 @@ export function createApp(): Hono {
 
     if (type === "step-frames") {
       const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
-      setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame);
+      setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame, snapshotId);
       broadcast({
         action: "replace",
         type: spec.frames[0].type ?? spec.frame_type,
@@ -468,13 +498,44 @@ export function createApp(): Hono {
         totalFrames: spec.frames.length,
         ...(title !== undefined ? { title } : {}),
         ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
+        ...(snapshotId !== undefined ? { id: snapshotId } : {}),
+        ...(viewport !== undefined ? { viewport } : {}),
       });
     } else {
-      setCanvas(type as CanvasType, payload, title);
-      broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
+      setCanvas(type as CanvasType, payload, title, snapshotId);
+      broadcast({
+        action: "replace",
+        type,
+        payload,
+        ...(title !== undefined ? { title } : {}),
+        ...(snapshotId !== undefined ? { id: snapshotId } : {}),
+        ...(viewport !== undefined ? { viewport } : {}),
+      });
     }
 
     setLastWorkspace(workspace);
+    return c.json({ ok: true });
+  });
+
+  // ── Mermaid viewport persistence (v0.19, F19/C3) ────────────────────────────
+
+  app.post("/viewport", async (c) => {
+    const body = await c.req.json<{ id?: unknown; scale?: unknown; positionX?: unknown; positionY?: unknown }>();
+    if (typeof body.id !== "string" || body.id.length === 0) {
+      return c.json({ ok: false, error: "id must be a non-empty string" }, 400);
+    }
+    const { scale, positionX, positionY } = body;
+    if (typeof scale !== "number" || !Number.isFinite(scale)) {
+      return c.json({ ok: false, error: "scale must be a finite number" }, 400);
+    }
+    if (typeof positionX !== "number" || !Number.isFinite(positionX)) {
+      return c.json({ ok: false, error: "positionX must be a finite number" }, 400);
+    }
+    if (typeof positionY !== "number" || !Number.isFinite(positionY)) {
+      return c.json({ ok: false, error: "positionY must be a finite number" }, 400);
+    }
+    const viewport: Viewport = { scale, positionX, positionY };
+    setViewport(body.id, viewport);
     return c.json({ ok: true });
   });
 
@@ -527,15 +588,21 @@ export function createApp(): Hono {
 
     const workspaceDir = join(root, workspace);
     let deleted = 0;
+    const deletedIds: string[] = [];
     for (const f of filenames as string[]) {
       const fullPath = join(workspaceDir, f);
+      const id = readSnapshotIdSafe(fullPath);
       try {
         unlinkSync(fullPath);
         deleted++;
+        if (id !== undefined) deletedIds.push(id);
       } catch {
         // Missing files are silently skipped.
       }
     }
+    // Clean up any viewport-cache entries so deleted snapshots don't leave
+    // orphaned rows behind (C3, `02`).
+    deleteViewports(deletedIds);
     return c.json({ ok: true, deleted });
   });
 
@@ -548,10 +615,24 @@ export function createApp(): Hono {
     }
     const { workspace } = validated;
 
-    rmSync(join(root, workspace), { recursive: true, force: true });
+    const workspaceDir = join(root, workspace);
+    let idsToClean: string[] = [];
+    try {
+      idsToClean = readdirSync(workspaceDir)
+        .filter((f) => f.endsWith("_screen.json"))
+        .map((f) => readSnapshotIdSafe(join(workspaceDir, f)))
+        .filter((id): id is string => id !== undefined);
+    } catch {
+      // Workspace directory unreadable/absent — nothing to clean up.
+    }
+
+    rmSync(workspaceDir, { recursive: true, force: true });
     if (getLastWorkspace() === workspace) {
       setLastWorkspace("");
     }
+    // Clean up viewport-cache entries for every snapshot that lived in this
+    // workspace (C3, `02`).
+    deleteViewports(idsToClean);
     return c.json({ ok: true });
   });
 

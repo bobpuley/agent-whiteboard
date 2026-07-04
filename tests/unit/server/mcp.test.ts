@@ -6,6 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 vi.mock("../../../server/snapshot.js", () => ({
   saveSnapshot: vi.fn(),
+  generateSnapshotId: vi.fn(() => "test-uuid-generated"),
 }));
 
 vi.mock("../../../server/snapshot-reader.js", () => ({

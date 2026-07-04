@@ -11,8 +11,8 @@ export interface StepFrame {
 }
 
 export type CanvasState =
-  | { type: CanvasType; payload: string; title?: string }
-  | { type: "step-frames"; frames: StepFrame[]; frameType: string; currentFrame: number; rawPayload: string; title?: string; nodeToFrame?: Record<string, number> }
+  | { type: CanvasType; payload: string; title?: string; id?: string }
+  | { type: "step-frames"; frames: StepFrame[]; frameType: string; currentFrame: number; rawPayload: string; title?: string; nodeToFrame?: Record<string, number>; id?: string }
   | { type: "empty" };
 
 let canvas: CanvasState = { type: "empty" };
@@ -30,12 +30,12 @@ export function setLastWorkspace(workspace: string): void {
   lastWorkspace = workspace;
 }
 
-export function setCanvas(type: CanvasType, payload: string, title?: string): void {
-  canvas = { type, payload, ...(title !== undefined ? { title } : {}) };
+export function setCanvas(type: CanvasType, payload: string, title?: string, id?: string): void {
+  canvas = { type, payload, ...(title !== undefined ? { title } : {}), ...(id !== undefined ? { id } : {}) };
 }
 
-export function setStepFrames(frames: StepFrame[], frameType: string, rawPayload: string, title?: string, nodeToFrame?: Record<string, number>): void {
-  canvas = { type: "step-frames", frames, frameType, currentFrame: 0, rawPayload, ...(title !== undefined ? { title } : {}), ...(nodeToFrame !== undefined ? { nodeToFrame } : {}) };
+export function setStepFrames(frames: StepFrame[], frameType: string, rawPayload: string, title?: string, nodeToFrame?: Record<string, number>, id?: string): void {
+  canvas = { type: "step-frames", frames, frameType, currentFrame: 0, rawPayload, ...(title !== undefined ? { title } : {}), ...(nodeToFrame !== undefined ? { nodeToFrame } : {}), ...(id !== undefined ? { id } : {}) };
 }
 
 /**

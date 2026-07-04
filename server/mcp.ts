@@ -11,7 +11,7 @@ import { broadcast, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
-import { saveSnapshot } from "./snapshot.js";
+import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 import { generateExportHtml, writeExportHtmlToDisk } from "./export-html.js";
@@ -149,7 +149,10 @@ export function createMcpServer(): McpServer {
         const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
         const frames = spec.frames;
         cancelSlideshow();
-        setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame);
+        // Generate the id before broadcasting so the browser can key its viewport
+        // report on it — a brand-new render() always mints a fresh id (F19/C3).
+        const newId = generateSnapshotId();
+        setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame, newId);
         broadcast({
           action: "replace",
           type: frames[0].type ?? spec.frame_type,
@@ -160,21 +163,23 @@ export function createMcpServer(): McpServer {
           totalFrames: frames.length,
           ...(title !== undefined ? { title } : {}),
           ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
+          id: newId,
         });
         setLastWorkspace(workspace);
         let sfSnapshotId: string | undefined;
-        try { sfSnapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }); } catch { /* non-fatal */ }
+        try { sfSnapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal */ }
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: true, ...(sfSnapshotId !== undefined ? { id: sfSnapshotId } : {}) }) }],
         };
       }
 
       cancelSlideshow();
-      setCanvas(type, payload, title);
-      broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}) });
+      const newId = generateSnapshotId();
+      setCanvas(type, payload, title, newId);
+      broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}), id: newId });
       setLastWorkspace(workspace);
       let snapshotId: string | undefined;
-      try { snapshotId = saveSnapshot(type, payload, { title, workspace }); } catch { /* non-fatal */ }
+      try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal */ }
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) }) }],
@@ -223,6 +228,9 @@ export function createMcpServer(): McpServer {
           currentFrame: result.currentFrame,
           totalFrames: result.totalFrames,
           ...(state.title !== undefined ? { title: state.title } : {}),
+          // Same id as when this sequence was created — tells the browser this is
+          // a continuation, not a new diagram, so it must not re-fit (F19/C3).
+          ...(state.id !== undefined ? { id: state.id } : {}),
         });
       }
       return {
@@ -278,6 +286,7 @@ export function createMcpServer(): McpServer {
         totalFrames: total,
         ...(state.title !== undefined ? { title: state.title } : {}),
         ...(state.nodeToFrame !== undefined ? { nodeToFrame: state.nodeToFrame } : {}),
+        ...(state.id !== undefined ? { id: state.id } : {}),
       });
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, current_frame: frame, total_frames: total }) }],
@@ -553,8 +562,10 @@ export function createMcpServer(): McpServer {
       const result = await appendFrame(id, payload, label, type);
       if (result.ok) {
         // Live preview: push the accumulated partial sequence to the browser.
+        // Reuse the builder id so the browser fits-to-view once on the first
+        // frame and treats subsequent appends as a continuation (F19/C3).
         const { frames, frame_type, title } = result;
-        broadcastStepFrames(frames, frame_type, frames.length - 1, title);
+        broadcastStepFrames(frames, frame_type, frames.length - 1, title, id);
       }
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: result.ok, ...( result.ok ? { frame_count: result.frame_count } : { error: result.error }) }) }],
@@ -592,14 +603,15 @@ export function createMcpServer(): McpServer {
       const assembledPayload = JSON.stringify({ frame_type, frames });
 
       cancelSlideshow();
-      setStepFrames(frames, frame_type, assembledPayload, title);
+      const commitId = generateSnapshotId();
+      setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
       setLastWorkspace(workspace);
       let commitSnapshotId: string | undefined;
       try {
-        commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace });
+        commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId);
       } catch { /* non-fatal */ }
       // Final broadcast for consistency (handles clear() called between appends).
-      broadcastStepFrames(frames, frame_type, 0, title);
+      broadcastStepFrames(frames, frame_type, 0, title, commitId);
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) }) }],

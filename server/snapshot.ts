@@ -8,7 +8,19 @@ export interface RenderOptions {
   workspace: string;
 }
 
-export function saveSnapshot(type: string, payload: string, options: RenderOptions): string | undefined {
+/** Generate a snapshot id up front, before the write happens — lets callers
+ * broadcast the id to the browser (e.g. for viewport-cache keying) without
+ * waiting on the (synchronous, but logically separate) disk write. */
+export function generateSnapshotId(): string {
+  return crypto.randomUUID();
+}
+
+export function saveSnapshot(
+  type: string,
+  payload: string,
+  options: RenderOptions,
+  id?: string
+): string | undefined {
   try {
     const { workspace } = options;
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
@@ -16,12 +28,12 @@ export function saveSnapshot(type: string, payload: string, options: RenderOptio
     mkdirSync(dir, { recursive: true });
 
     const now = new Date();
-    const id = crypto.randomUUID();
+    const usedId = id ?? crypto.randomUUID();
     // Include the (already-unique) id so two writes in the same second never collide.
-    const filename = `${formatTimestamp(now)}_${id}_screen.json`;
+    const filename = `${formatTimestamp(now)}_${usedId}_screen.json`;
 
     const content: Record<string, unknown> = {
-      id,
+      id: usedId,
       timestamp: now.toISOString(),
       workspace,
       type,
@@ -35,7 +47,7 @@ export function saveSnapshot(type: string, payload: string, options: RenderOptio
     }
 
     writeFileSync(join(dir, filename), JSON.stringify(content, null, 2), "utf-8");
-    return id;
+    return usedId;
   } catch (err) {
     console.error(
       "[agent-whiteboard] snapshot write failed:",

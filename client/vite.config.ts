@@ -15,6 +15,7 @@ export default defineConfig({
       "/node-click": "http://localhost:3000",
       "/wait-click": "http://localhost:3000",
       "/snapshots": "http://localhost:3000",
+      "/viewport": "http://localhost:3000",
       "/mcp": "http://localhost:3000",
       // WebSocket proxy requires ws: true — HTTP proxy alone does not cover WS connections.
       "/stream": {
