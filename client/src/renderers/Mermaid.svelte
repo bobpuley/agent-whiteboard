@@ -11,6 +11,10 @@
   let container: HTMLDivElement;
   let errorMessage: string | null = null;
   let lastRendered: string | null = null;
+  // Bumped on every renderDiagram() call; a render whose token no longer
+  // matches by the time its async work resolves has been superseded and
+  // must not touch the DOM (B8 — stale-render race).
+  let renderToken = 0;
 
   // ── Zoom / pan state ────────────────────────────────────────────────────────
   let scale = 1;
@@ -248,6 +252,7 @@
   mermaid.initialize({ startOnLoad: false, theme: "default" });
 
   async function renderDiagram(src: string) {
+    const token = ++renderToken;
     errorMessage = null;
     resetTransform();
     detachClickListeners();
@@ -258,10 +263,12 @@
     try {
       const id = `mermaid-${Date.now()}`;
       const { svg } = await mermaid.render(id, src);
+      if (token !== renderToken) return; // superseded by a newer render
       if (container) container.innerHTML = svg;
       if (clickable) attachClickListeners();
       else if (nodeToFrame) attachNodeToFrameListeners(nodeToFrame);
     } catch (err) {
+      if (token !== renderToken) return; // superseded by a newer render
       errorMessage = err instanceof Error ? err.message : String(err);
       if (container) container.innerHTML = "";
     }
