@@ -184,7 +184,7 @@
     </div>
   </div>
 
-  {#if canvas.type !== "empty" && canvas.stepFrames}
+  {#if canvas.type !== "empty" && canvas.type !== "step-frames-placeholder" && canvas.stepFrames}
     <div class="step-bar">
       <button
         class="step-btn"

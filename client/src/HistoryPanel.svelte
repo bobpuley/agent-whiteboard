@@ -21,7 +21,7 @@
     error = "";
     try {
       const res = await fetch("/snapshots/all");
-      const data = await res.json<{ ok: boolean; workspaces: WorkspaceGroup[]; error?: string }>();
+      const data = (await res.json()) as { ok: boolean; workspaces: WorkspaceGroup[]; error?: string };
       if (data.ok) {
         workspaces = data.workspaces;
       } else {

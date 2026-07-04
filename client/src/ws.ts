@@ -1,9 +1,12 @@
 // WebSocket client — connects to /stream and dispatches render commands.
 
+// Content types the server can send in a "replace" command.
+export type RendererType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
+
 export type RenderCommand =
   | {
       action: "replace";
-      type: string; // content type — one of: mermaid, svg, html, katex, vega-lite
+      type: RendererType;
       payload: string;
       title?: string;        // optional label shown above the canvas
       frameLabel?: string;   // present when this is a step-frames frame
