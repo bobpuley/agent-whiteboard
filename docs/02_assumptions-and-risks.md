@@ -56,7 +56,7 @@ The agent generates structured payloads (Mermaid source, Vega-Lite JSON, step-fr
 Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline needed.
 - Risk: large or complex diagrams (hundreds of nodes) may hit browser performance limits. (NF4 sets a target of <200ms for <500 nodes.)
 
-**C3 — Mermaid zoom/pan: fit-to-view on new content, persisted per snapshot (FR18, v0.19, planned)**
+**C3 — Mermaid zoom/pan: fit-to-view on new content, persisted per snapshot (FR18, v0.19, shipped)**
 > ✅ DECISION (2026-07-04, via `/grill-me` interview during intake): resolves FR18's three-part request.
 1. **Auto-fit on new content only:** every genuinely new `render()` call (a new snapshot `id`) auto-fits the diagram (scaled to contain, centered) on first display. `step()`/`seek()` navigation within the same step-frames sequence does **not** re-trigger auto-fit — the whole sequence shares one viewport, consistent with the existing "remembered during the session" ask. A brand-new diagram replacing the canvas is treated as a fresh "opening," not a continuation.
 2. **Live persistence:** the browser debounces zoom/pan changes (~800ms after the last wheel/drag input) and reports the final viewport to the server via a new `POST /viewport` endpoint, keyed by the currently-displayed snapshot's `id`.

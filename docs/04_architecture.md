@@ -59,7 +59,7 @@
     │  • Done button conditional visibility (v0.12): button hidden by default; shown only when server emits { action: "set_done_armed", armed: true }; hidden again on armed: false; server pushes current state to every new WebSocket connection
     │  • History panel delete/export — REPLACED in v0.16 (see below). Superseded design (v0.12–v0.13, kept here for change history): recycle bin + export icons in the panel header toggled inline selection mode with checkboxes on every row across all workspace accordions at once, a per-workspace "Delete folder"/"Export workspace" action bar, and an always-visible per-row hover-delete button. All of this UI is removed in v0.16.
     │  • Delete/export modal (v0.16, shipped — see FR16 in `01`, K3 in `02`): clicking the delete or export icon in the right-side controls panel opens a 2-step modal instead of toggling inline selection mode. Step 1: pick a workspace from a list (skipped, opening directly to step 2, when only one workspace has snapshots). Step 2: zoomed into that workspace — a single "Delete/Export entire workspace" action, or check a subset of its snapshots and act on just those via a footer "N selected" bar. Whole-workspace delete requires a second confirming interaction (replaces the old `window.confirm()`); whole-workspace export does not. Calls the same server endpoints as before (`POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, `POST /export-html`) — pure client-side UI change, no new endpoints. Prototyped in `mockup/whiteboard-view-v2.html`.
-    │  • Mermaid zoom/pan fit + persistence (v0.19, planned — see FR18 in `01`, C3 in `02`): every new `render()`/`commit_step_frames()` result auto-fits (scale-to-contain, centered) on first display; `step()`/`seek()` within a sequence does not re-fit. Zoom/pan changes are debounced (~800ms) and POSTed to `/viewport`, keyed by snapshot `id`, and stored server-side in a viewport-cache file separate from the snapshot JSON files. The server includes the cached viewport in the WebSocket broadcast whenever that `id` is (re)displayed; the browser applies it instead of auto-fitting. Mermaid-only; no MCP tool.
+    │  • Mermaid zoom/pan fit + persistence (v0.19, shipped — see FR18 in `01`, C3 in `02`): every new `render()`/`commit_step_frames()` result auto-fits (scale-to-contain, centered) on first display; `step()`/`seek()` within a sequence does not re-fit. Zoom/pan changes are debounced (~800ms) and POSTed to `/viewport`, keyed by snapshot `id`, and stored server-side in a viewport-cache file separate from the snapshot JSON files. The server includes the cached viewport in the WebSocket broadcast whenever that `id` is (re)displayed; the browser applies it instead of auto-fitting. Mermaid-only; no MCP tool.
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -483,7 +483,7 @@ agent calls export_html(workspace="my-course", ids=["<uuid-1>", "<uuid-2>"], out
 
 **Relationship to the v0.13 browser flow:** both `list_snapshots`/`export_html` and the HistoryPanel's export mode ultimately call the same `generateExportHtml()` — the only difference is how items are addressed (`id` vs `filename`) and how the result is delivered (written to disk vs returned as an HTTP response body for browser download). See L5 (`02`) for why the two addressing schemes coexist rather than being unified in this milestone.
 
-### Mermaid Viewport Persistence (v0.19, planned)
+### Mermaid Viewport Persistence (v0.19)
 
 ```
 [Display — auto-fit or restore]
@@ -658,7 +658,7 @@ agent-whiteboard/
 │   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17; id field + explicit workspace param v0.15); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18); findSnapshotById() for export(id) (v0.11); findSnapshotByIdInWorkspace() for agent-facing POST /export-html { workspace, id } items (v0.15)
 │   ├── step-frames-builder.ts  # in-memory map of id → partial step-frames state; TTL cleanup (v0.8)
 │   ├── export-html.ts    # HTML assembly for POST /export-html (v0.13). Server-side rendering for katex/vega-lite/svg/html; Mermaid embedded + rendered client-side (v0.14, see bug B4 in `01`). Items addressable by filename (v0.13) or id (v0.15) — also used by the export_html MCP tool, which writes the result to disk instead of returning it in the HTTP response. generateExportHtml() serializes calls via a promise queue around generateExportHtmlInner() (v0.18, see bug B14 in `01`).
-│   ├── viewport-cache.ts # (v0.19, planned) reads/writes viewport-cache.json (id → { scale, positionX, positionY }); used by POST /viewport (write) and by the render/snapshots-load broadcast paths (read) and the two delete endpoints (cleanup on delete). See F19 in `03`, C3 in `02`.
+│   ├── viewport-cache.ts # (v0.19) reads/writes viewport-cache.json (id → { scale, positionX, positionY }); used by POST /viewport (write) and by the render/snapshots-load broadcast paths (read) and the two delete endpoints (cleanup on delete). See F19 in `03`, C3 in `02`.
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/
@@ -667,7 +667,7 @@ agent-whiteboard/
 │   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17). v0.16: inline selection-mode UI (header icons, per-row checkboxes, select-bar, ws-actions-bar) removed — becomes pure browse/load.
 │   │   ├── DeleteExportModal.svelte  # 2-step delete/export modal (v0.16, shipped) — workspace picker → zoomed-in whole-workspace / subset action. Triggered from App.svelte's controls panel.
 │   │   └── renderers/    # one file per content type
-│   │       ├── Mermaid.svelte  # (v0.19, planned) auto-fit on new snapshot id; debounced POST /viewport on zoom/pan change; applies server-supplied viewport when present instead of auto-fitting
+│   │       ├── Mermaid.svelte  # (v0.19) auto-fit on new snapshot id; debounced POST /viewport on zoom/pan change; applies server-supplied viewport when present instead of auto-fitting
 │   │       ├── Html.svelte
 │   │       ├── Katex.svelte
 │   │       └── VegaLite.svelte
