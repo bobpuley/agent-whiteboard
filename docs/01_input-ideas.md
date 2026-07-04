@@ -334,6 +334,12 @@ Raw idea, captured during a README/release-readiness review (2026-07-03, outside
 **FR16 — Move delete/export controls to the right-side panel; replace inline selection UI with a 2-step modal**
 Raw request: "upgrade the view to whiteboard-view-v2.html style." Move the delete and export icon buttons out of the history panel header (U7f/U7g) and into the right-side controls panel, alongside the existing history-toggle and Done buttons (U7d). Clicking either icon opens a modal instead of toggling inline selection mode: **step 1** — the user picks a workspace from a list; **step 2** — the view zooms into that workspace, where the user either deletes/exports the entire workspace in one action, or checks a subset of its snapshots and deletes/exports just those. Goal (user's words): "the history panel is cleaner and the UI for delete and export will be clearer and easier to use." Prototyped as a working static mockup: `mockup/whiteboard-view-v2.html` (and `mockup/whiteboard-view.html` for the prior/baseline UI).
 
+**FR18 — Mermaid diagram zoom/pan: fit-to-view on first open, persist during session, evaluate snapshot storage**
+Raw request (2026-07-04), three parts:
+1. When a Mermaid diagram is opened for the first time in a session, the graph should be centered and should fit the page/viewport size.
+2. During a session, if the user changes zoom level or pan position, that state should be remembered until the session ends.
+3. Evaluate whether it is possible, and whether it makes sense, to also persist zoom level and pan position in the snapshot.
+
 ---
 
 ## Design Debt Log

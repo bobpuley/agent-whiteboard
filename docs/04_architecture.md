@@ -59,6 +59,7 @@
     │  • Done button conditional visibility (v0.12): button hidden by default; shown only when server emits { action: "set_done_armed", armed: true }; hidden again on armed: false; server pushes current state to every new WebSocket connection
     │  • History panel delete/export — REPLACED in v0.16 (see below). Superseded design (v0.12–v0.13, kept here for change history): recycle bin + export icons in the panel header toggled inline selection mode with checkboxes on every row across all workspace accordions at once, a per-workspace "Delete folder"/"Export workspace" action bar, and an always-visible per-row hover-delete button. All of this UI is removed in v0.16.
     │  • Delete/export modal (v0.16, shipped — see FR16 in `01`, K3 in `02`): clicking the delete or export icon in the right-side controls panel opens a 2-step modal instead of toggling inline selection mode. Step 1: pick a workspace from a list (skipped, opening directly to step 2, when only one workspace has snapshots). Step 2: zoomed into that workspace — a single "Delete/Export entire workspace" action, or check a subset of its snapshots and act on just those via a footer "N selected" bar. Whole-workspace delete requires a second confirming interaction (replaces the old `window.confirm()`); whole-workspace export does not. Calls the same server endpoints as before (`POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, `POST /export-html`) — pure client-side UI change, no new endpoints. Prototyped in `mockup/whiteboard-view-v2.html`.
+    │  • Mermaid zoom/pan fit + persistence (v0.19, planned — see FR18 in `01`, C3 in `02`): every new `render()`/`commit_step_frames()` result auto-fits (scale-to-contain, centered) on first display; `step()`/`seek()` within a sequence does not re-fit. Zoom/pan changes are debounced (~800ms) and POSTed to `/viewport`, keyed by snapshot `id`, and stored server-side in a viewport-cache file separate from the snapshot JSON files. The server includes the cached viewport in the WebSocket broadcast whenever that `id` is (re)displayed; the browser applies it instead of auto-fitting. Mermaid-only; no MCP tool.
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -482,6 +483,47 @@ agent calls export_html(workspace="my-course", ids=["<uuid-1>", "<uuid-2>"], out
 
 **Relationship to the v0.13 browser flow:** both `list_snapshots`/`export_html` and the HistoryPanel's export mode ultimately call the same `generateExportHtml()` — the only difference is how items are addressed (`id` vs `filename`) and how the result is delivered (written to disk vs returned as an HTTP response body for browser download). See L5 (`02`) for why the two addressing schemes coexist rather than being unified in this milestone.
 
+### Mermaid Viewport Persistence (v0.19, planned)
+
+```
+[Display — auto-fit or restore]
+server broadcasts a snapshot (fresh render()/commit_step_frames(), or POST /snapshots/load reload)
+  → server looks up snapshot.id in viewport-cache.json
+  → IF entry found: include it in the WebSocket payload:
+      { action: "replace", type: "mermaid", payload: "...", viewport: { scale, positionX, positionY } }
+      → browser applies the stored viewport (no auto-fit)
+  → IF no entry (new diagram never seen before): omit the field
+      → browser computes scale-to-contain + centers the diagram (auto-fit)
+  (step()/seek() broadcasts for the same step-frames sequence do NOT re-trigger auto-fit —
+   the browser keeps whatever viewport is currently active, live or restored)
+
+[User adjusts zoom/pan]
+user scrolls/drags on the Mermaid canvas
+  → browser updates its live transform immediately (unchanged from today)
+  → browser starts/resets an 800ms debounce timer
+  → after 800ms of no further zoom/pan input:
+      → browser computes positionX/positionY as fractions of the container's width/height
+      → browser POSTs /viewport: { id: "<current snapshot id>", scale, positionX, positionY }
+      → server writes/overwrites the entry for id in viewport-cache.json
+      → returns { ok: true }
+
+[Cleanup]
+POST /snapshots/delete-files or POST /snapshots/delete-workspace succeeds
+  → server also removes the corresponding entry/entries (by id) from viewport-cache.json
+```
+
+Viewport-cache file layout:
+```
+<WHITEBOARD_SNAPSHOTS_DIR>/viewport-cache.json
+{
+  "<snapshot-id-1>": { "scale": 1.4, "positionX": 0.12, "positionY": -0.05 },
+  "<snapshot-id-2>": { "scale": 0.8, "positionX": 0.0,  "positionY": 0.0 }
+}
+```
+One global file (not per-workspace) — snapshot `id`s are already globally unique UUIDs (J1, `02`), so no workspace-scoping is needed to avoid collisions. Read/written directly (no debounce needed server-side; the browser already debounces before sending).
+
+**Not addressed via MCP:** the agent has no tool for this — it's a pure browser⇄server UI concern (D2 in `02`: "the agent is stateless with respect to the whiteboard").
+
 ### Node Click Flow (Phase 2 — Sprint 12 plain click)
 
 ```
@@ -616,6 +658,7 @@ agent-whiteboard/
 │   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17; id field + explicit workspace param v0.15); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18); findSnapshotById() for export(id) (v0.11); findSnapshotByIdInWorkspace() for agent-facing POST /export-html { workspace, id } items (v0.15)
 │   ├── step-frames-builder.ts  # in-memory map of id → partial step-frames state; TTL cleanup (v0.8)
 │   ├── export-html.ts    # HTML assembly for POST /export-html (v0.13). Server-side rendering for katex/vega-lite/svg/html; Mermaid embedded + rendered client-side (v0.14, see bug B4 in `01`). Items addressable by filename (v0.13) or id (v0.15) — also used by the export_html MCP tool, which writes the result to disk instead of returning it in the HTTP response. generateExportHtml() serializes calls via a promise queue around generateExportHtmlInner() (v0.18, see bug B14 in `01`).
+│   ├── viewport-cache.ts # (v0.19, planned) reads/writes viewport-cache.json (id → { scale, positionX, positionY }); used by POST /viewport (write) and by the render/snapshots-load broadcast paths (read) and the two delete endpoints (cleanup on delete). See F19 in `03`, C3 in `02`.
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/
@@ -624,7 +667,7 @@ agent-whiteboard/
 │   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17). v0.16: inline selection-mode UI (header icons, per-row checkboxes, select-bar, ws-actions-bar) removed — becomes pure browse/load.
 │   │   ├── DeleteExportModal.svelte  # 2-step delete/export modal (v0.16, shipped) — workspace picker → zoomed-in whole-workspace / subset action. Triggered from App.svelte's controls panel.
 │   │   └── renderers/    # one file per content type
-│   │       ├── Mermaid.svelte
+│   │       ├── Mermaid.svelte  # (v0.19, planned) auto-fit on new snapshot id; debounced POST /viewport on zoom/pan change; applies server-supplied viewport when present instead of auto-fitting
 │   │       ├── Html.svelte
 │   │       ├── Katex.svelte
 │   │       └── VegaLite.svelte

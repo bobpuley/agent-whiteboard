@@ -56,6 +56,18 @@ The agent generates structured payloads (Mermaid source, Vega-Lite JSON, step-fr
 Mermaid.js, D3, KaTeX etc. run in-browser. No server-side rendering pipeline needed.
 - Risk: large or complex diagrams (hundreds of nodes) may hit browser performance limits. (NF4 sets a target of <200ms for <500 nodes.)
 
+**C3 — Mermaid zoom/pan: fit-to-view on new content, persisted per snapshot (FR18, v0.19, planned)**
+> ✅ DECISION (2026-07-04, via `/grill-me` interview during intake): resolves FR18's three-part request.
+1. **Auto-fit on new content only:** every genuinely new `render()` call (a new snapshot `id`) auto-fits the diagram (scaled to contain, centered) on first display. `step()`/`seek()` navigation within the same step-frames sequence does **not** re-trigger auto-fit — the whole sequence shares one viewport, consistent with the existing "remembered during the session" ask. A brand-new diagram replacing the canvas is treated as a fresh "opening," not a continuation.
+2. **Live persistence:** the browser debounces zoom/pan changes (~800ms after the last wheel/drag input) and reports the final viewport to the server via a new `POST /viewport` endpoint, keyed by the currently-displayed snapshot's `id`.
+3. **Storage — evaluated, decision: yes, via a separate cache file:** rather than mutating the immutable snapshot JSON files (which would contradict F10's write-once model), viewport state lives in its own global cache file — `<WHITEBOARD_SNAPSHOTS_DIR>/viewport-cache.json` — mapping `id → { scale, positionX, positionY }`. `positionX`/`positionY` are stored as **normalized fractions of the canvas container**, not raw pixels, so a saved view still looks correct if the browser window is a different size next time (raw pixels tied to the capture-time viewport would look off-center or clipped otherwise).
+4. **Restore:** whenever a snapshot is displayed — a fresh `render()` or a `POST /snapshots/load` history reload — the server checks the cache for that `id`; if present, the browser applies the stored viewport instead of auto-fitting.
+5. **Cleanup:** `POST /snapshots/delete-files` and `POST /snapshots/delete-workspace` also remove the corresponding viewport-cache entry/entries, so deleted snapshots don't leave orphaned cache rows behind indefinitely (avoids compounding G3's already-accepted "no snapshot cleanup policy" with a second, untracked growth source).
+6. **Scope:** Mermaid only — the only renderer with any zoom/pan mechanism today (confirmed: `Html.svelte`, `Katex.svelte`, `VegaLite.svelte` have none). No MCP tool exposure; this is a pure browser⇄server UI concern, consistent with D2's "agent is stateless with respect to the whiteboard."
+- Risk (residual, unconfirmed): a step-frames sequence's frames can have very different intrinsic sizes; a single shared viewport per sequence may look better-fit for some frames than others once the user has manually adjusted it. Accepted as a known trade-off of "one viewport per snapshot," not re-litigated per frame.
+- Risk (residual): the viewport-cache file is a second piece of persistent state alongside snapshot files; nothing currently guarantees the two stay in lockstep beyond the delete-time cleanup in point 5 (e.g. a manually-deleted snapshot file, outside the app, leaves an orphaned cache entry). Accepted as consistent with G4's existing stance that `~/.agent-whiteboard/` is the user's own responsibility.
+- > ⚠️ ASSUMPTION: "fit to view" means scale-to-contain (entire diagram bounding box visible, centered on both axes) inside the canvas viewport. Not yet explicitly confirmed against a concrete example; revisit if the implemented behavior doesn't match user expectations once built.
+
 ---
 
 ## C2b — Slideshow broadcast parity with /render (Sprint 9 bug)
