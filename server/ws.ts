@@ -32,7 +32,8 @@ export function broadcastStepFrames(
   frames: Array<{ payload: string; label?: string; type?: string }>,
   frameType: string,
   currentFrame: number,
-  title?: string
+  title?: string,
+  id?: string
 ): void {
   broadcast({
     action: "replace",
@@ -43,5 +44,6 @@ export function broadcastStepFrames(
     currentFrame,
     totalFrames: frames.length,
     ...(title !== undefined ? { title } : {}),
+    ...(id !== undefined ? { id } : {}),
   });
 }

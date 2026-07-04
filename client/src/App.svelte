@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { connectWebSocket } from "./ws.js";
-  import type { RenderCommand } from "./ws.js";
+  import type { RenderCommand, Viewport } from "./ws.js";
   import MermaidRenderer from "./renderers/Mermaid.svelte";
   import HtmlRenderer from "./renderers/Html.svelte";
   import KatexRenderer from "./renderers/Katex.svelte";
@@ -25,6 +25,8 @@
         currentFrame?: number;
         totalFrames?: number;
         nodeToFrame?: Record<string, number>;
+        id?: string;
+        viewport?: Viewport;
       };
 
   let canvas: CanvasState = { type: "empty" };
@@ -55,6 +57,8 @@
         currentFrame: cmd.currentFrame,
         totalFrames: cmd.totalFrames,
         nodeToFrame: cmd.nodeToFrame,
+        id: cmd.id,
+        viewport: cmd.viewport,
       };
       nodeToFrameEnabled = cmd.nodeToFrame !== undefined;
     } else if (cmd.action === "set_node_actions") {
@@ -177,7 +181,7 @@
       {:else if canvas.type === "step-frames-placeholder"}
         <p class="placeholder">Building step-frames… {canvas.frameCount} frames</p>
       {:else if canvas.type === "mermaid"}
-        <MermaidRenderer source={canvas.payload} {clickable} {nodeActions} nodeToFrame={nodeToFrameEnabled ? canvas.nodeToFrame : undefined} />
+        <MermaidRenderer source={canvas.payload} {clickable} {nodeActions} nodeToFrame={nodeToFrameEnabled ? canvas.nodeToFrame : undefined} snapshotId={canvas.id} viewport={canvas.viewport} />
       {:else if canvas.type === "svg" || canvas.type === "html"}
         <HtmlRenderer source={canvas.payload} type={canvas.type} />
       {:else if canvas.type === "katex"}

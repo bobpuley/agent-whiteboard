@@ -6,6 +6,13 @@
   export let clickable = false;
   export let nodeActions: Record<string, string[]> | undefined = undefined;
   export let nodeToFrame: Record<string, number> | undefined = undefined;
+  // v0.19 (F19/C3): snapshot id for the content currently being displayed —
+  // present on new render()/commit_step_frames()/history-load content, echoed
+  // unchanged on step()/seek() continuations, absent on legacy (pre-v0.11)
+  // snapshots. viewport, when present, is a previously-saved zoom/pan to
+  // restore instead of auto-fitting.
+  export let snapshotId: string | undefined = undefined;
+  export let viewport: { scale: number; positionX: number; positionY: number } | undefined = undefined;
 
   let wrapper: HTMLDivElement;
   let container: HTMLDivElement;
@@ -15,6 +22,10 @@
   // matches by the time its async work resolves has been superseded and
   // must not touch the DOM (B8 — stale-render race).
   let renderToken = 0;
+  // Tracks the last snapshot id we fit-or-restored a viewport for. A missing
+  // (undefined) incoming id — e.g. step()/seek() broadcasts — always means
+  // "continuation, do not touch the viewport", regardless of this value.
+  let lastSnapshotId: string | undefined = undefined;
 
   // ── Zoom / pan state ────────────────────────────────────────────────────────
   let scale = 1;
@@ -29,11 +40,72 @@
   const MIN_SCALE = 0.1;
   const MAX_SCALE = 10;
   const ZOOM_FACTOR = 0.001; // scale delta per wheel pixel
+  const FIT_MARGIN = 0.92; // small breathing room around the fitted diagram
+  const VIEWPORT_REPORT_DEBOUNCE_MS = 800;
 
+  /** Scale-to-contain the diagram's natural (viewBox) size within wrapper, centered. */
+  function fitToView(svg: SVGSVGElement) {
+    if (!wrapper) return;
+    const viewBox = svg.getAttribute("viewBox");
+    let w: number;
+    let h: number;
+    if (viewBox) {
+      const parts = viewBox.trim().split(/\s+/).map(Number);
+      w = parts[2];
+      h = parts[3];
+    } else {
+      w = svg.clientWidth || 1;
+      h = svg.clientHeight || 1;
+    }
+    if (!w || !h) return;
+    const wrapperW = wrapper.clientWidth;
+    const wrapperH = wrapper.clientHeight;
+    const fitScale = Math.min(wrapperW / w, wrapperH / h) * FIT_MARGIN;
+    scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, fitScale));
+    tx = (wrapperW - w * scale) / 2;
+    ty = (wrapperH - h * scale) / 2;
+  }
+
+  /** Restore a previously-saved viewport (normalized fractions -> pixels). */
+  function applyViewport(vp: { scale: number; positionX: number; positionY: number }) {
+    if (!wrapper) return;
+    scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, vp.scale));
+    tx = vp.positionX * wrapper.clientWidth;
+    ty = vp.positionY * wrapper.clientHeight;
+  }
+
+  let reportTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Debounced report of the live viewport to the server, keyed by snapshotId. */
+  function scheduleViewportReport() {
+    if (reportTimer) clearTimeout(reportTimer);
+    reportTimer = setTimeout(() => {
+      reportTimer = null;
+      reportViewport();
+    }, VIEWPORT_REPORT_DEBOUNCE_MS);
+  }
+
+  function reportViewport() {
+    if (!snapshotId || !wrapper) return;
+    const positionX = tx / wrapper.clientWidth;
+    const positionY = ty / wrapper.clientHeight;
+    fetch("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: snapshotId, scale, positionX, positionY }),
+    }).catch(() => { /* server might not be listening */ });
+  }
+
+  /** Manual "reset view" — re-fit and treat it as a deliberate user choice. */
   function resetTransform() {
-    scale = 1;
-    tx = 0;
-    ty = 0;
+    const svg = container?.querySelector("svg");
+    if (svg) fitToView(svg);
+    else {
+      scale = 1;
+      tx = 0;
+      ty = 0;
+    }
+    scheduleViewportReport();
   }
 
   function onWheel(e: WheelEvent) {
@@ -50,6 +122,7 @@
     tx = cursorX - (cursorX - tx) * (newScale / scale);
     ty = cursorY - (cursorY - ty) * (newScale / scale);
     scale = newScale;
+    scheduleViewportReport();
   }
 
   function onMousedown(e: MouseEvent) {
@@ -66,6 +139,7 @@
     if (!dragging) return;
     tx = dragOriginTx + (e.clientX - dragStartX);
     ty = dragOriginTy + (e.clientY - dragStartY);
+    scheduleViewportReport();
   }
 
   function onMouseup() {
@@ -251,10 +325,16 @@
   // ── Mermaid rendering ───────────────────────────────────────────────────────
   mermaid.initialize({ startOnLoad: false, theme: "default" });
 
-  async function renderDiagram(src: string) {
+  // v0.19 (F19/C3): a new snapshot id (different from the last one we saw)
+  // fits-to-view or restores a saved viewport; a repeated/absent id (step()/
+  // seek() continuations) leaves the live transform untouched.
+  function isNewSnapshot(): boolean {
+    return snapshotId !== undefined && snapshotId !== lastSnapshotId;
+  }
+
+  async function renderDiagram(src: string, fitOrRestore: boolean) {
     const token = ++renderToken;
     errorMessage = null;
-    resetTransform();
     detachClickListeners();
     if (!src) {
       if (container) container.innerHTML = "";
@@ -265,6 +345,13 @@
       const { svg } = await mermaid.render(id, src);
       if (token !== renderToken) return; // superseded by a newer render
       if (container) container.innerHTML = svg;
+      if (fitOrRestore) {
+        const svgEl = container?.querySelector("svg");
+        if (svgEl) {
+          if (viewport) applyViewport(viewport);
+          else fitToView(svgEl);
+        }
+      }
       if (clickable) attachClickListeners();
       else if (nodeToFrame) attachNodeToFrameListeners(nodeToFrame);
     } catch (err) {
@@ -275,7 +362,9 @@
   }
 
   onMount(() => {
-    void renderDiagram(source);
+    const fitOrRestore = isNewSnapshot();
+    if (snapshotId !== undefined) lastSnapshotId = snapshotId;
+    void renderDiagram(source, fitOrRestore);
     lastRendered = source;
 
     window.addEventListener("mousemove", onMousemove);
@@ -284,8 +373,10 @@
 
   afterUpdate(() => {
     if (source !== lastRendered) {
+      const fitOrRestore = isNewSnapshot();
+      if (snapshotId !== undefined) lastSnapshotId = snapshotId;
       lastRendered = source;
-      void renderDiagram(source);
+      void renderDiagram(source, fitOrRestore);
     }
   });
 
@@ -294,6 +385,7 @@
     window.removeEventListener("mouseup", onMouseup);
     detachClickListeners();
     detachNodeToFrameListeners();
+    if (reportTimer) clearTimeout(reportTimer);
   });
 
   // Re-attach (or detach) click listeners when clickable prop changes.
