@@ -1,9 +1,12 @@
 // WebSocket client — connects to /stream and dispatches render commands.
 
+// Content types the server can send in a "replace" command.
+export type RendererType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
+
 export type RenderCommand =
   | {
       action: "replace";
-      type: string; // content type — one of: mermaid, svg, html, katex, vega-lite
+      type: RendererType;
       payload: string;
       title?: string;        // optional label shown above the canvas
       frameLabel?: string;   // present when this is a step-frames frame
@@ -31,17 +34,39 @@ export type RenderCommand =
 
 type CommandHandler = (cmd: RenderCommand) => void;
 
+const KNOWN_RENDERER_TYPES: readonly RendererType[] = ["mermaid", "svg", "html", "katex", "vega-lite"];
+const KNOWN_ACTIONS = ["replace", "clear", "set_node_actions", "set_done_armed"] as const;
+
+// Validates the minimal shape needed to safely cast to RenderCommand — in
+// particular that "replace" messages carry a `type` App.svelte actually
+// knows how to render, instead of silently falling through every `{#if}`
+// branch with no diagnostic (B11).
+function isKnownRenderCommand(cmd: unknown): cmd is RenderCommand {
+  if (typeof cmd !== "object" || cmd === null) return false;
+  const action = (cmd as { action?: unknown }).action;
+  if (!(KNOWN_ACTIONS as readonly string[]).includes(action as string)) return false;
+  if (action !== "replace") return true;
+  const type = (cmd as { type?: unknown }).type;
+  return type === "step-frames-placeholder" || (KNOWN_RENDERER_TYPES as readonly string[]).includes(type as string);
+}
+
 export function connectWebSocket(onCommand: CommandHandler): () => void {
   const protocol = location.protocol === "https:" ? "wss" : "ws";
   const ws = new WebSocket(`${protocol}://${location.host}/stream`);
 
   ws.addEventListener("message", (event) => {
+    let cmd: unknown;
     try {
-      const cmd = JSON.parse(event.data as string) as RenderCommand;
-      onCommand(cmd);
+      cmd = JSON.parse(event.data as string);
     } catch {
       console.error("ws: failed to parse message", event.data);
+      return;
     }
+    if (!isKnownRenderCommand(cmd)) {
+      console.error("ws: received message with unrecognized action/type — ignoring", cmd);
+      return;
+    }
+    onCommand(cmd);
   });
 
   ws.addEventListener("close", () => {

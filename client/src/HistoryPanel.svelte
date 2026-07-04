@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
+  import { trapFocus } from "./lib/trapFocus";
+  import { fetchAllSnapshots } from "./lib/fetchSnapshots";
 
   export let open = false;
 
@@ -19,19 +21,13 @@
   export async function fetchSnapshots() {
     loading = true;
     error = "";
-    try {
-      const res = await fetch("/snapshots/all");
-      const data = await res.json<{ ok: boolean; workspaces: WorkspaceGroup[]; error?: string }>();
-      if (data.ok) {
-        workspaces = data.workspaces;
-      } else {
-        error = data.error ?? "Failed to load snapshots";
-      }
-    } catch {
-      error = "Network error loading snapshots";
-    } finally {
-      loading = false;
+    const result = await fetchAllSnapshots();
+    if (result.ok) {
+      workspaces = result.workspaces;
+    } else {
+      error = result.error;
     }
+    loading = false;
   }
 
   async function loadSnapshot(workspace: string, filename: string) {
@@ -68,7 +64,14 @@
 </script>
 
 {#if open}
-  <div class="history-panel" role="dialog" aria-label="Snapshot history">
+  <div
+    class="history-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Snapshot history"
+    tabindex="-1"
+    use:trapFocus={{ onEscape: () => dispatch("close") }}
+  >
     <div class="panel-header">
       <span class="panel-title">History</span>
       <div class="header-actions">

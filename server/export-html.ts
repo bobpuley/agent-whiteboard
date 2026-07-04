@@ -373,7 +373,7 @@ export function writeExportHtmlToDisk(
 
 // ── Public entrypoint ──────────────────────────────────────────────────────
 
-export async function generateExportHtml(
+async function generateExportHtmlInner(
   items: ValidatedExportItem[]
 ): Promise<ExportResult> {
   const win = new Window();
@@ -407,4 +407,27 @@ export async function generateExportHtml(
   const downloadFilename = buildDownloadFilename(uniqueWorkspaces);
 
   return { html, downloadFilename };
+}
+
+// generateExportHtmlInner() patches global DOM state (document, window, ...)
+// for the duration of a call so happy-dom-backed rendering works, then
+// restores it in a `finally`. That save/set/restore isn't reentrant: two
+// overlapping calls (POST /export-html and the export_html MCP tool can run
+// concurrently) each save/restore against whatever the *other* call happened
+// to have in place at that moment, which can leave global DOM state pointing
+// at an already-closed Window once both settle (B14). A simple queue forces
+// calls to run one at a time, in the order they were made, so only one
+// call's globals are ever active at once.
+let exportQueue: Promise<unknown> = Promise.resolve();
+
+export function generateExportHtml(items: ValidatedExportItem[]): Promise<ExportResult> {
+  const result = exportQueue.then(() => generateExportHtmlInner(items));
+  // Chain the queue off a version that never rejects, so one failed export
+  // doesn't permanently wedge every export queued after it; the caller of
+  // generateExportHtml() still sees the original rejection via `result`.
+  exportQueue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
 }

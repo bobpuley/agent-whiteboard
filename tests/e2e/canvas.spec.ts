@@ -246,6 +246,42 @@ test("Done button: shows 'Sent ✓' after click, then disappears (v0.12 conditio
   await waitDone;
 });
 
+test("Done button: a failed POST /user-done shows an error and allows retry (B9)", async ({ page, request }) => {
+  await page.goto("/");
+
+  const waitDone = request.post(`${SERVER}/wait-done`);
+  const btn = page.getByRole("button", { name: "Done" });
+  await expect(btn).toBeVisible();
+
+  // Simulate a network/server failure on the first click.
+  let failNext = true;
+  await page.route("**/user-done", (route) => {
+    if (failNext) {
+      failNext = false;
+      return route.abort("failed");
+    }
+    return route.continue();
+  });
+
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err));
+
+  await btn.click();
+  await expect(page.getByRole("button", { name: /Failed/ })).toBeVisible();
+  // Button must stay enabled so the user can retry — unlike the success path.
+  await expect(page.getByRole("button", { name: /Failed/ })).toBeEnabled();
+
+  // Error indicator clears after its timeout, reverting to the plain Done button.
+  await expect(page.getByRole("button", { name: "Done" })).toBeVisible({ timeout: 5_000 });
+
+  // Retry succeeds now that the route passes through.
+  await btn.click();
+  await expect(page.getByRole("button", { name: /Sent/ })).toBeVisible();
+
+  expect(pageErrors).toEqual([]);
+  await waitDone;
+});
+
 // ── History panel ─────────────────────────────────────────────────────────────
 
 test("history panel: hidden by default on page load", async ({ page }) => {
@@ -273,6 +309,81 @@ test("history panel: closes when X button is clicked", async ({ page }) => {
 
   await page.getByRole("button", { name: "Close history panel" }).click();
   await expect(page.locator(".history-panel")).not.toBeVisible();
+});
+
+test("history panel: closes on Escape and traps Tab focus (B12)", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, workspaces: [] }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  const panel = page.locator(".history-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute("aria-modal", "true");
+
+  // Focus starts inside the dialog (on the first focusable control).
+  await expect(page.locator(".history-panel :focus")).toHaveCount(1);
+
+  // Tabbing forward from the last focusable element wraps back to the first.
+  const closeBtn = page.getByRole("button", { name: "Close history panel" });
+  await closeBtn.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".history-panel :focus")).toHaveCount(1);
+  const wrappedToPanel = await page.evaluate(() => document.activeElement?.closest(".history-panel") !== null);
+  expect(wrappedToPanel).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(panel).not.toBeVisible();
+});
+
+test("delete/export modal: closes on Escape and traps Tab focus (B12)", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        workspaces: [{ name: "ws-a", isCurrent: true, snapshots: [] }, { name: "ws-b", isCurrent: false, snapshots: [] }],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Delete snapshots" }).click();
+  const modal = page.locator(".modal");
+  await expect(modal).toBeVisible();
+  await expect(modal).toHaveAttribute("aria-modal", "true");
+  await expect(page.locator(".modal :focus")).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await expect(modal).not.toBeVisible();
+});
+
+test("history panel: shows a visible error when GET /snapshots/all fails (B13)", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ ok: false, error: "boom" }) });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  await expect(page.locator(".panel-error")).toBeVisible();
+  await expect(page.locator(".panel-error")).toContainText("boom");
+});
+
+test("delete/export modal: shows a visible error when GET /snapshots/all fails (B13)", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ ok: false, error: "boom" }) });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Delete snapshots" }).click();
+  await expect(page.locator(".modal-error")).toBeVisible();
+  await expect(page.locator(".modal-error")).toContainText("boom");
 });
 
 test("history panel: shows 'No snapshots yet.' when list is empty", async ({ page }) => {

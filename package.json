@@ -12,7 +12,8 @@
     "dev:client": "vite --config client/vite.config.ts",
     "dev:open": "wait-on http://localhost:5173 && node -e \"import('open').then(m => m.default('http://localhost:5173'))\"",
     "dev:test": "concurrently --kill-others-on-fail --names \"server,client\" \"tsx server/index.ts\" \"npm run dev:client\"",
-    "build": "tsc -p tsconfig.json && vite build --config client/vite.config.ts",
+    "typecheck": "svelte-check --tsconfig client/tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run typecheck && vite build --config client/vite.config.ts",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
@@ -40,6 +41,7 @@
     "@types/ws": "^8.18.1",
     "concurrently": "^9.1.2",
     "svelte": "^4.2.19",
+    "svelte-check": "^4.7.1",
     "tsx": "^3.14.0",
     "typescript": "^5.8.3",
     "vite": "^4.5.10",

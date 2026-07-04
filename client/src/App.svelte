@@ -9,6 +9,7 @@
   import HistoryPanel from "./HistoryPanel.svelte";
   import DeleteExportModal from "./DeleteExportModal.svelte";
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
+  import { fetchAllSnapshots } from "./lib/fetchSnapshots";
 
   type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
 
@@ -100,14 +101,16 @@
   // Delete/export modal — opened from the controls panel (v0.16).
   let modalMode: "delete" | "export" | null = null;
   let modalWorkspaces: WorkspaceGroup[] = [];
+  let modalLoadError: string | null = null;
 
   async function openModal(mode: "delete" | "export") {
-    try {
-      const res = await fetch("/snapshots/all");
-      const data = await res.json();
-      modalWorkspaces = data.ok ? data.workspaces : [];
-    } catch {
+    const result = await fetchAllSnapshots();
+    if (result.ok) {
+      modalWorkspaces = result.workspaces;
+      modalLoadError = null;
+    } else {
       modalWorkspaces = [];
+      modalLoadError = result.error;
     }
     modalMode = mode;
   }
@@ -123,11 +126,22 @@
   // Done button — shown only while wait_done() is armed on the server.
   let doneArmed = false;
   let doneSent = false;
+  let doneError = false;
   let doneTimer: ReturnType<typeof setTimeout> | null = null;
+  let doneErrorTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function handleDone() {
     if (doneSent) return;
-    await fetch("/user-done", { method: "POST" });
+    try {
+      const res = await fetch("/user-done", { method: "POST" });
+      if (!res.ok) throw new Error(`unexpected status ${res.status}`);
+    } catch (err) {
+      console.error("handleDone: POST /user-done failed", err);
+      doneError = true;
+      if (doneErrorTimer) clearTimeout(doneErrorTimer);
+      doneErrorTimer = setTimeout(() => { doneError = false; }, 2000);
+      return; // leave doneSent false so the user can retry
+    }
     doneSent = true;
     if (doneTimer) clearTimeout(doneTimer);
     doneTimer = setTimeout(() => { doneSent = false; }, 2000);
@@ -140,6 +154,7 @@
   mode={modalMode ?? "delete"}
   open={modalMode !== null}
   workspaces={modalWorkspaces}
+  loadError={modalLoadError}
   on:close={closeModal}
   on:deleted={handleModalDeleted}
 />
@@ -173,7 +188,7 @@
     </div>
   </div>
 
-  {#if canvas.type !== "empty" && canvas.stepFrames}
+  {#if canvas.type !== "empty" && canvas.type !== "step-frames-placeholder" && canvas.stepFrames}
     <div class="step-bar">
       <button
         class="step-btn"
@@ -211,11 +226,13 @@
       </svg>
     </button>
 
-    {#if doneArmed || doneSent}
+    {#if doneArmed || doneSent || doneError}
       <div class="panel-sep"></div>
-      <button class="done-btn" on:click={handleDone} disabled={doneSent} title="Done">
+      <button class="done-btn" class:done-btn-error={doneError} on:click={handleDone} disabled={doneSent} title={doneError ? "Failed to send — click to retry" : "Done"}>
         {#if doneSent}
           Sent ✓
+        {:else if doneError}
+          Failed ✗
         {:else}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="20 6 9 17 4 12"/>
@@ -415,5 +432,14 @@
     border-color: #aaa;
     color: #aaa;
     cursor: default;
+  }
+
+  .done-btn-error {
+    border-color: #e74c3c;
+    color: #e74c3c;
+  }
+
+  .done-btn-error:hover:not(:disabled) {
+    background: #fdf2f2;
   }
 </style>

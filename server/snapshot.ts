@@ -16,8 +16,9 @@ export function saveSnapshot(type: string, payload: string, options: RenderOptio
     mkdirSync(dir, { recursive: true });
 
     const now = new Date();
-    const filename = `${formatTimestamp(now)}_screen.json`;
     const id = crypto.randomUUID();
+    // Include the (already-unique) id so two writes in the same second never collide.
+    const filename = `${formatTimestamp(now)}_${id}_screen.json`;
 
     const content: Record<string, unknown> = {
       id,

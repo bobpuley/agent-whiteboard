@@ -2591,6 +2591,19 @@ describe("POST /snapshots/delete-workspace (v0.12)", () => {
     expect(res.status).toBe(400);
     expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
   });
+
+  it("rejects a bare '.' workspace and deletes nothing (B6)", async () => {
+    const res = await app.request("/snapshots/delete-workspace", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace: "." }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(false);
+    // The snapshots root itself, and the workspace created in beforeEach, must survive.
+    expect(existsSync(SNAP_ROOT)).toBe(true);
+    expect(existsSync(pathJoin(SNAP_ROOT, "test-ws"))).toBe(true);
+  });
 });
 
 // ── v0.13 — HTML Export ───────────────────────────────────────────────────────

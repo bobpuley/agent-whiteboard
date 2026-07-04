@@ -8,9 +8,13 @@
   let errorMessage: string | null = null;
   let lastRendered: string | null = null;
   let cleanup: (() => void) | null = null;
+  // Bumped on every render() call; a render whose token no longer matches
+  // by the time its async work resolves has been superseded (B8).
+  let renderToken = 0;
 
   async function render(src: string) {
     if (!container) return;
+    const token = ++renderToken;
     errorMessage = null;
 
     // Dispose previous vega view before rendering a new one.
@@ -23,8 +27,13 @@
         actions: false,
         renderer: "svg",
       });
+      if (token !== renderToken) {
+        result.view.finalize(); // superseded — discard, don't leak the view
+        return;
+      }
       cleanup = () => result.view.finalize();
     } catch (err) {
+      if (token !== renderToken) return; // superseded by a newer render
       errorMessage = err instanceof Error ? err.message : String(err);
     }
   }

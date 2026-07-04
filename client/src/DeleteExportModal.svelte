@@ -2,10 +2,12 @@
   import { createEventDispatcher, onDestroy } from "svelte";
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
   import { triggerDownload } from "./lib/download";
+  import { trapFocus } from "./lib/trapFocus";
 
   export let mode: "delete" | "export";
   export let open = false;
   export let workspaces: WorkspaceGroup[] = [];
+  export let loadError: string | null = null;
 
   const dispatch = createEventDispatcher<{ close: void; deleted: void }>();
 
@@ -214,7 +216,14 @@
 
 {#if open}
   <div class="modal-overlay" on:click|self={close}>
-    <div class="modal mode-{mode}" role="dialog" aria-label="{verb} snapshots">
+    <div
+      class="modal mode-{mode}"
+      role="dialog"
+      aria-modal="true"
+      aria-label="{verb} snapshots"
+      tabindex="-1"
+      use:trapFocus={{ onEscape: close }}
+    >
       <div class="modal-header">
         {#if canGoBack}
           <button class="modal-back-btn" on:click={goBack} aria-label="Back">&#8592;</button>
@@ -230,7 +239,9 @@
       </div>
 
       <div class="modal-body">
-        {#if doneMessage}
+        {#if loadError}
+          <p class="modal-error">Failed to load workspaces: {loadError}</p>
+        {:else if doneMessage}
           <div class="modal-confirm">
             <span class="check-circle">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
