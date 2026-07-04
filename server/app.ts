@@ -2,7 +2,7 @@
 // Exported so tests can import it without spinning up a real server.
 
 import { homedir } from "os";
-import { join } from "path";
+import { join, resolve, sep } from "path";
 import { existsSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
@@ -374,7 +374,7 @@ export function createApp(): Hono {
       if (queryWorkspace.length === 0) {
         return c.json({ ok: false, error: "workspace must be a non-empty string" }, 400);
       }
-      if (queryWorkspace.includes("/") || queryWorkspace.includes("\\") || queryWorkspace.includes("\0") || queryWorkspace === "..") {
+      if (!isValidWorkspaceName(queryWorkspace)) {
         return c.json({ ok: false, error: "invalid workspace: path traversal not allowed" }, 400);
       }
       workspace = queryWorkspace;
@@ -418,8 +418,7 @@ export function createApp(): Hono {
         return c.json({ ok: false, error: "workspace must be a non-empty string" }, 400);
       }
       const ws = body.workspace;
-      // Safety: no path separators, no null bytes, not bare ".."
-      if (ws.includes("/") || ws.includes("\\") || ws.includes("\0") || ws === "..") {
+      if (!isValidWorkspaceName(ws)) {
         return c.json({ ok: false, error: "invalid workspace: path traversal not allowed" });
       }
       workspace = ws;
@@ -489,10 +488,15 @@ export function createApp(): Hono {
     if (typeof workspace !== "string" || workspace.length === 0) {
       return { error: "workspace must be a non-empty string", status: 400 };
     }
-    if (workspace.includes("/") || workspace.includes("\\") || workspace.includes("\0") || workspace === "..") {
+    if (!isValidWorkspaceName(workspace)) {
       return { error: "invalid workspace: path traversal not allowed", status: 400 };
     }
     const dir = join(root, workspace);
+    // Belt-and-suspenders containment check: reject anything that resolves
+    // outside (or exactly onto) the snapshots root — e.g. workspace ".".
+    if (!resolve(dir).startsWith(resolve(root) + sep)) {
+      return { error: "invalid workspace: path traversal not allowed", status: 400 };
+    }
     if (!existsSync(dir)) {
       return { error: "workspace not found", status: 404 };
     }
@@ -567,7 +571,7 @@ export function createApp(): Hono {
       const { workspace, filename, id } = item as Record<string, unknown>;
 
       if (typeof workspace !== "string") continue;
-      if (workspace.includes("/") || workspace.includes("\\") || workspace.includes("\0") || workspace === "..") continue;
+      if (!isValidWorkspaceName(workspace)) continue;
 
       if (typeof filename === "string") {
         if (!/^[^/]+_screen\.json$/.test(filename) || filename.includes("..")) continue;
