@@ -35,7 +35,7 @@ Two specialized code reviews ran against `./server` and `./client`. Of 31 raw fi
 - [x] **T6 (B11, LOW) — `client/src/ws.ts` + `App.svelte`:** validate `cmd.type` against the known set of renderer types before casting; log a clear diagnostic (and consider a visible "unsupported content type" fallback) instead of silently failing the `{#if}` chain.
 - [x] **T7 (B12, LOW) — `client/src/DeleteExportModal.svelte` + `HistoryPanel.svelte`:** add `aria-modal="true"`, an `Escape` key handler, and basic focus trap/restore to both dialogs.
 - [x] **T8 (B13, LOW) — `client/src/App.svelte` + `HistoryPanel.svelte`:** extract a shared `fetchSnapshots()` helper for `GET /snapshots/all`; surface fetch failures to the user in both call sites instead of `App.svelte`'s silent empty-list fallback.
-- [ ] **T9 (B14, MEDIUM) — `server/export-html.ts`:** serialize calls to `generateExportHtml()` with a simple async queue (`exportQueue = exportQueue.then(() => generateExportHtmlInner(items))`) so overlapping calls from `POST /export-html` and the `export_html` MCP tool can't corrupt each other's global DOM state.
+- [x] **T9 (B14, MEDIUM) — `server/export-html.ts`:** serialize calls to `generateExportHtml()` with a simple async queue (`exportQueue = exportQueue.then(() => generateExportHtmlInner(items))`) so overlapping calls from `POST /export-html` and the `export_html` MCP tool can't corrupt each other's global DOM state.
 
 > **Implementation note:** T1's fix is also the root-cause fix for the workspace-validation duplication flagged in the Design Debt Log — reusing `isValidWorkspaceName()` everywhere closes both the bug and (partially) the duplication debt in one change.
 
