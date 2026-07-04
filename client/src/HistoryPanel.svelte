@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
+  import { trapFocus } from "./lib/trapFocus";
 
   export let open = false;
 
@@ -68,7 +69,14 @@
 </script>
 
 {#if open}
-  <div class="history-panel" role="dialog" aria-label="Snapshot history">
+  <div
+    class="history-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Snapshot history"
+    tabindex="-1"
+    use:trapFocus={{ onEscape: () => dispatch("close") }}
+  >
     <div class="panel-header">
       <span class="panel-title">History</span>
       <div class="header-actions">

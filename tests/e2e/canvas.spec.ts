@@ -311,6 +311,59 @@ test("history panel: closes when X button is clicked", async ({ page }) => {
   await expect(page.locator(".history-panel")).not.toBeVisible();
 });
 
+test("history panel: closes on Escape and traps Tab focus (B12)", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, workspaces: [] }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Toggle history panel" }).click();
+  const panel = page.locator(".history-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAttribute("aria-modal", "true");
+
+  // Focus starts inside the dialog (on the first focusable control).
+  await expect(page.locator(".history-panel :focus")).toHaveCount(1);
+
+  // Tabbing forward from the last focusable element wraps back to the first.
+  const closeBtn = page.getByRole("button", { name: "Close history panel" });
+  await closeBtn.focus();
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".history-panel :focus")).toHaveCount(1);
+  const wrappedToPanel = await page.evaluate(() => document.activeElement?.closest(".history-panel") !== null);
+  expect(wrappedToPanel).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(panel).not.toBeVisible();
+});
+
+test("delete/export modal: closes on Escape and traps Tab focus (B12)", async ({ page }) => {
+  await page.route("/snapshots/all", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        workspaces: [{ name: "ws-a", isCurrent: true, snapshots: [] }, { name: "ws-b", isCurrent: false, snapshots: [] }],
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Delete snapshots" }).click();
+  const modal = page.locator(".modal");
+  await expect(modal).toBeVisible();
+  await expect(modal).toHaveAttribute("aria-modal", "true");
+  await expect(page.locator(".modal :focus")).toHaveCount(1);
+
+  await page.keyboard.press("Escape");
+  await expect(modal).not.toBeVisible();
+});
+
 test("history panel: shows 'No snapshots yet.' when list is empty", async ({ page }) => {
   await page.route("/snapshots/all", (route) => {
     route.fulfill({

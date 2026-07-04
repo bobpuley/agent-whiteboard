@@ -2,6 +2,7 @@
   import { createEventDispatcher, onDestroy } from "svelte";
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
   import { triggerDownload } from "./lib/download";
+  import { trapFocus } from "./lib/trapFocus";
 
   export let mode: "delete" | "export";
   export let open = false;
@@ -214,7 +215,14 @@
 
 {#if open}
   <div class="modal-overlay" on:click|self={close}>
-    <div class="modal mode-{mode}" role="dialog" aria-label="{verb} snapshots">
+    <div
+      class="modal mode-{mode}"
+      role="dialog"
+      aria-modal="true"
+      aria-label="{verb} snapshots"
+      tabindex="-1"
+      use:trapFocus={{ onEscape: close }}
+    >
       <div class="modal-header">
         {#if canGoBack}
           <button class="modal-back-btn" on:click={goBack} aria-label="Back">&#8592;</button>
