@@ -1,6 +1,6 @@
 # Milestone v0.19 — Mermaid Zoom/Pan Fit & Persistence (Sprint 32)
 
-**Status:** planned
+**Status:** in progress
 
 > Objective: (1) auto-fit a Mermaid diagram to the canvas viewport (scale-to-contain, centered) the first time each new snapshot is displayed; (2) preserve the user's manual zoom/pan for the duration it's on screen — including across `step()`/`seek()` navigation within the same step-frames sequence; (3) persist the user's adjusted viewport per snapshot `id` in a separate cache file, and restore it automatically the next time that exact snapshot is displayed (fresh render or history reload).
 
