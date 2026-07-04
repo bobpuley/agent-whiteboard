@@ -1,3 +1,13 @@
+## 0.19.0 — 2026-07-04
+
+- **Mermaid zoom/pan: fit-to-view on first display:** every new `render()`/`commit_step_frames()` result (or a `POST /snapshots/load` history reload) now auto-fits the diagram — scaled to contain, centered — on first display, replacing the old behavior of resetting to a raw 1:1 transform on every render
+- **Zoom/pan preserved across step-frames navigation:** `step()`/`seek()` within the same step-frames sequence no longer resets the live viewport — the whole sequence shares one continuously-adjustable view
+- **Manual zoom/pan is persisted per snapshot:** the browser debounces zoom/pan changes (~800ms) and reports them to a new `POST /viewport` endpoint, keyed by the snapshot's `id`; the server stores them in a new global `viewport-cache.json` file (`server/viewport-cache.ts`) — separate from the immutable snapshot JSON files — and restores the saved viewport instead of auto-fitting whenever that exact snapshot is redisplayed
+- **Viewport-cache cleanup on delete:** `POST /snapshots/delete-files` and `POST /snapshots/delete-workspace` now also remove the corresponding viewport-cache entry/entries, so deleted snapshots don't leave orphaned rows behind
+- **Fix: `/viewport` was missing from the Vite dev-server proxy list** (`client/vite.config.ts`) — without it, the browser's viewport reports silently never reached the real server during local dev; caught by the new e2e persistence test
+- Mermaid-only; no MCP tool — this is a pure browser⇄server concern, the agent is unaware of it
+- 16 new unit tests (`viewport-cache.test.ts` plus additions to `app.test.ts`/`snapshot.test.ts`/`mcp.test.ts`) and 3 new e2e tests (auto-fit, step/seek continuity, persistence-through-reload) — 260 unit tests / 38 e2e tests all pass
+
 ## 0.18.0 — 2026-07-04
 
 - **Stability & correctness fixes (B6–B14, from a Node.js/TS + frontend code review pass):**
