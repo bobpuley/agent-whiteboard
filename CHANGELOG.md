@@ -1,3 +1,18 @@
+## 0.18.0 — 2026-07-04
+
+- **Stability & correctness fixes (B6–B14, from a Node.js/TS + frontend code review pass):**
+  - **B6 — workspace-validation gap:** `POST /snapshots/delete-workspace` accepted `{"workspace": "."}`, which resolved to the snapshots root and recursively deleted every workspace's history in one call. All workspace-name checks across `app.ts` (`GET /snapshots`, `POST /snapshots/load`, `POST /export-html`, both delete endpoints) now route through the shared `isValidWorkspaceName()`; the delete-workspace endpoint additionally asserts the resolved path stays strictly inside the snapshots root before `rmSync`
+  - **B7 — snapshot filename collisions:** two `render()`/`commit_step_frames()` calls in the same wall-clock second silently overwrote each other's snapshot file. Filenames now include the snapshot's own `id` UUID
+  - **B8 — stale async renders:** `Mermaid.svelte` and `VegaLite.svelte` could display a stale diagram/chart if an older in-flight render resolved after a newer one. Both now discard a superseded render's result via a generation token
+  - **B9 — unhandled Done-button fetch rejection:** a failed `POST /user-done` left the Done button's state machine stuck with no feedback. `handleDone()` now catches the failure, shows a "Failed ✗" state, and stays retryable
+  - **B10 — client TypeScript never type-checked:** `npm run build` only ran `tsc` against `server/`. Added `svelte-check` + a `typecheck` script, chained into `build`; fixed the three real type errors it surfaced (an invalid `res.json<T>()` call, a non-discriminating `RenderCommand` union, and an under-narrowed step-bar visibility check)
+  - **B11 — unvalidated WebSocket messages:** an unrecognized `type` in a WS message silently rendered nothing. `ws.ts` now validates message shape before dispatch and logs a diagnostic for anything unrecognized instead of dropping it silently
+  - **B12 — dialogs not keyboard-accessible:** `DeleteExportModal` and `HistoryPanel` had no `aria-modal`, Escape handling, or focus trap. Both now use a shared `trapFocus` Svelte action
+  - **B13 — inconsistent snapshot-fetch error handling:** `App.svelte`'s delete/export modal silently fell back to an empty workspace list on a failed `GET /snapshots/all`, while `HistoryPanel` already surfaced the error. Extracted a shared `fetchAllSnapshots()` helper; both call sites now surface failures visibly
+  - **B14 — concurrent export-html corruption:** `generateExportHtml()` patches Node's `global.*` DOM state for the call's duration with no lock; overlapping calls (from `POST /export-html` and the `export_html` MCP tool) could leave global state dangling on an already-closed Window. Calls are now serialized via a promise queue
+- `01`–`04` design docs updated to reflect resolved status for all nine bugs
+- 229 unit tests (7 test files, including 3 new: `snapshot.test.ts`, `export-html.test.ts`, and the project's first client-side test `ws.test.ts`) / 35 e2e tests (5 new) all pass
+
 ## 0.17.1 — 2026-07-03
 
 - **Fix: Done button confirmation never rendered (client only, no server change):** `set_done_armed: false` arrives over the WebSocket almost immediately after a click — the server unarms as part of resolving `wait_done()` — and was hiding the whole Done button and force-resetting `doneSent` before the "Sent ✓" text ever had a chance to render, confirmed via live DOM instrumentation in a real browser. `client/src/App.svelte` now shows the button on `doneArmed || doneSent`, letting `doneSent`'s own 2-second timer own its lifecycle instead of being cut short by the unarm broadcast
