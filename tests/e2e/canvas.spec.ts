@@ -246,6 +246,42 @@ test("Done button: shows 'Sent ✓' after click, then disappears (v0.12 conditio
   await waitDone;
 });
 
+test("Done button: a failed POST /user-done shows an error and allows retry (B9)", async ({ page, request }) => {
+  await page.goto("/");
+
+  const waitDone = request.post(`${SERVER}/wait-done`);
+  const btn = page.getByRole("button", { name: "Done" });
+  await expect(btn).toBeVisible();
+
+  // Simulate a network/server failure on the first click.
+  let failNext = true;
+  await page.route("**/user-done", (route) => {
+    if (failNext) {
+      failNext = false;
+      return route.abort("failed");
+    }
+    return route.continue();
+  });
+
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (err) => pageErrors.push(err));
+
+  await btn.click();
+  await expect(page.getByRole("button", { name: /Failed/ })).toBeVisible();
+  // Button must stay enabled so the user can retry — unlike the success path.
+  await expect(page.getByRole("button", { name: /Failed/ })).toBeEnabled();
+
+  // Error indicator clears after its timeout, reverting to the plain Done button.
+  await expect(page.getByRole("button", { name: "Done" })).toBeVisible({ timeout: 5_000 });
+
+  // Retry succeeds now that the route passes through.
+  await btn.click();
+  await expect(page.getByRole("button", { name: /Sent/ })).toBeVisible();
+
+  expect(pageErrors).toEqual([]);
+  await waitDone;
+});
+
 // ── History panel ─────────────────────────────────────────────────────────────
 
 test("history panel: hidden by default on page load", async ({ page }) => {
