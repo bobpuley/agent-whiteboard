@@ -7,6 +7,7 @@
   export let mode: "delete" | "export";
   export let open = false;
   export let workspaces: WorkspaceGroup[] = [];
+  export let loadError: string | null = null;
 
   const dispatch = createEventDispatcher<{ close: void; deleted: void }>();
 
@@ -238,7 +239,9 @@
       </div>
 
       <div class="modal-body">
-        {#if doneMessage}
+        {#if loadError}
+          <p class="modal-error">Failed to load workspaces: {loadError}</p>
+        {:else if doneMessage}
           <div class="modal-confirm">
             <span class="check-circle">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>

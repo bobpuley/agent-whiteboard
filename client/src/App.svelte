@@ -9,6 +9,7 @@
   import HistoryPanel from "./HistoryPanel.svelte";
   import DeleteExportModal from "./DeleteExportModal.svelte";
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
+  import { fetchAllSnapshots } from "./lib/fetchSnapshots";
 
   type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
 
@@ -100,14 +101,16 @@
   // Delete/export modal — opened from the controls panel (v0.16).
   let modalMode: "delete" | "export" | null = null;
   let modalWorkspaces: WorkspaceGroup[] = [];
+  let modalLoadError: string | null = null;
 
   async function openModal(mode: "delete" | "export") {
-    try {
-      const res = await fetch("/snapshots/all");
-      const data = await res.json();
-      modalWorkspaces = data.ok ? data.workspaces : [];
-    } catch {
+    const result = await fetchAllSnapshots();
+    if (result.ok) {
+      modalWorkspaces = result.workspaces;
+      modalLoadError = null;
+    } else {
       modalWorkspaces = [];
+      modalLoadError = result.error;
     }
     modalMode = mode;
   }
@@ -151,6 +154,7 @@
   mode={modalMode ?? "delete"}
   open={modalMode !== null}
   workspaces={modalWorkspaces}
+  loadError={modalLoadError}
   on:close={closeModal}
   on:deleted={handleModalDeleted}
 />
