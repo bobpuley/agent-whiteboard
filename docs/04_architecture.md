@@ -58,7 +58,7 @@
     │  • History panel lock/unlock (v0.10): toggle in panel header; locked = panel stays open after snapshot load
     │  • Done button conditional visibility (v0.12): button hidden by default; shown only when server emits { action: "set_done_armed", armed: true }; hidden again on armed: false; server pushes current state to every new WebSocket connection
     │  • History panel delete/export — REPLACED in v0.16 (see below). Superseded design (v0.12–v0.13, kept here for change history): recycle bin + export icons in the panel header toggled inline selection mode with checkboxes on every row across all workspace accordions at once, a per-workspace "Delete folder"/"Export workspace" action bar, and an always-visible per-row hover-delete button. All of this UI is removed in v0.16.
-    │  • Delete/export modal (v0.16, planned — see FR16 in `01`, K3 in `02`): clicking the new delete or export icon in the right-side controls panel opens a 2-step modal instead of toggling inline selection mode. Step 1: pick a workspace from a list (skipped, opening directly to step 2, when only one workspace has snapshots). Step 2: zoomed into that workspace — a single "Delete/Export entire workspace" action, or check a subset of its snapshots and act on just those via a footer "N selected" bar. Whole-workspace delete requires a second confirming interaction (replaces the old `window.confirm()`); whole-workspace export does not. Calls the same server endpoints as before (`POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, `POST /export-html`) — pure client-side UI change, no new endpoints. Prototyped in `mockup/whiteboard-view-v2.html`.
+    │  • Delete/export modal (v0.16, shipped — see FR16 in `01`, K3 in `02`): clicking the delete or export icon in the right-side controls panel opens a 2-step modal instead of toggling inline selection mode. Step 1: pick a workspace from a list (skipped, opening directly to step 2, when only one workspace has snapshots). Step 2: zoomed into that workspace — a single "Delete/Export entire workspace" action, or check a subset of its snapshots and act on just those via a footer "N selected" bar. Whole-workspace delete requires a second confirming interaction (replaces the old `window.confirm()`); whole-workspace export does not. Calls the same server endpoints as before (`POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, `POST /export-html`) — pure client-side UI change, no new endpoints. Prototyped in `mockup/whiteboard-view-v2.html`.
 ```
 
 **Shipped in MVP (not Phase 2):**
@@ -416,14 +416,13 @@ user enters export mode → clicks "Export workspace" on a workspace accordion h
   → create one happy-dom Window instance for this export call (used by katex/vega-lite/svg/html paths only — see below)
   → for each valid snapshot item:
       → dispatch to renderer by type:
-          "mermaid"    → (v0.14, planned — in progress, not yet implemented) target design: NOT
-                         rendered server-side. Raw Mermaid source would be written into a
-                         container <pre class="mermaid">…</pre> in the output; actual rendering
-                         would happen later, client-side, when the exported file is opened (see below).
-                         [Current (v0.13) behavior, still in place: mermaid.render() using happy-dom
-                         Window globals → SVG string — produces invisible labels / wrong viewBox /
+          "mermaid"    → (v0.14, shipped): NOT rendered server-side. Raw Mermaid source is written
+                         into a container <pre class="mermaid">…</pre> in the output; actual
+                         rendering happens later, client-side, when the exported file is opened
+                         (see below). [Superseded (v0.13) behavior: mermaid.render() using happy-dom
+                         Window globals → SVG string — produced invisible labels / wrong viewBox /
                          thrown errors because happy-dom has no real text-layout engine; bug B4,
-                         see `01`/`02` L1 — this is the bug v0.14 is meant to fix]
+                         see `01`/`02` L1 — fixed by this v0.14 change]
           "katex"      → katex.renderToString(payload, { displayMode: true, throwOnError: false }) → HTML string
           "vega-lite"  → vl.compile(spec).spec → vega.parse() → new vega.View().toSVG() → SVG string
           "svg"        → DOMPurify(window).sanitize(payload, { USE_PROFILES: { svg: true } })
@@ -623,7 +622,7 @@ agent-whiteboard/
 │   │   ├── App.svelte
 │   │   ├── ws.ts         # WebSocket client
 │   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17). v0.16: inline selection-mode UI (header icons, per-row checkboxes, select-bar, ws-actions-bar) removed — becomes pure browse/load.
-│   │   ├── DeleteExportModal.svelte  # 2-step delete/export modal (v0.16, planned) — workspace picker → zoomed-in whole-workspace / subset action. Triggered from App.svelte's controls panel.
+│   │   ├── DeleteExportModal.svelte  # 2-step delete/export modal (v0.16, shipped) — workspace picker → zoomed-in whole-workspace / subset action. Triggered from App.svelte's controls panel.
 │   │   └── renderers/    # one file per content type
 │   │       ├── Mermaid.svelte
 │   │       ├── Html.svelte
@@ -667,13 +666,13 @@ Two test layers:
 
 **Layer 1 — Server integration tests (Vitest)**
 
-`tests/unit/server/app.test.ts` — covers all REST endpoints (test count grows over time; run `npm test` for the current count, currently 161). Runs with `npm test`. Scoped via `vitest.config.ts`.
+`tests/unit/server/app.test.ts` — covers all REST endpoints (test count grows over time; run `npm test` for the current count, currently 223). Runs with `npm test`. Scoped via `vitest.config.ts`.
 
 MCP tool handlers are thin wrappers over the same session logic exercised by the REST tests. MCP correctness verified manually: `export()`, `render()`, and `clear()` confirmed working end-to-end (MCP → WebSocket → browser) on 2026-05-31.
 
 **Layer 2 — Browser e2e tests (Playwright) — Sprint 11 ✅**
 
-`tests/e2e/canvas.spec.ts` — 16 tests covering the full interactive browser surface. Runs with `npm run test:e2e`. Uses system Chrome (`channel: "chrome"`); `dev:test` starts the servers without opening a browser.
+`tests/e2e/canvas.spec.ts` and related specs — 31 tests covering the full interactive browser surface (test count grows over time; run `npm run test:e2e` for the current count). Runs with `npm run test:e2e`. Uses system Chrome (`channel: "chrome"`); `dev:test` starts the servers without opening a browser.
 
 Covered scenarios:
 - Initial placeholder state (confirms WebSocket connects)
