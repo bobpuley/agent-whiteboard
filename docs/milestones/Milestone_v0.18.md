@@ -1,6 +1,6 @@
 # Milestone v0.18 — Stability & Correctness Fixes (Sprint 31)
 
-**Status:** in progress
+**Status:** released
 
 > Objective: fix nine bugs (B6–B14, `01_input-ideas.md`) surfaced by a Node.js/TS + frontend code review pass on 2026-07-04, triaged against the project's actual local-only, single-trusted-user scope (`02` A1/A2) via a `/grill-me` interview during intake. Three reviewer findings (unrestricted `output_path`, no auth, server-side sanitization) were confirmed as already-decided trade-offs and dismissed — not part of this milestone. A separate, non-behavioral "Design Debt Log" (`01`) captures tech-debt/maintainability findings from the same review that are explicitly out of scope here — no observed broken behavior, not a bug.
 
