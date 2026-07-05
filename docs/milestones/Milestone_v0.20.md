@@ -1,6 +1,6 @@
 # Milestone v0.20 — Design Debt: Safety Net (Sprint 33)
 
-**Status:** in progress
+**Status:** released
 
 > Promoted 2026-07-05 from the Design Debt Log (`01_input-ideas.md`) via a `/grill-me` scoping interview during intake. First of two milestones splitting the log's 8 items by regression risk: this one is additive/no-behavior-change work, and it exists partly to safety-net the behavior-risk refactors in `Milestone_v0.21.md`. See `02_assumptions-and-risks.md` §M and `03_requirements.md` NF9–NF13.
 
