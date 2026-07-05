@@ -45,14 +45,41 @@
     border-radius: 3px;
   }
 
+  .canvas-frame-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
   .canvas-frame {
     flex: 1;
     display: flex;
     flex-direction: column;
-    border: 1px solid #d8d8d8;
-    border-radius: 6px;
+    /* border color echoes the app favicon (media/favico.png) ink tone,
+       lightened to #a7a7a7 + radius tuned live in devtools for readability
+       against the rest of the mockup's UI chrome */
+    border: 2px solid #a7a7a7;
+    border-radius: 10px;
     overflow: hidden;
     min-height: 0;
+  }
+
+  /* sibling of .canvas-frame (not a child) so it can poke outside the
+     frame's own overflow:hidden bounds, same as the sparkle overlapping
+     the open top-right corner in the favicon */
+  .canvas-frame-sparkle {
+    position: absolute;
+    top: -12.5px;
+    right: -12.5px;
+    width: 25px;
+    height: 25px;
+    color: #a7a7a7;
+    background: #fff;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
   }
 
   .canvas-title {
@@ -60,7 +87,7 @@
     font-size: 15px;
     font-weight: 600;
     color: #333;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 2px solid #a7a7a7;
     background: #fafafa;
     user-select: none;
   }
@@ -869,12 +896,17 @@
     Server disconnected. Restart <code>npm run dev</code>.
   </div>
 
-  <div class="canvas-frame">
-    <header id="canvas-title" class="canvas-title">Photosynthesis — overview</header>
+  <div class="canvas-frame-wrap">
+    <div class="canvas-frame">
+      <header id="canvas-title" class="canvas-title">Photosynthesis — overview</header>
 
-    <div class="canvas" id="canvas-body">
-      <!-- swapped by JS based on #sel-canvas -->
+      <div class="canvas" id="canvas-body">
+        <!-- swapped by JS based on #sel-canvas -->
+      </div>
     </div>
+    <svg class="canvas-frame-sparkle" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .962 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.962 0z"/>
+    </svg>
   </div>
 
   <div id="step-bar" class="step-bar" style="display:none">

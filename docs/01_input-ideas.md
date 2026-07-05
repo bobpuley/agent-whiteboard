@@ -356,6 +356,11 @@ Raw request (2026-07-04), three parts:
 - **Minor a11y/style polish** — placeholder/zoom-hint text contrast below WCAG AA, no `aria-live` on the disconnect banner / Done button, one non-keyed `each` block in the Mermaid popup menu.
 - **Backend hygiene** — redundant `try/catch` around `saveSnapshot()` (which already handles its own errors), a couple of silent `catch {}` blocks with no logging, `getMermaidBundle()`/`getKatexCss()` re-read from disk on every export instead of being memoized, client and server dependencies share one `package.json`.
 
+**2026-07-05 — promoted (via `/grill-me` scoping interview during intake):** all 8 items scheduled across two milestones, split by regression risk rather than shipped as one batch — see `02` §M, `03` NF9–NF13, `05` Milestone_v0.20.md / Milestone_v0.21.md.
+- **v0.20 "Safety Net" (Sprint 33):** linter setup → hygiene/a11y fixes (linter-assisted) → blanket unit test coverage (client + all untested server modules) → CSP + Mermaid `securityLevel` → `@types/katex` bump. These are additive/no-behavior-change and exist partly to safety-net the v0.21 refactors.
+- **v0.21 "Core Consolidation" (Sprint 34):** App.svelte decomposition into stores/reducers, then dynamic imports placed at the new component boundaries, plus the `server/app.ts`/`server/mcp.ts` shared-core extraction (independent backend track). These are the behavior-risk items, deliberately sequenced after the safety net.
+- **Deferred, still unscheduled:** the Vite/tsx/vitest major-version migration (Vite is 4 majors behind — `4.5.10` → `8.1.3` — and `vitest`/`@sveltejs/vite-plugin-svelte` are version-locked to it; this needs its own risk assessment, not a "hygiene" bump) and the client/server `package.json` → npm-workspaces split (a build-tooling restructuring, not a code-level fix). Both remain logged here as candidates for a future intake pass.
+
 ## Bug Reports
 
 **B1 — Slideshow step-frames slide renders nothing (Sprint 9)**

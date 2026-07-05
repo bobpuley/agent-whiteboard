@@ -322,3 +322,44 @@ Risks from moving the three test roots:
 > - **`output_path` has no path restriction** when provided: the tool creates parent directories (`mkdir -p` semantics) and writes there, with no traversal/boundary check. Rationale: the calling agent already has unrestricted filesystem write access on the host via its own Bash/Write tools — this is the same local, single-trusted-user boundary as A1/G4. Adding a restriction here would not close any real attack surface, only add friction.
 > - **Relative `output_path` values resolve against the server process's working directory**, not the agent's — since the server is typically a long-lived background process, its cwd may differ from the agent's session cwd. The MCP tool description must tell the agent to pass an absolute path if a specific location is required.
 > - No REST endpoint is added purely for "write to disk" — a curl-based caller already gets this behavior for free via `curl ... -o file.html` against the (now `id`-aware) `POST /export-html`. Only the MCP tool wraps the disk-write + default-path convenience.
+
+---
+
+## M. Design Debt Remediation (v0.20/v0.21)
+
+> Promoted 2026-07-05 from the Design Debt Log (`01`) via a `/grill-me` scoping interview during intake. Split into two milestones by regression risk: v0.20 is additive/no-behavior-change, v0.21 is the behavior-risk refactor work, deliberately sequenced after the safety net. See `03` NF9–NF13, `05` Milestone_v0.20.md / Milestone_v0.21.md.
+
+**M1 — Retrofitting a linter after 32 sprints of unstyled code (v0.20)**
+> ⚠️ ASSUMPTION: introducing ESLint (`eslint-plugin-svelte` + `@typescript-eslint`) now, rather than at project start, is still net-positive despite the codebase predating it.
+- Risk: a first run against 32 sprints of code could surface a large one-time diff of violations, making the initial PR noisy and hard to review.
+- Mitigation: scope the initial ruleset to catch real bugs (the class of thing that produced the a11y/unsafe-cast findings in the code review), not full stylistic conformance; let `--fix` absorb the mechanical part; don't gate CI/build on lint passing until the codebase is clean.
+
+**M2 — Blanket test coverage is an adequate safety net for the v0.21 refactors, even though it isn't scoped to the refactor targets**
+> ⚠️ ASSUMPTION: writing tests for every currently-untested module/component (client, `export-html.ts`, `slideshow.ts`, `events.ts`, `ws.ts`, `channel.ts`, `session.ts`, plus deeper `mcp.ts` coverage) in v0.20 gives enough behavioral coverage to catch regressions introduced by the v0.21 refactors (shared-core extraction, App.svelte decomposition), even though the tests aren't specifically targeted at those refactor's code paths.
+- Risk: coverage gaps could still exist in exactly the code the refactors touch, since "blanket" breadth doesn't guarantee depth on any one module.
+- Mitigation: the existing 31-test Playwright e2e suite (§7 in `04`) already exercises the full interactive browser surface end-to-end and is the real backstop — it must pass unchanged after both v0.21 refactors, independent of how the new unit tests are scoped.
+
+**M3 — CSP + explicit Mermaid `securityLevel` is pure hardening with no rendering-behavior change (v0.20)**
+> ⚠️ ASSUMPTION: adding a `Content-Security-Policy` header and an explicit Mermaid `securityLevel` is defense-in-depth only, since DOMPurify already sanitizes SVG/HTML payloads (see A/C sections above) and no live gap is being closed.
+- Risk: a strict CSP (no `unsafe-inline`, no `unsafe-eval`) could break Mermaid's runtime diagram rendering (dagre/d3 sometimes inject inline styles) or Vega-Embed's canvas-backed rendering path (L3).
+- Mitigation: start with a CSP permissive enough not to break current renderers, verified against the full e2e suite (§7 in `04`) before considering tightening it further in a future pass.
+
+**M4 — Shared-core module extraction (`server/app.ts` + `server/mcp.ts`) is the highest blast-radius item in this remediation pass**
+> ⚠️ RISK: consolidating the duplicated render/step-frames/workspace-validation logic reduces *future* drift risk (this duplication was the root cause of the `workspace: "."` bug, B6 in `01`) — but the extraction itself means a bug introduced during the refactor now affects the HTTP path and the MCP path simultaneously, instead of just one.
+- Mitigation: ships in v0.21, after the v0.20 safety net (linter + blanket test coverage) lands; the full existing integration suite (223+ Vitest cases, §7 in `04`) must pass unchanged before this is considered done. Runs independently of the App.svelte/dynamic-import work in v0.21 (different layer — backend vs. frontend), so it doesn't block or get blocked by that sequencing.
+
+**M5 — App.svelte decomposition risk (v0.21)**
+> ⚠️ RISK: extracting WebSocket routing, canvas state, step-frame nav, modal orchestration, and Done-button lifecycle out of the 449-line god component into stores/reducers risks subtle Svelte reactivity-ordering regressions (e.g., a derived value recomputing in a different order than before).
+- Mitigation: the 31-test e2e suite (§7 in `04`) covers this exact interactive surface end-to-end and must pass unchanged; scheduled *before* dynamic imports (M6) in v0.21 so lazy-load boundaries get placed against the new (settled) component/store boundaries rather than the current god component.
+
+**M6 — Dynamic imports introduce a first-use loading delay, previously masked by eager bundling (v0.21)**
+> ✅ ACCEPTED TRADE-OFF: lazy-loading Mermaid/KaTeX/Vega-Embed at the point of first use (after M5 settles component boundaries) means the first render of a given canvas type incurs a network/parse delay it didn't before.
+- Accepted: this isn't on the app's critical startup path (nothing renders until the agent calls `render()` anyway) and reduces initial bundle size for every session that doesn't use every renderer type. No loading-spinner requirement is added for this.
+
+**M7 — Version drift is not one uniform-risk item — split by actual blast radius (deferred item, not scheduled in v0.20/v0.21)**
+> ⚠️ RISK (found during grill-me scoping, 2026-07-05): the Design Debt Log's "version drift" item bundled a trivial fix with a real migration. `@types/katex` (`0.16.8` → `0.17.x`, matching installed `katex@0.17.0`) is a types-only patch with no runtime risk — this is the only part folded into v0.20 (NF-adjacent, see `03`). Vite (`4.5.10` → `8.1.3`, 4 majors behind) and `tsx` (`3.14` → `4.23`, 1 major behind) are **not** bundled in — `vitest@0.34.6` and `@sveltejs/vite-plugin-svelte` are both version-locked to the Vite major currently in use, so a Vite bump is its own migration with its own compatibility risk, not a hygiene fix.
+- Mitigation: remains logged in `01`'s Design Debt Log, unscheduled, until it gets its own scoping pass.
+
+**M8 — Client/server `package.json` split into npm workspaces (deferred item, not scheduled)**
+> ⚠️ RISK: unlike the small code-level hygiene fixes bundled into v0.20 (redundant `try/catch`, silent `catch {}`, memoizing `getMermaidBundle()`/`getKatexCss()`), splitting the shared `package.json` into an npm-workspaces layout touches `vite.config.ts`, build scripts, and potentially CI — a build-tooling restructuring, not a code fix.
+- Mitigation: remains logged in `01`'s Design Debt Log, unscheduled, until it gets its own scoping pass.
