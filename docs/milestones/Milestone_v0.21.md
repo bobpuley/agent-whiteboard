@@ -1,11 +1,11 @@
 # Milestone v0.21 — Design Debt: Core Consolidation (Sprint 34)
 
-**Status:** planned
+**Status:** in progress
 
 > Promoted 2026-07-05 from the Design Debt Log (`01_input-ideas.md`) via a `/grill-me` scoping interview during intake. Second of two milestones splitting the log's 8 items by regression risk: this one is the behavior-risk refactor work, deliberately sequenced after `Milestone_v0.20.md`'s safety net (linter + blanket test coverage) lands. See `02_assumptions-and-risks.md` §M and `03_requirements.md` NF12–NF13.
 
 ### Sprint 34 — Design Debt: Core Consolidation
-- [ ] Decompose `App.svelte` (449 lines) into stores/reducers: WebSocket routing, canvas state, step-frame nav, modal orchestration, Done-button lifecycle (NF12)
+- [x] Decompose `App.svelte` (449 lines) into stores/reducers: WebSocket routing, canvas state, step-frame nav, modal orchestration, Done-button lifecycle (NF12)
 - [ ] Switch Mermaid/KaTeX/Vega-Embed from eager bundling to per-canvas-type dynamic `import()`, placed at the new component/store boundaries from the task above (NF13)
 - [ ] Extract the duplicated render/step-frames-create/append/commit/workspace-validation logic in `server/app.ts` and `server/mcp.ts` into a shared core module (NF12)
 
