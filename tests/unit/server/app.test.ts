@@ -3120,7 +3120,7 @@ describe("POST /export-html (v0.13)", () => {
     });
 
     const body = await res.text();
-    expect(body).toContain("mermaid.initialize({ startOnLoad: false })");
+    expect(body).toContain('mermaid.initialize({ startOnLoad: false, securityLevel: "strict" })');
     expect(body).toContain('mermaid.run({ querySelector: ".mermaid" })');
     expect(body).not.toMatch(/<script src=["']https?:/);
   });

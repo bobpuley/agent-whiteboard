@@ -23,7 +23,7 @@
 | v0.17 | Step-Frames Per-Frame Type & Validation Parity | 30 | released    | [Milestone_v0.17.md](./milestones/Milestone_v0.17.md) |
 | v0.18 | Stability & Correctness Fixes | 31 | released    | [Milestone_v0.18.md](./milestones/Milestone_v0.18.md) |
 | v0.19 | Mermaid Zoom/Pan Fit & Persistence | 32 | released    | [Milestone_v0.19.md](./milestones/Milestone_v0.19.md) |
-| v0.20 | Design Debt — Safety Net | 33 | planned     | [Milestone_v0.20.md](./milestones/Milestone_v0.20.md) |
+| v0.20 | Design Debt — Safety Net | 33 | released    | [Milestone_v0.20.md](./milestones/Milestone_v0.20.md) |
 | v0.21 | Design Debt — Core Consolidation | 34 | planned     | [Milestone_v0.21.md](./milestones/Milestone_v0.21.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.

@@ -142,8 +142,11 @@ export function findSnapshotById(id: string, dir: string): string | null {
         if (parsed.id === id && typeof parsed.payload === "string") {
           return parsed.payload;
         }
-      } catch {
-        // Skip unreadable or malformed files.
+      } catch (err) {
+        console.error(
+          `[agent-whiteboard] snapshot-reader: skipping unreadable file ${filename}:`,
+          err instanceof Error ? err.message : String(err)
+        );
       }
     }
   }
@@ -200,8 +203,11 @@ export function findSnapshotByIdInWorkspace(workspace: string, id: string, dir: 
         }
         return record;
       }
-    } catch {
-      // Skip unreadable or malformed files.
+    } catch (err) {
+      console.error(
+        `[agent-whiteboard] snapshot-reader: skipping unreadable file ${filename}:`,
+        err instanceof Error ? err.message : String(err)
+      );
     }
   }
 

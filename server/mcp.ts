@@ -5,7 +5,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { StepFrame } from "./session.js";
 import { broadcast, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid, validatePayload } from "./validate.js";
@@ -34,7 +34,7 @@ export function createMcpServer(): McpServer {
         '  • "svg"         — Inline SVG markup. Example: render({ type: "svg", payload: "<svg>...</svg>" })\n' +
         '  • "html"        — HTML/CSS fragment. Example: render({ type: "html", payload: "<h1>Hello</h1>" })\n' +
         '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
-        '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{\"$schema\":\"...\",\"mark\":\"bar\",...}" })\n' +
+        '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{"$schema":"...","mark":"bar",...}" })\n' +
         '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A", "type": "mermaid" }, ...] }. Displays frame 0; use step() to navigate. ' +
         'Every frame is validated against its effective type (frame.type ?? frame_type) before anything is accepted — an invalid frame anywhere in the sequence rejects the whole call with { ok: false, error } and nothing is rendered. ' +
         'frame.type is optional per frame — omit it to use frame_type; set it to mix content types within one sequence (e.g. a mermaid frame followed by a katex frame). ' +
@@ -166,8 +166,12 @@ export function createMcpServer(): McpServer {
           id: newId,
         });
         setLastWorkspace(workspace);
+        // F10: a write failure must never block rendering. saveSnapshot() already
+        // catches its own errors, but this try/catch is a deliberate caller-level
+        // backstop for that guarantee (see tests/unit/server/app.test.ts "render
+        // still returns { ok: true } when saveSnapshot throws").
         let sfSnapshotId: string | undefined;
-        try { sfSnapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal */ }
+        try { sfSnapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal, see F10 */ }
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: true, ...(sfSnapshotId !== undefined ? { id: sfSnapshotId } : {}) }) }],
         };
@@ -178,8 +182,9 @@ export function createMcpServer(): McpServer {
       setCanvas(type, payload, title, newId);
       broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}), id: newId });
       setLastWorkspace(workspace);
+      // F10 backstop — see comment above.
       let snapshotId: string | undefined;
-      try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal */ }
+      try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal, see F10 */ }
 
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) }) }],
@@ -606,10 +611,9 @@ export function createMcpServer(): McpServer {
       const commitId = generateSnapshotId();
       setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
       setLastWorkspace(workspace);
+      // F10 backstop — see comment near the other saveSnapshot() calls above.
       let commitSnapshotId: string | undefined;
-      try {
-        commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId);
-      } catch { /* non-fatal */ }
+      try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId); } catch { /* non-fatal, see F10 */ }
       // Final broadcast for consistency (handles clear() called between appends).
       broadcastStepFrames(frames, frame_type, 0, title, commitId);
 

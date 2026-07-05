@@ -27,7 +27,16 @@ function readCache(): Record<string, Viewport> {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
     return parsed as Record<string, Viewport>;
-  } catch {
+  } catch (err) {
+    // ENOENT (no cache file yet, e.g. first run) is expected and not logged.
+    // Anything else (corrupted JSON, permission error) silently discards all
+    // persisted zoom/pan state, so it's worth a warning.
+    if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
+      console.error(
+        "[agent-whiteboard] viewport-cache read failed, resetting cache:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
     return {};
   }
 }

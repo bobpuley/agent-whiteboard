@@ -49,8 +49,24 @@ function readSnapshotIdSafe(fullPath: string): string | undefined {
   }
 }
 
+// Defense-in-depth only (see M3 in docs/02_assumptions-and-risks.md) — SVG/HTML
+// payloads are already sanitized client-side via DOMPurify before render, and
+// server-side for HTML exports. 'unsafe-inline' on script/style is required
+// because the self-contained HTML export embeds the full mermaid.js bundle
+// and generated CSS inline (F17 in docs/03) — a nonce/hash scheme would be
+// more restrictive but isn't worth the complexity for a backstop control.
+const CSP_HEADER =
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; " +
+  "frame-ancestors 'none'";
+
 export function createApp(): Hono {
   const app = new Hono();
+
+  app.use("*", async (c, next) => {
+    await next();
+    c.header("Content-Security-Policy", CSP_HEADER);
+  });
 
   app.post("/render", async (c) => {
     const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; node_to_frame?: Record<string, number>; workspace?: string } }>();
@@ -110,8 +126,12 @@ export function createApp(): Hono {
         id: newId,
       });
       setLastWorkspace(workspace);
+      // F10: a write failure must never block rendering. saveSnapshot() already
+      // catches its own errors, but this try/catch is a deliberate caller-level
+      // backstop for that guarantee (see tests/unit/server/app.test.ts "render
+      // still returns { ok: true } when saveSnapshot throws").
       let snapshotId: string | undefined;
-      try { snapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal */ }
+      try { snapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal, see F10 */ }
       return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
     }
 
@@ -120,8 +140,9 @@ export function createApp(): Hono {
     setCanvas(type as CanvasType, payload, title, newId);
     broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}), id: newId });
     setLastWorkspace(workspace);
+    // F10 backstop — see comment above.
     let snapshotId: string | undefined;
-    try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal */ }
+    try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal, see F10 */ }
     return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
   });
 
@@ -313,8 +334,9 @@ export function createApp(): Hono {
     const commitId = generateSnapshotId();
     setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
     setLastWorkspace(workspace);
+    // F10 backstop — see comment near the other saveSnapshot() calls above.
     let commitSnapshotId: string | undefined;
-    try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId); } catch { /* non-fatal */ }
+    try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId); } catch { /* non-fatal, see F10 */ }
     // Final broadcast for consistency (handles clear() called between appends).
     broadcastStepFrames(frames, frame_type, 0, title, commitId);
     return c.json({ ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) });
