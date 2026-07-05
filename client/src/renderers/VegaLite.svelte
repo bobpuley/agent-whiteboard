@@ -1,5 +1,4 @@
 <script lang="ts">
-  import embed from "vega-embed";
   import { onMount, afterUpdate, onDestroy } from "svelte";
 
   export let source: string;
@@ -12,6 +11,18 @@
   // by the time its async work resolves has been superseded (B8).
   let renderToken = 0;
 
+  // Loaded lazily on first use rather than eagerly bundled on initial page
+  // paint (NF13) — cached after the first call so later renders don't re-import.
+  type VegaEmbed = typeof import("vega-embed")["default"];
+  let vegaEmbedPromise: Promise<VegaEmbed> | null = null;
+
+  function loadVegaEmbed(): Promise<VegaEmbed> {
+    if (!vegaEmbedPromise) {
+      vegaEmbedPromise = import("vega-embed").then((mod) => mod.default);
+    }
+    return vegaEmbedPromise;
+  }
+
   async function render(src: string) {
     if (!container) return;
     const token = ++renderToken;
@@ -23,6 +34,8 @@
 
     try {
       const spec = JSON.parse(src);
+      const embed = await loadVegaEmbed();
+      if (token !== renderToken) return; // superseded while the library was loading
       const result = await embed(container, spec, {
         actions: false,
         renderer: "svg",
