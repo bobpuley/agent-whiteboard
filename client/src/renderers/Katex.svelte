@@ -1,5 +1,4 @@
 <script lang="ts">
-  import katex from "katex";
   import "katex/dist/katex.min.css";
   import { onMount, afterUpdate } from "svelte";
 
@@ -8,30 +7,50 @@
   let container: HTMLDivElement;
   let errorMessage: string | null = null;
   let lastRendered: string | null = null;
+  // Bumped on every render() call; a render whose token no longer matches by
+  // the time the lazily-loaded library resolves has been superseded and must
+  // not touch the DOM (same guard as Mermaid/VegaLite — B8).
+  let renderToken = 0;
 
-  function render(src: string) {
+  // Loaded lazily on first use rather than eagerly bundled on initial page
+  // paint (NF13) — cached after the first call so later renders don't re-import.
+  type KatexInstance = typeof import("katex")["default"];
+  let katexPromise: Promise<KatexInstance> | null = null;
+
+  function loadKatex(): Promise<KatexInstance> {
+    if (!katexPromise) {
+      katexPromise = import("katex").then((mod) => mod.default);
+    }
+    return katexPromise;
+  }
+
+  async function render(src: string) {
     if (!container) return;
+    const token = ++renderToken;
     errorMessage = null;
     try {
+      const katex = await loadKatex();
+      if (token !== renderToken) return; // superseded while the library was loading
       katex.render(src, container, {
         displayMode: true,
         throwOnError: true,
       });
     } catch (err) {
+      if (token !== renderToken) return; // superseded while the library was loading
       errorMessage = err instanceof Error ? err.message : String(err);
       container.innerHTML = "";
     }
   }
 
   onMount(() => {
-    render(source);
+    void render(source);
     lastRendered = source;
   });
 
   afterUpdate(() => {
     if (source !== lastRendered) {
       lastRendered = source;
-      render(source);
+      void render(source);
     }
   });
 </script>

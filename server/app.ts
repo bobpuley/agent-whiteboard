@@ -9,13 +9,18 @@ import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js"
 import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
-import { broadcast, broadcastStepFrames } from "./ws.js";
+import { broadcast } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
-import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
-import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
+import {
+  appendFrameAndBroadcast,
+  commitRenderResult,
+  commitStepFramesResult,
+  initStepFramesResult,
+  validateWorkspaceInput,
+} from "./render-core.js";
 import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
 import { deleteViewports, getViewport, setViewport } from "./viewport-cache.js";
@@ -71,16 +76,11 @@ export function createApp(): Hono {
   app.post("/render", async (c) => {
     const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; node_to_frame?: Record<string, number>; workspace?: string } }>();
 
-    const workspace = body.options?.workspace;
-    if (!workspace) {
-      return c.json({ ok: false, error: "workspace is required" }, 400);
+    const workspaceResult = validateWorkspaceInput(body.options?.workspace);
+    if (!workspaceResult.ok) {
+      return c.json({ ok: false, error: workspaceResult.error }, 400);
     }
-    if (!isValidWorkspaceName(workspace)) {
-      return c.json({
-        ok: false,
-        error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-      }, 400);
-    }
+    const { workspace } = workspaceResult;
 
     if (typeof body.payload !== "string") {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
@@ -103,47 +103,8 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: validationError });
     }
 
-    // Cancel any running slideshow — render takes canvas ownership.
-    cancelSlideshow();
-
-    if (type === "step-frames") {
-      const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
-      const frames = spec.frames;
-      // Generate the id before broadcasting so the browser can key its viewport
-      // report on it — a brand-new render() always mints a fresh id (F19/C3).
-      const newId = generateSnapshotId();
-      setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame, newId);
-      broadcast({
-        action: "replace",
-        type: frames[0].type ?? spec.frame_type,
-        payload: frames[0].payload,
-        frameLabel: frames[0].label,
-        stepFrames: true,
-        currentFrame: 0,
-        totalFrames: frames.length,
-        ...(title !== undefined ? { title } : {}),
-        ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
-        id: newId,
-      });
-      setLastWorkspace(workspace);
-      // F10: a write failure must never block rendering. saveSnapshot() already
-      // catches its own errors, but this try/catch is a deliberate caller-level
-      // backstop for that guarantee (see tests/unit/server/app.test.ts "render
-      // still returns { ok: true } when saveSnapshot throws").
-      let snapshotId: string | undefined;
-      try { snapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal, see F10 */ }
-      return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
-    }
-
-    // svg, html, katex, mermaid, vega-lite
-    const newId = generateSnapshotId();
-    setCanvas(type as CanvasType, payload, title, newId);
-    broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}), id: newId });
-    setLastWorkspace(workspace);
-    // F10 backstop — see comment above.
-    let snapshotId: string | undefined;
-    try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal, see F10 */ }
-    return c.json({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) });
+    const result = commitRenderResult(type, payload, workspace, title, nodeToFrame);
+    return c.json(result);
   });
 
   app.post("/step", async (c) => {
@@ -278,23 +239,13 @@ export function createApp(): Hono {
         error: `frame_type must be one of: ${FRAME_TYPES.join(", ")}`,
       }, 400);
     }
-    if (!body.workspace || typeof body.workspace !== "string") {
-      return c.json({ ok: false, error: "workspace is required" }, 400);
+    const workspaceResult = validateWorkspaceInput(body.workspace);
+    if (!workspaceResult.ok) {
+      return c.json({ ok: false, error: workspaceResult.error }, 400);
     }
-    if (!isValidWorkspaceName(body.workspace)) {
-      return c.json({
-        ok: false,
-        error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-      }, 400);
-    }
+    const { workspace } = workspaceResult;
     const title = typeof body.title === "string" ? body.title : undefined;
-    const id = createBuilder(body.frame_type, body.workspace, title);
-    broadcast({
-      action: "replace",
-      type: "step-frames-placeholder",
-      frameCount: 0,
-      ...(title !== undefined ? { title } : {}),
-    });
+    const { id } = initStepFramesResult(body.frame_type, workspace, title);
     return c.json({ ok: true, id });
   });
 
@@ -307,39 +258,20 @@ export function createApp(): Hono {
     }
     const label = typeof body.label === "string" ? body.label : undefined;
     const type = typeof body.type === "string" ? body.type : undefined;
-    const result = await appendFrame(id, body.payload, label, type);
+    const result = await appendFrameAndBroadcast(id, body.payload, label, type);
     if (!result.ok) {
       return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
     }
-    // Live preview: push the accumulated partial sequence to the browser.
-    // Reuse the builder id so the browser fits-to-view once on the first frame
-    // and then treats subsequent appends as a continuation (F19/C3) — this is
-    // distinct from the final snapshot id minted at commit time.
-    const { frames, frame_type, title } = result;
-    broadcastStepFrames(frames, frame_type, frames.length - 1, title, id);
     return c.json({ ok: true, frame_count: result.frame_count });
   });
 
   app.post("/step-frames/:id/commit", (c) => {
     const id = c.req.param("id");
-    const result = commitBuilder(id);
+    const result = commitStepFramesResult(id);
     if (!result.ok) {
       return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
     }
-    const { entry } = result;
-    const { frame_type, workspace, title, frames } = entry;
-    const assembledPayload = JSON.stringify({ frame_type, frames });
-
-    cancelSlideshow();
-    const commitId = generateSnapshotId();
-    setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
-    setLastWorkspace(workspace);
-    // F10 backstop — see comment near the other saveSnapshot() calls above.
-    let commitSnapshotId: string | undefined;
-    try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId); } catch { /* non-fatal, see F10 */ }
-    // Final broadcast for consistency (handles clear() called between appends).
-    broadcastStepFrames(frames, frame_type, 0, title, commitId);
-    return c.json({ ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) });
+    return c.json(result);
   });
 
   // ── User events — bidirectionality (Sprint 10 experiment) ───────────────────

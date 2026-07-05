@@ -1,5 +1,4 @@
 <script lang="ts">
-  import mermaid from "mermaid";
   import { afterUpdate, onDestroy, onMount } from "svelte";
 
   export let source: string;
@@ -323,7 +322,21 @@
   }
 
   // ── Mermaid rendering ───────────────────────────────────────────────────────
-  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" });
+  // Loaded lazily on first use rather than eagerly bundled on initial page
+  // paint (NF13) — cached after the first call so later renders don't re-import.
+  type MermaidInstance = typeof import("mermaid")["default"];
+  let mermaidPromise: Promise<MermaidInstance> | null = null;
+
+  function loadMermaid(): Promise<MermaidInstance> {
+    if (!mermaidPromise) {
+      mermaidPromise = import("mermaid").then((mod) => {
+        const instance = mod.default;
+        instance.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" });
+        return instance;
+      });
+    }
+    return mermaidPromise;
+  }
 
   // v0.19 (F19/C3): a new snapshot id (different from the last one we saw)
   // fits-to-view or restores a saved viewport; a repeated/absent id (step()/
@@ -341,6 +354,8 @@
       return;
     }
     try {
+      const mermaid = await loadMermaid();
+      if (token !== renderToken) return; // superseded while the library was loading
       const id = `mermaid-${Date.now()}`;
       const { svg } = await mermaid.render(id, src);
       if (token !== renderToken) return; // superseded by a newer render
