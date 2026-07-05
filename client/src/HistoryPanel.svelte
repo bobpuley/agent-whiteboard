@@ -37,8 +37,10 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspace, filename }),
       });
-    } catch {
-      // Canvas will update via WebSocket if successful
+    } catch (err) {
+      // Canvas will update via WebSocket if the request reached the server —
+      // this only catches a network-level failure (request never arrived).
+      console.error("[agent-whiteboard] failed to load snapshot:", err);
     }
     if (!locked) dispatch("close");
   }

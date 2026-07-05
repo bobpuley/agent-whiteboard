@@ -23,6 +23,9 @@ vi.mock("../../../server/ws.js", () => ({
 
 import { createMcpServer } from "../../../server/mcp.js";
 import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
+import { broadcast, broadcastStepFrames } from "../../../server/ws.js";
+import { signalClick, signalDone } from "../../../server/events.js";
+import { getCanvas, resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 
 interface ToolCallResult {
   content: { type: string; text: string }[];
@@ -213,5 +216,266 @@ describe("MCP tool: export_html (v0.15)", () => {
     expect(result).toEqual({ ok: true, path: customPath });
     expect(existsSync(customPath)).toBe(true);
     expect(readFileSync(customPath, "utf-8")).toContain("<!DOCTYPE html>");
+  });
+});
+
+describe("MCP tool: render — basic types", () => {
+  const server = createMcpServer();
+
+  afterEach(() => {
+    resetCanvas();
+    resetLastWorkspace();
+    vi.mocked(broadcast).mockClear();
+  });
+
+  it("renders svg and broadcasts the replace action", async () => {
+    const result = await callTool(server, "render", {
+      type: "svg",
+      payload: "<svg/>",
+      options: { workspace: "ws1" },
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(getCanvas()).toMatchObject({ type: "svg", payload: "<svg/>" });
+    expect(broadcast).toHaveBeenCalledWith(expect.objectContaining({ action: "replace", type: "svg", payload: "<svg/>" }));
+  });
+
+  it("returns an error when workspace is missing", async () => {
+    const result = await callTool(server, "render", { type: "svg", payload: "<svg/>", options: {} });
+    expect(result).toEqual({ ok: false, error: "workspace is required" });
+  });
+
+  it("returns an error when workspace is invalid", async () => {
+    const result = await callTool(server, "render", {
+      type: "svg",
+      payload: "<svg/>",
+      options: { workspace: "../escape" },
+    });
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it("rejects mermaid payload without a diagram keyword", async () => {
+    const result = await callTool(server, "render", {
+      type: "mermaid",
+      payload: "not a diagram",
+      options: { workspace: "ws1" },
+    });
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it("rejects invalid vega-lite JSON", async () => {
+    const result = await callTool(server, "render", {
+      type: "vega-lite",
+      payload: "{ not json",
+      options: { workspace: "ws1" },
+    });
+    expect(result).toMatchObject({ ok: false });
+  });
+});
+
+describe("MCP tool: step / seek", () => {
+  const server = createMcpServer();
+
+  afterEach(() => {
+    resetCanvas();
+    vi.mocked(broadcast).mockClear();
+  });
+
+  it("step returns an error when no step-frames sequence is loaded", async () => {
+    const result = await callTool(server, "step", { direction: "next" });
+    expect(result).toEqual({ ok: false, error: "no step-frames sequence is loaded" });
+  });
+
+  it("step advances the cursor and broadcasts the new frame", async () => {
+    await callTool(server, "render", {
+      type: "step-frames",
+      payload: JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }] }),
+      options: { workspace: "ws1" },
+    });
+    vi.mocked(broadcast).mockClear();
+
+    const result = await callTool(server, "step", { direction: "next" });
+    expect(result).toEqual({ ok: true, current_frame: 1, total_frames: 2 });
+    expect(broadcast).toHaveBeenCalledWith(expect.objectContaining({ currentFrame: 1, payload: "graph TD; C-->D" }));
+  });
+
+  it("seek jumps directly to a frame index", async () => {
+    await callTool(server, "render", {
+      type: "step-frames",
+      payload: JSON.stringify({
+        frame_type: "mermaid",
+        frames: [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }, { payload: "graph TD; E-->F" }],
+      }),
+      options: { workspace: "ws1" },
+    });
+
+    const result = await callTool(server, "seek", { frame: 2 });
+    expect(result).toEqual({ ok: true, current_frame: 2, total_frames: 3 });
+  });
+
+  it("seek returns an error when frame is out of range", async () => {
+    await callTool(server, "render", {
+      type: "step-frames",
+      payload: JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph TD; A-->B" }] }),
+      options: { workspace: "ws1" },
+    });
+
+    const result = await callTool(server, "seek", { frame: 5 });
+    expect(result).toEqual({ ok: false, error: "frame out of range: must be 0–0" });
+  });
+
+  it("seek returns an error when no step-frames sequence is loaded", async () => {
+    const result = await callTool(server, "seek", { frame: 0 });
+    expect(result).toEqual({ ok: false, error: "no step-frames sequence is loaded" });
+  });
+});
+
+describe("MCP tool: clear", () => {
+  const server = createMcpServer();
+
+  afterEach(() => {
+    resetCanvas();
+    vi.mocked(broadcast).mockClear();
+  });
+
+  it("resets the canvas and broadcasts a clear action", async () => {
+    await callTool(server, "render", { type: "svg", payload: "<svg/>", options: { workspace: "ws1" } });
+    const result = await callTool(server, "clear", {});
+    expect(result).toEqual({ ok: true });
+    expect(getCanvas()).toEqual({ type: "empty" });
+    expect(broadcast).toHaveBeenLastCalledWith({ action: "clear" });
+  });
+});
+
+describe("MCP tool: slideshow / slideshow_stop", () => {
+  const server = createMcpServer();
+
+  afterEach(() => {
+    resetCanvas();
+    vi.mocked(broadcast).mockClear();
+  });
+
+  it("starts a slideshow and broadcasts the first slide", async () => {
+    const result = await callTool(server, "slideshow", {
+      slides: [{ type: "svg", payload: "<svg>1</svg>" }, { type: "svg", payload: "<svg>2</svg>" }],
+      delay_ms: 1000,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(broadcast).toHaveBeenCalledWith({ action: "replace", type: "svg", payload: "<svg>1</svg>" });
+  });
+
+  it("rejects a slideshow with an invalid mermaid slide", async () => {
+    const result = await callTool(server, "slideshow", {
+      slides: [{ type: "mermaid", payload: "not a diagram" }],
+      delay_ms: 1000,
+    });
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it("slideshow_stop is a no-op success even with nothing running", async () => {
+    const result = await callTool(server, "slideshow_stop", {});
+    expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("MCP tool: wait_click / wait_done", () => {
+  const server = createMcpServer();
+
+  afterEach(() => {
+    vi.mocked(broadcast).mockClear();
+  });
+
+  it("wait_click arms the browser and resolves with the clicked event", async () => {
+    const promise = callTool(server, "wait_click", {});
+    expect(broadcast).toHaveBeenCalledWith({ action: "set_node_actions", node_actions: {}, enabled: true });
+
+    signalClick({ type: "node", id: "n1", label: "Node 1", action: null });
+    const result = await promise;
+
+    expect(result).toEqual({ ok: true, type: "node", id: "n1", label: "Node 1", action: null });
+    expect(broadcast).toHaveBeenCalledWith({ action: "set_node_actions", enabled: false });
+  });
+
+  it("wait_done resolves once the user signals done", async () => {
+    const promise = callTool(server, "wait_done", {});
+    signalDone();
+    const result = await promise;
+    expect(result).toEqual({ ok: true });
+  });
+});
+
+describe("MCP tool: init_step_frames / append_frame / commit_step_frames", () => {
+  const server = createMcpServer();
+
+  afterEach(() => {
+    resetCanvas();
+    resetLastWorkspace();
+    vi.mocked(broadcast).mockClear();
+    vi.mocked(broadcastStepFrames).mockClear();
+  });
+
+  it("returns an error when workspace is missing", async () => {
+    const result = await callTool(server, "init_step_frames", { frame_type: "mermaid", workspace: "" });
+    expect(result).toEqual({ ok: false, error: "workspace is required" });
+  });
+
+  it("builds a sequence incrementally and commits it", async () => {
+    const initResult = (await callTool(server, "init_step_frames", {
+      frame_type: "mermaid",
+      workspace: "ws1",
+      title: "My Sequence",
+    })) as { ok: boolean; id: string };
+    expect(initResult.ok).toBe(true);
+    const id = initResult.id;
+
+    const appendResult = await callTool(server, "append_frame", { id, payload: "graph TD; A-->B", label: "Step 1" });
+    expect(appendResult).toEqual({ ok: true, frame_count: 1 });
+    expect(broadcastStepFrames).toHaveBeenCalledWith([{ payload: "graph TD; A-->B", label: "Step 1" }], "mermaid", 0, "My Sequence", id);
+
+    const commitResult = await callTool(server, "commit_step_frames", { id });
+    expect(commitResult).toMatchObject({ ok: true });
+
+    const canvas = getCanvas();
+    expect(canvas.type === "step-frames" && canvas.frames).toEqual([{ payload: "graph TD; A-->B", label: "Step 1" }]);
+  });
+
+  it("append_frame returns an error for an unknown id", async () => {
+    const result = await callTool(server, "append_frame", { id: "nonexistent", payload: "graph TD; A-->B" });
+    expect(result).toEqual({ ok: false, error: "step-frames session not found or expired" });
+  });
+
+  it("commit_step_frames returns an error for an unknown id", async () => {
+    const result = await callTool(server, "commit_step_frames", { id: "nonexistent" });
+    expect(result).toEqual({ ok: false, error: "step-frames session not found or expired" });
+  });
+});
+
+describe("MCP tool: export", () => {
+  const server = createMcpServer();
+
+  afterEach(() => {
+    resetCanvas();
+  });
+
+  it("returns the current canvas payload verbatim when no id is given", async () => {
+    await callTool(server, "render", { type: "svg", payload: "<svg/>", options: { workspace: "ws1" } });
+    const result = await callTool(server, "export", {});
+    expect(result).toEqual({ ok: true, data: "<svg/>" });
+  });
+
+  it("returns an empty string when the canvas is blank", async () => {
+    const result = await callTool(server, "export", {});
+    expect(result).toEqual({ ok: true, data: "" });
+  });
+
+  it("returns an error when id is provided but no snapshot matches", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotById).mockReturnValue(null);
+    const result = await callTool(server, "export", { id: "nope" });
+    expect(result).toEqual({ ok: false, error: "graph not found" });
+  });
+
+  it("returns the matching snapshot's payload when id resolves", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotById).mockReturnValue("graph TD; A-->B");
+    const result = await callTool(server, "export", { id: "some-id" });
+    expect(result).toEqual({ ok: true, data: "graph TD; A-->B" });
   });
 });

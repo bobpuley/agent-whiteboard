@@ -165,7 +165,7 @@
 
 <main>
   {#if disconnected}
-    <div class="banner">
+    <div class="banner" role="alert" aria-live="assertive">
       Server disconnected. Restart <code>npm run dev</code>.
     </div>
   {/if}
@@ -232,7 +232,7 @@
 
     {#if doneArmed || doneSent || doneError}
       <div class="panel-sep"></div>
-      <button class="done-btn" class:done-btn-error={doneError} on:click={handleDone} disabled={doneSent} title={doneError ? "Failed to send — click to retry" : "Done"}>
+      <button class="done-btn" class:done-btn-error={doneError} on:click={handleDone} disabled={doneSent} title={doneError ? "Failed to send — click to retry" : "Done"} aria-live="polite">
         {#if doneSent}
           Sent ✓
         {:else if doneError}
@@ -308,7 +308,7 @@
   }
 
   .placeholder {
-    color: #aaa;
+    color: #666;
     font-size: 16px;
     user-select: none;
   }

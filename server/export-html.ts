@@ -190,23 +190,31 @@ function formatTimestampHuman(iso: string): string {
   }
 }
 
+let cachedKatexCss: string | undefined;
+
 function getKatexCss(): string {
+  if (cachedKatexCss !== undefined) return cachedKatexCss;
   try {
     const req = createRequire(import.meta.url);
     const cssPath = req.resolve("katex/dist/katex.min.css");
-    return readFileSync(cssPath, "utf-8");
+    cachedKatexCss = readFileSync(cssPath, "utf-8");
   } catch {
-    return "";
+    cachedKatexCss = "";
   }
+  return cachedKatexCss;
 }
 
+let cachedMermaidBundle: string | undefined;
+
 function getMermaidBundle(): string {
+  if (cachedMermaidBundle !== undefined) return cachedMermaidBundle;
   const req = createRequire(import.meta.url);
   const bundlePath = req.resolve("mermaid/dist/mermaid.min.js");
   const source = readFileSync(bundlePath, "utf-8");
   // Guard against a literal "</script" sequence inside the bundle prematurely
   // closing the inline <script> tag when parsed as HTML.
-  return source.replace(/<\/script/gi, "<\\/script");
+  cachedMermaidBundle = source.replace(/<\/script/gi, "<\\/script");
+  return cachedMermaidBundle;
 }
 
 const LAYOUT_CSS = `
@@ -296,7 +304,7 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: bool
     ? `<script>${getMermaidBundle()}</script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  mermaid.initialize({ startOnLoad: false });
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
   mermaid.run({ querySelector: ".mermaid" });
 });
 </script>
@@ -308,6 +316,7 @@ document.addEventListener("DOMContentLoaded", function () {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'">
 <title>Whiteboard Export</title>
 <style>${LAYOUT_CSS}</style>
 ${katexBlock}</head>
@@ -331,7 +340,7 @@ function buildDownloadFilename(workspaces: string[]): string {
     `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 
   if (workspaces.length === 1) {
-    const sanitized = workspaces[0].replace(/[^a-zA-Z0-9_.\-]/g, "-").slice(0, 24);
+    const sanitized = workspaces[0].replace(/[^a-zA-Z0-9_.-]/g, "-").slice(0, 24);
     return `${sanitized}-${ts}.html`;
   }
   return `export-${ts}.html`;

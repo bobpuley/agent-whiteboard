@@ -4,7 +4,7 @@ import mermaid from "mermaid";
 import type { StepFrame } from "./session.js";
 
 // Initialise once — no DOM side effects in parse-only mode.
-mermaid.initialize({ startOnLoad: false });
+mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
 
 /**
  * Layer 1: fast prefix check.

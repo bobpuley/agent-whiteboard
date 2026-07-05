@@ -323,7 +323,7 @@
   }
 
   // ── Mermaid rendering ───────────────────────────────────────────────────────
-  mermaid.initialize({ startOnLoad: false, theme: "default" });
+  mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" });
 
   // v0.19 (F19/C3): a new snapshot id (different from the last one we saw)
   // fits-to-view or restores a saved viewport; a repeated/absent id (step()/
@@ -430,8 +430,7 @@
       style="position: fixed; left: {popup.x}px; top: {popup.y}px;"
       on:click|stopPropagation={() => {}}
     >
-      {#each popup.actions as action}
-        <!-- svelte-ignore a11y-no-static-element-interactions -->
+      {#each popup.actions as action, i (i)}
         <div class="popup-item" role="button" tabindex="0" on:click={() => selectAction(action)} on:keydown={(e) => e.key === 'Enter' && selectAction(action)}>
           {action}
         </div>
@@ -483,7 +482,7 @@
     bottom: 8px;
     right: 12px;
     font-size: 11px;
-    color: #bbb;
+    color: #666;
     pointer-events: none;
     user-select: none;
   }
