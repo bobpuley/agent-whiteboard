@@ -1,6 +1,6 @@
 # Milestone v0.21 — Design Debt: Core Consolidation (Sprint 34)
 
-**Status:** in progress
+**Status:** released
 
 > Promoted 2026-07-05 from the Design Debt Log (`01_input-ideas.md`) via a `/grill-me` scoping interview during intake. Second of two milestones splitting the log's 8 items by regression risk: this one is the behavior-risk refactor work, deliberately sequenced after `Milestone_v0.20.md`'s safety net (linter + blanket test coverage) lands. See `02_assumptions-and-risks.md` §M and `03_requirements.md` NF12–NF13.
 
