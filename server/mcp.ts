@@ -5,17 +5,21 @@ import { homedir } from "os";
 import { join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
-import type { StepFrame } from "./session.js";
-import { broadcast, broadcastStepFrames } from "./ws.js";
-import { hasMermaidKeyword, isValidWorkspaceName, parseMermaid, validatePayload } from "./validate.js";
+import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, stepCursor } from "./session.js";
+import { broadcast } from "./ws.js";
+import { hasMermaidKeyword, parseMermaid, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
-import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
-import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 import { generateExportHtml, writeExportHtmlToDisk } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
+import {
+  appendFrameAndBroadcast,
+  commitRenderResult,
+  commitStepFramesResult,
+  initStepFramesResult,
+  validateWorkspaceInput,
+} from "./render-core.js";
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -68,126 +72,24 @@ export function createMcpServer(): McpServer {
     async ({ type, payload, options }) => {
       const title = options?.title;
       const nodeToFrame = options?.node_to_frame;
-      const workspace = options?.workspace;
-      if (!workspace) {
+      const workspaceResult = validateWorkspaceInput(options?.workspace);
+      if (!workspaceResult.ok) {
         return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({ ok: false, error: "workspace is required" }),
-          }],
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: workspaceResult.error }) }],
         };
       }
-      if (!isValidWorkspaceName(workspace)) {
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: false,
-              error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-            }),
-          }],
-        };
-      }
-      if (type === "mermaid") {
-        if (!hasMermaidKeyword(payload)) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error:
-                    "invalid payload: mermaid source must begin with a diagram keyword " +
-                    "(e.g. 'graph TD', 'sequenceDiagram', 'classDiagram', ...)",
-                }),
-              },
-            ],
-          };
-        }
-        try {
-          await parseMermaid(payload);
-        } catch (err) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: `invalid mermaid syntax: ${err instanceof Error ? err.message : String(err)}`,
-                }),
-              },
-            ],
-          };
-        }
-      }
+      const { workspace } = workspaceResult;
 
-      if (type === "vega-lite") {
-        try {
-          JSON.parse(payload);
-        } catch {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: "invalid payload: vega-lite payload must be valid JSON",
-                }),
-              },
-            ],
-          };
-        }
-      }
-
-      if (type === "step-frames") {
-        const stepFramesError = await validatePayload("step-frames", payload);
-        if (stepFramesError) {
-          return {
-            content: [{ type: "text", text: JSON.stringify({ ok: false, error: stepFramesError }) }],
-          };
-        }
-        const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
-        const frames = spec.frames;
-        cancelSlideshow();
-        // Generate the id before broadcasting so the browser can key its viewport
-        // report on it — a brand-new render() always mints a fresh id (F19/C3).
-        const newId = generateSnapshotId();
-        setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame, newId);
-        broadcast({
-          action: "replace",
-          type: frames[0].type ?? spec.frame_type,
-          payload: frames[0].payload,
-          frameLabel: frames[0].label,
-          stepFrames: true,
-          currentFrame: 0,
-          totalFrames: frames.length,
-          ...(title !== undefined ? { title } : {}),
-          ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
-          id: newId,
-        });
-        setLastWorkspace(workspace);
-        // F10: a write failure must never block rendering. saveSnapshot() already
-        // catches its own errors, but this try/catch is a deliberate caller-level
-        // backstop for that guarantee (see tests/unit/server/app.test.ts "render
-        // still returns { ok: true } when saveSnapshot throws").
-        let sfSnapshotId: string | undefined;
-        try { sfSnapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId); } catch { /* non-fatal, see F10 */ }
+      const validationError = await validatePayload(type, payload);
+      if (validationError) {
         return {
-          content: [{ type: "text", text: JSON.stringify({ ok: true, ...(sfSnapshotId !== undefined ? { id: sfSnapshotId } : {}) }) }],
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: validationError }) }],
         };
       }
 
-      cancelSlideshow();
-      const newId = generateSnapshotId();
-      setCanvas(type, payload, title, newId);
-      broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}), id: newId });
-      setLastWorkspace(workspace);
-      // F10 backstop — see comment above.
-      let snapshotId: string | undefined;
-      try { snapshotId = saveSnapshot(type, payload, { title, workspace }, newId); } catch { /* non-fatal, see F10 */ }
-
+      const result = commitRenderResult(type, payload, workspace, title, nodeToFrame);
       return {
-        content: [{ type: "text", text: JSON.stringify({ ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) }) }],
+        content: [{ type: "text", text: JSON.stringify(result) }],
       };
     }
   );
@@ -512,29 +414,13 @@ export function createMcpServer(): McpServer {
       }),
     },
     ({ frame_type, workspace, title }) => {
-      if (!workspace) {
+      const workspaceResult = validateWorkspaceInput(workspace);
+      if (!workspaceResult.ok) {
         return {
-          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workspace is required" }) }],
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: workspaceResult.error }) }],
         };
       }
-      if (!isValidWorkspaceName(workspace)) {
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: false,
-              error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-            }),
-          }],
-        };
-      }
-      const id = createBuilder(frame_type, workspace, title);
-      broadcast({
-        action: "replace",
-        type: "step-frames-placeholder",
-        frameCount: 0,
-        ...(title !== undefined ? { title } : {}),
-      });
+      const { id } = initStepFramesResult(frame_type, workspaceResult.workspace, title);
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, id }) }],
       };
@@ -564,14 +450,7 @@ export function createMcpServer(): McpServer {
       }),
     },
     async ({ id, payload, label, type }) => {
-      const result = await appendFrame(id, payload, label, type);
-      if (result.ok) {
-        // Live preview: push the accumulated partial sequence to the browser.
-        // Reuse the builder id so the browser fits-to-view once on the first
-        // frame and treats subsequent appends as a continuation (F19/C3).
-        const { frames, frame_type, title } = result;
-        broadcastStepFrames(frames, frame_type, frames.length - 1, title, id);
-      }
+      const result = await appendFrameAndBroadcast(id, payload, label, type);
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: result.ok, ...( result.ok ? { frame_count: result.frame_count } : { error: result.error }) }) }],
       };
@@ -595,30 +474,9 @@ export function createMcpServer(): McpServer {
       }),
     },
     ({ id }) => {
-      const result = commitBuilder(id);
-      if (!result.ok) {
-        return {
-          content: [{ type: "text", text: JSON.stringify(result) }],
-        };
-      }
-      const { entry } = result;
-      const { frame_type, workspace, title, frames } = entry;
-
-      // Assemble the full step-frames JSON.
-      const assembledPayload = JSON.stringify({ frame_type, frames });
-
-      cancelSlideshow();
-      const commitId = generateSnapshotId();
-      setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
-      setLastWorkspace(workspace);
-      // F10 backstop — see comment near the other saveSnapshot() calls above.
-      let commitSnapshotId: string | undefined;
-      try { commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId); } catch { /* non-fatal, see F10 */ }
-      // Final broadcast for consistency (handles clear() called between appends).
-      broadcastStepFrames(frames, frame_type, 0, title, commitId);
-
+      const result = commitStepFramesResult(id);
       return {
-        content: [{ type: "text", text: JSON.stringify({ ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) }) }],
+        content: [{ type: "text", text: JSON.stringify(result) }],
       };
     }
   );
@@ -683,24 +541,14 @@ export function createMcpServer(): McpServer {
       }),
     },
     ({ workspace }) => {
-      if (!workspace) {
+      const workspaceResult = validateWorkspaceInput(workspace);
+      if (!workspaceResult.ok) {
         return {
-          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workspace is required" }) }],
-        };
-      }
-      if (!isValidWorkspaceName(workspace)) {
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: false,
-              error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-            }),
-          }],
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: workspaceResult.error }) }],
         };
       }
       const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
-      const snapshots = listSnapshots(workspace, root);
+      const snapshots = listSnapshots(workspaceResult.workspace, root);
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, snapshots }) }],
       };
@@ -743,20 +591,10 @@ export function createMcpServer(): McpServer {
       }),
     },
     async ({ workspace, ids, output_path }) => {
-      if (!workspace) {
+      const workspaceResult = validateWorkspaceInput(workspace);
+      if (!workspaceResult.ok) {
         return {
-          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "workspace is required" }) }],
-        };
-      }
-      if (!isValidWorkspaceName(workspace)) {
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: false,
-              error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-            }),
-          }],
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: workspaceResult.error }) }],
         };
       }
       if (ids.length === 0) {
@@ -765,12 +603,13 @@ export function createMcpServer(): McpServer {
         };
       }
 
+      const validatedWorkspace = workspaceResult.workspace;
       const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
       const validItems: ValidatedExportItem[] = [];
       for (const id of ids) {
-        const record = findSnapshotByIdInWorkspace(workspace, id, root);
+        const record = findSnapshotByIdInWorkspace(validatedWorkspace, id, root);
         if (record !== null) {
-          validItems.push({ workspace, id, record });
+          validItems.push({ workspace: validatedWorkspace, id, record });
         }
       }
 
@@ -783,7 +622,7 @@ export function createMcpServer(): McpServer {
       const { html, downloadFilename } = await generateExportHtml(validItems);
 
       try {
-        const path = writeExportHtmlToDisk(workspace, html, downloadFilename, output_path, root);
+        const path = writeExportHtmlToDisk(validatedWorkspace, html, downloadFilename, output_path, root);
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: true, path }) }],
         };

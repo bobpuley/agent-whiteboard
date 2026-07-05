@@ -7,7 +7,7 @@
 ### Sprint 34 — Design Debt: Core Consolidation
 - [x] Decompose `App.svelte` (449 lines) into stores/reducers: WebSocket routing, canvas state, step-frame nav, modal orchestration, Done-button lifecycle (NF12)
 - [x] Switch Mermaid/KaTeX/Vega-Embed from eager bundling to per-canvas-type dynamic `import()`, placed at the new component/store boundaries from the task above (NF13)
-- [ ] Extract the duplicated render/step-frames-create/append/commit/workspace-validation logic in `server/app.ts` and `server/mcp.ts` into a shared core module (NF12)
+- [x] Extract the duplicated render/step-frames-create/append/commit/workspace-validation logic in `server/app.ts` and `server/mcp.ts` into a shared core module (NF12)
 
 > **Implementation note:** App.svelte decomposition must land before the dynamic-import task — lazy-load boundaries are cleanest to place once component/store boundaries are settled, not retrofitted into the current god component (see M5/M6 in `02`). The shared-core server extraction is a different layer (backend vs. frontend) with no code dependency on the other two tasks and can proceed independently/in parallel — it's the highest blast-radius item in this remediation pass (see M4 in `02`), since a bug introduced during extraction would affect both the HTTP and MCP paths at once.
 
