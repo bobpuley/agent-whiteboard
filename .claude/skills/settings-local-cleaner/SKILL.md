@@ -1,6 +1,6 @@
 ---
 name: settings-local-cleaner
-description: Analyzes and simplifies Claude Code settings by generalizing permission patterns, resolving duplicates, and producing a clean .claude/settings.json with user validation
+description: Analyzes and simplifies Claude Code settings by generalizing permission patterns, resolving duplicates, and producing a clean .claude/settings.local.json with user validation
 version: 1.0.0
 author: System
 ---
