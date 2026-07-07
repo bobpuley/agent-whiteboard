@@ -374,3 +374,30 @@ Risks from moving the three test roots:
 **M8 — Client/server `package.json` split into npm workspaces (deferred item, not scheduled)**
 > ⚠️ RISK: unlike the small code-level hygiene fixes bundled into v0.20 (redundant `try/catch`, silent `catch {}`, memoizing `getMermaidBundle()`/`getKatexCss()`), splitting the shared `package.json` into an npm-workspaces layout touches `vite.config.ts`, build scripts, and potentially CI — a build-tooling restructuring, not a code fix.
 - Mitigation: remains logged in `01`'s Design Debt Log, unscheduled, until it gets its own scoping pass.
+
+---
+
+## N. Architecture Consolidation (v0.23–v0.26)
+
+> Promoted 2026-07-07 from `desing-analysis/` (a fresh-eyes structural redesign written before reading the code) via a `/grill-me` stress-test during intake (FR22 in `01`). The full analysis — target architecture, 9 unit deep-dives, decision points D1–D5, open questions OQ1–OQ15, and a baseline comparison grounded in the real code — was propagated here and into `03` §7 / `04` §9 / `Milestone_v0.23.md`–`Milestone_v0.26.md`, then the `desing-analysis/` folder was deleted (see N1). See `04` §9 for the actual target architecture (unit map, decision points, contract changes); this section covers only the meta-decisions about *whether/when/how* to adopt it.
+
+**N1 — `desing-analysis/` is intake material, not a permanent parallel doc**
+> ✅ DECISION: once its content is fully propagated into `02`/`03`/`04`/milestones, the folder is deleted. Keeping it around indefinitely would create a second source of truth that can drift from the canonical docs the moment implementation deviates from the plan — precisely the failure mode (`04` lagging the real code once already, see the baseline-comparison's closing note) this whole redesign targets one level up. The original fresh-eyes writeup remains recoverable from git history if ever needed.
+
+**N2 — Full adoption (slices A+B+C+D), not the analysis's own risk-weighted recommendation**
+> ✅ DECISION: the baseline-comparison document explicitly recommends adopting only slices A (unified projector), B (client renderer registry), and C (persistence policy + finalize dedup) now, deferring D (full Presentation/Frame model + snapshot migration + MCP contract break) "only if feature growth continues." User chose full A+B+C+D instead.
+- Driver (confirmed via `/grill-me`): architecture-quality on principle ahead of a not-yet-scheduled public release — not a specific feature requiring the unified model. "We still have a few misbehaviours and we are close to a public release, so the quality of the design and the code matters as well as the app itself."
+- Risk (accepted): D's own documented costs (C1–C4 below) are the strongest argument in the whole analysis and are not hypothetical — full adoption is a deliberate override of the analysis's own ROI ÷ blast-radius recommendation, not a default acceptance.
+
+**N3 — Sequencing: one milestone per slice; D kept as one milestone with ordered, individually-tested sprint tasks**
+> ✅ DECISION: v0.23 = A, v0.24 = B, v0.25 = C, v0.26 = D (see `05` Milestone Registry). D's own coupling (session.ts, canvasStore.ts, the WS contract, and the snapshot schema move together — cannot land one small PR at a time, per the baseline-comparison's C1) means it cannot be fragmented across version boundaries without a compat shim already ruled out (N5). It stays one milestone, but its sprint tasks are strictly ordered with individual acceptance criteria (schema+migration → reducer → WS contract → adapter/payload updates → return-channel generalization → full test-suite rewrite) — see `Milestone_v0.26.md`.
+
+**N4 — Release gating de-risks D's contract break (C3)**
+> ✅ DECISION: the redesign (all of A–D) completes *before* any public release; no fixed release date exists yet. This is deliberate: today there are zero external MCP consumers (solo project, single git contributor across all history) — the cheapest possible moment to break `type:"step-frames"` as a content type and change the WS/payload contract is now, not after shipping the old contract publicly and breaking it on real users shortly after launch.
+- Consequence: **no back-compat shim** for the old MCP payload shape is planned or wanted — a clean cutover, consistent with this project's existing "no backwards-compatibility hacks" convention. `tests/human_driven/showcase.js` and `README.md` are updated to the new contract as part of v0.26, not maintained in parallel.
+- Residual risk: if a public release date gets set before v0.26 completes, this decision must be revisited — shipping the *old* contract publicly, even briefly, reintroduces C3's real cost.
+
+**N5 — Snapshot migration risk is bounded: real but small personal data, not "real user data" at scale**
+> ✅ CLARIFIED: the baseline-comparison's C4 risk ("a bug corrupts real history") is real but the blast radius is now known precisely — `~/.agent-whiteboard/` currently holds 54 snapshots across 8 workspaces (`agent-whiteboard`, `distributed-systems-101`, `my-redis`, and five `study-coach_*` workspaces), all the user's own local data, single-developer, no other consumer.
+- Mitigation (required for `Milestone_v0.26.md`'s migration task): back up `~/.agent-whiteboard/` before running the one-time deterministic migration script (OQ5a — a one-time upgrade, not a legacy dual-read path); the script must be idempotent and verified in a dry-run/backup-copy mode before running against the real directory.
+- Not a blocker: small volume (54 files) makes exhaustive verification against a real backup copy tractable before committing to the real run, unlike the analysis's generic "corrupts real user data" framing which implicitly assumed a larger, less-inspectable dataset.

@@ -25,8 +25,13 @@
 | v0.19 | Mermaid Zoom/Pan Fit & Persistence | 32 | released    | [Milestone_v0.19.md](./milestones/Milestone_v0.19.md) |
 | v0.20 | Design Debt — Safety Net | 33 | released    | [Milestone_v0.20.md](./milestones/Milestone_v0.20.md) |
 | v0.21 | Design Debt — Core Consolidation | 34 | released    | [Milestone_v0.21.md](./milestones/Milestone_v0.21.md) |
-| v0.22 | Showcase Coverage, Step-Frames Fit Fix & Slideshow Persistence | 35 | in progress | [Milestone_v0.22.md](./milestones/Milestone_v0.22.md) |
+| v0.22 | Showcase Coverage, Step-Frames Fit Fix & Slideshow Persistence | 35 | released    | [Milestone_v0.22.md](./milestones/Milestone_v0.22.md) |
+| v0.23 | Architecture Consolidation — Unified Projector | 36 | planned     | [Milestone_v0.23.md](./milestones/Milestone_v0.23.md) |
+| v0.24 | Architecture Consolidation — Client Renderer Registry | 37 | planned     | [Milestone_v0.24.md](./milestones/Milestone_v0.24.md) |
+| v0.25 | Architecture Consolidation — Persistence Policy & Finalize Dedup | 38 | planned     | [Milestone_v0.25.md](./milestones/Milestone_v0.25.md) |
+| v0.26 | Architecture Consolidation — Unified Presentation Model | 39 | planned     | [Milestone_v0.26.md](./milestones/Milestone_v0.26.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
+> v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`, `02` §N, `04` §9) — sequenced one slice per milestone; v0.26 must complete before any public release.
 
 > When scoping a new milestone, skim the **Design Debt Log** in `01_input-ideas.md` for candidates worth promoting into a real task — it's a running list of non-behavioral findings (duplication, test gaps, hardening, style polish) that don't get pulled into planning automatically.

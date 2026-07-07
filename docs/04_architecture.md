@@ -758,3 +758,70 @@ Covered scenarios:
 - The server must be running before Claude Code connects — `npm run dev` starts it.
 - Port `3000` is the default; overridable via `PORT` environment variable.
 - Binding address defaults to `localhost`; overridable via `HOST` environment variable (see `server/index.ts`). See A1 (`02`) for the local-only deployment rationale.
+
+---
+
+## 9. Target Architecture — Unified Command Pipeline (v0.23–v0.26)
+
+> Promoted from `desing-analysis/` (FR22 in `01`; adoption/sequencing decisions in `02` §N) via a `/grill-me` stress-test during intake, 2026-07-07 — the folder itself is deleted once this section captures its content. **Sections 1–8 above describe the architecture as it stands today (through v0.22)** and are updated in place, concretely, as each slice below actually ships — this section is the target design and the roadmap, not a description of already-shipped behavior.
+
+### 9.1 The core model
+
+Everything renderable collapses to one atom and two orthogonal axes:
+
+- **Frame** = `{ type, payload, label? }` — one atomic renderable (Mermaid source, KaTeX string, Vega-Lite spec, …).
+- **Presentation** = `{ id, title?, cursor, frames: Frame[] }` — an ordered list of frames + a cursor.
+- **Content axis:** always a Presentation (the only content atom — "slide" and "step-frames" as distinct top-level types disappear).
+- **Cursor-driver axis:** `static` (1 frame) · `manual` (agent/user via `step`/`seek`/click) · `timed` (the Playback/slideshow controller).
+
+`render()`, step-frames, and `slideshow()` become the same Presentation differing only by driver and frame count — not three parallel implementations. `step`/`seek` become cursor moves; a history snapshot is a serialized Presentation.
+
+### 9.2 Unit map (9 units + 1 controller)
+
+| # | Unit | Responsibility | Baseline status |
+|---|------|-----------------|------------------|
+| U0 | Pipeline Runner | Composes `validate → reduce → persist(policy) → project` for every command; the one call both MCP and REST adapters make | New (v0.23 partially via the projector; full form v0.26) |
+| U1 | Source Adapters | Translate MCP/REST calls into Commands; zero business logic | Largely shipped — `render-core.ts` already does this for the core paths (v0.21); full thin-adapter parity completes in v0.26 |
+| U2 | Content Model + Validation | `Frame`/`Presentation`; one `validateFrame()` looped over every frame | Partially shipped (per-frame validation since v0.17); the unified type replaces the 3-way union in v0.26 |
+| U3 | Canvas State (reducer) | Single source of truth: current presentation, cursor, `lastWorkspace`, arm-states, driver | Today's `session.ts`/`canvasStore.ts` 3-way union; rewritten in v0.26 |
+| U4 | Persistence | Snapshot read/write, viewport cache, list/delete; enforces the persist policy | Mechanism shipped; explicit required-trigger policy is new (v0.25); schema migration is v0.26 |
+| U5 | Projection / Broadcast | The one function building every server→browser message | New — collapses 13 hand-built sites into 1 (v0.23, the 80/20) |
+| U6 | Render Surface | Renderer registry (type→component) + canvas controller + auto-fit/viewport + async-ordering guard | Store/reducer decomposition shipped (v0.21); registry is new (v0.24) |
+| U7 | Return Channel | One arm/await/resolve Interaction primitive (`wait_done`/`wait_click`/`node_to_frame` as variants) | Today three separate-but-similar mechanisms; generalized in v0.26 |
+| U8 | Export (read-side) | `export()`/`export_html` over *persisted* presentations; strictly downstream of U4, read-only | Shipped (v0.13–v0.15); adapts to the new schema in v0.26 |
+| — | Playback controller | Timer advancing a cursor; owns no validation/broadcast/persist code of its own | Today `slideshow.ts` owns broadcast+persist logic directly; reduced to a thin controller by v0.23 (projector) + v0.25 (persist policy) |
+
+**Scope boundaries (one-way dependencies):** `U1 Sources → U0 Runner → {U2 Validate, U3 Reduce, U4 Persist(policy), U5 Project} → U6 Render Surface`; `U8 Export → U4 (read-only)`; `U7 Return Channel` emits browser events independently, coupled only to a `cursor`/`id` handle, never to content. U0 is the only unit that knows the pipeline's *sequence*; adapters (U1) never orchestrate.
+
+### 9.3 Decision points (resolved)
+
+| D | Resolution |
+|---|------------|
+| D1 | Unify content under one `Presentation`/`Frame` model — **yes** (makes the B5/B15/C2b/C2d drift class unrepresentable; costs a payload-schema change, accepted per `02` N2/N4) |
+| D2 | Broadcast is a fully agnostic mechanism (no per-feature branches); persistence = one agnostic write mechanism + a required per-command trigger (`immediate\|on-finalize\|transient\|never`) — the trigger is what a new feature must declare, not an opt-in it can skip |
+| D3 | One renderer-registry abstraction, keyed by `type`, with two capability slots (`renderLive` for U6, `renderStatic` for U8/export) — one registration serves both live and export |
+| D4 | One Interaction primitive for the return channel — `arm(affordance, options) → await → resolve(event)\|timeout`; `wait_done`/`wait_click` are configurations of it, `node_to_frame` is the same arm with a local (not agent-round-trip) resolver |
+| D5 | MCP and REST are both thin adapters over one core, full verb parity — removes the class of duplication that caused B6 (`workspace:"."` wipe) |
+
+**Contract changes this implies:** one `Presentation` payload/model (per-frame `type`, `type:"step-frames"` removed as a top-level type); unified `frames[]` snapshot schema + one-time migration (no legacy dual-read path, OQ5a); WS `replace` message always carries `id`+`cursor`+`total`, replacing the `stepFrames` boolean flag; neutral `{ok,error,category?}` error shape (REST maps `category`→HTTP status, MCP passes it through verbatim); `wait_click` gains `type:"superseded"`; `clickMap`/`node_to_frame` auto-restores after `wait_click` resolves (previously required a fresh `render()` call — see U4e in `03`). MCP tool *verbs* (`render`/`slideshow`/`step`/`seek`/…) are unchanged for agent ergonomics — they become sugar over "commit a Presentation + set a driver," per D5.
+
+### 9.4 Traceability — structural fix per historical drift bug
+
+| Past failure | Root cause | Structural fix |
+|---|---|---|
+| B15/C2d — slideshow no `id`, no auto-fit | Second broadcast builder in `slideshow.ts` | U5 (v0.23): one Projection builder; slideshow becomes a controller, not a builder |
+| FR20/B15 — slideshow missing from history | `slideshow()` never called `saveSnapshot()` | D2/U4 (v0.25): persist trigger is required, not opt-in |
+| B5 — one-shot step-frames skipped validation | Two validation paths (one-shot vs. incremental) | U2 (v0.26): one `validateFrame()` over every frame, one content model |
+| B6 — `workspace:"."` wipe | `app.ts`/`mcp.ts` duplicated validation | U1/D5 (v0.26, full parity): one core, thin adapters |
+| B8 — stale async render | Per-renderer ad hoc ordering guard | U6 (v0.24 registry lands the shared surface; guard itself already shipped v0.18) |
+
+### 9.5 Adoption sequencing (ROI ÷ blast-radius)
+
+| Slice | Milestone | Scope | Risk |
+|---|---|---|---|
+| A — Unify the projector | **v0.23** | U5 only, over today's `CanvasState` — no schema change | Low-med; message shape unchanged |
+| B — Client renderer registry | **v0.24** | U6 registry, replacing the `{#if}` chain | Low; isolated to the client |
+| C — Persistence policy + finalize dedup | **v0.25** | U4 trigger vocabulary + shared finalize, after A | Low-med |
+| D — Full Presentation/Frame model + migration + contract break | **v0.26** | U0/U2/U3 rewrite, WS contract, snapshot schema, MCP payload, U7 return-channel generalization | High (C1–C4 in the retired `baseline-comparison.md`) — deliberately accepted per `02` N2, sequenced last, gated before any public release (`02` N4) |
+
+Per `02` §N3, v0.26 stays one milestone (its changes are coupled and cannot land across a version boundary without a compat shim already ruled out) but its sprint tasks are strictly ordered with individual acceptance criteria — see `Milestone_v0.26.md`.
