@@ -3,7 +3,8 @@
 // the MCP tool handlers (mcp.ts) so the two transports can never drift (NF12).
 import { cancelSlideshow } from "./slideshow.js";
 import { broadcastReplace, broadcastStepFrames } from "./ws.js";
-import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
+import { generateSnapshotId } from "./snapshot.js";
+import { assembleStepFramesPayload, persistContent } from "./persist.js";
 import { isValidWorkspaceName } from "./validate.js";
 import { setCanvas, setLastWorkspace, setStepFrames } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
@@ -73,13 +74,14 @@ export function commitRenderResult(
       id: newId,
     });
     setLastWorkspace(workspace);
-    // F10: a write failure must never block rendering. saveSnapshot() already
-    // catches its own errors, but this try/catch is a deliberate caller-level
-    // backstop for that guarantee.
-    let snapshotId: string | undefined;
-    try {
-      snapshotId = saveSnapshot("step-frames", payload, { title, node_to_frame: nodeToFrame, workspace }, newId);
-    } catch { /* non-fatal, see F10 */ }
+    const { id: snapshotId } = persistContent("render", {
+      type: "step-frames",
+      payload,
+      title,
+      nodeToFrame,
+      workspace,
+      id: newId,
+    });
     return { ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) };
   }
 
@@ -88,11 +90,13 @@ export function commitRenderResult(
   setCanvas(type as CanvasType, payload, title, newId);
   broadcastReplace({ type, payload, title, id: newId });
   setLastWorkspace(workspace);
-  // F10 backstop — see comment above.
-  let snapshotId: string | undefined;
-  try {
-    snapshotId = saveSnapshot(type as CanvasType, payload, { title, workspace }, newId);
-  } catch { /* non-fatal, see F10 */ }
+  const { id: snapshotId } = persistContent("render", {
+    type: type as CanvasType,
+    payload,
+    title,
+    workspace,
+    id: newId,
+  });
   return { ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) };
 }
 
@@ -116,6 +120,8 @@ export function initStepFramesResult(
  * Appends a frame to an in-progress step-frames builder and, if accepted,
  * pushes the accumulated partial sequence to the browser (live preview,
  * v0.9). Shared by POST /step-frames/:id/frame and the MCP `append_frame` tool.
+ * Persist trigger: "transient" (server/persist.ts) — never touches disk;
+ * only `commit_step_frames()` persists.
  */
 export async function appendFrameAndBroadcast(
   id: string,
@@ -152,17 +158,19 @@ export function commitStepFramesResult(id: string): CommitStepFramesResult {
 
   const { entry } = result;
   const { frame_type, workspace, title, frames } = entry;
-  const assembledPayload = JSON.stringify({ frame_type, frames });
+  const assembledPayload = assembleStepFramesPayload(frame_type, frames);
 
   cancelSlideshow();
   const commitId = generateSnapshotId();
   setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
   setLastWorkspace(workspace);
-  // F10 backstop — see comment near the other saveSnapshot() calls above.
-  let commitSnapshotId: string | undefined;
-  try {
-    commitSnapshotId = saveSnapshot("step-frames", assembledPayload, { title, workspace }, commitId);
-  } catch { /* non-fatal, see F10 */ }
+  const { id: commitSnapshotId } = persistContent("commit_step_frames", {
+    type: "step-frames",
+    payload: assembledPayload,
+    title,
+    workspace,
+    id: commitId,
+  });
   // Final broadcast for consistency (handles clear() called between appends).
   broadcastStepFrames(frames, frame_type, 0, title, commitId);
   return { ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) };
