@@ -6,3 +6,4 @@ dist/
 .claude/settings.local.json
 scripts/backfill-snapshot-ids.py
 test-results/.last-run.json
+.DS_Store
