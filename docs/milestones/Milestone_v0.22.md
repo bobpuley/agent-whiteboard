@@ -1,6 +1,6 @@
 # Milestone v0.22 — Showcase Coverage, Step-Frames Fit Fix & Slideshow Persistence (Sprint 35)
 
-**Status:** in progress — all sprint tasks implemented and automated tests pass; awaiting human-driven test feedback before the sprint-close merge/tag/changelog steps (per CLAUDE.md working rule 7)
+**Status:** released 2026-07-07 (`v0.22.0`) — all sprint tasks implemented, automated tests pass (365 unit, typecheck clean), and the slideshow auto-fit / `node_to_frame` dev-mode fixes were confirmed live by the user. Archive step deliberately skipped for this release.
 
 > Opened 2026-07-06 via `/doc-creator-driver:intake`, combining a feature request (does `tests/human_driven/showcase.js` demonstrate every shipped feature, excluding delete/export?) and a bug report (step-frames diagrams during the showcase render small and uncentered on first display, but correctly when reloaded from history) into one milestone per user decision. Three more items surfaced organically during the session's back-and-forth verification and were folded in rather than deferred, since each blocked verifying the item before it: B16 (blocked Section 14 verification), FR20/slideshow persistence (the user's own suggested path to a calmer repro), and B17 (the *actual* root cause — B15 was necessary but not sufficient). FR21 (re-fit per frame) was intentionally **not** implemented — intake only, per explicit user instruction.
 
