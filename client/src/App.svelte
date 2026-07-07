@@ -1,18 +1,55 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import MermaidRenderer from "./renderers/Mermaid.svelte";
-  import HtmlRenderer from "./renderers/Html.svelte";
-  import KatexRenderer from "./renderers/Katex.svelte";
-  import VegaLiteRenderer from "./renderers/VegaLite.svelte";
+  import type { ComponentType, SvelteComponent } from "svelte";
   import HistoryPanel from "./HistoryPanel.svelte";
   import DeleteExportModal from "./DeleteExportModal.svelte";
   import { canvasStore } from "./stores/canvasStore.js";
+  import type { CanvasState } from "./stores/canvasStore.js";
   import { doneStore } from "./stores/doneStore.js";
   import { modalStore } from "./stores/modalStore.js";
   import { stepNav } from "./stores/stepNav.js";
   import { disconnected, initRouter } from "./stores/wsRouter.js";
+  import { rendererRegistry } from "./renderers/registry.js";
+  import type { RendererKey } from "./renderers/registry.js";
 
   $: ({ canvas, clickable, nodeActions, nodeToFrameEnabled } = $canvasStore);
+
+  // Renderer registry wiring (v0.24, U6 in docs/04_architecture.md §9): looks
+  // up and caches the component for the current canvas type via the registry's
+  // async `load()` (see registry.ts for why that's a resolved promise, not a
+  // dynamic import(), for today's renderer types). `loadToken` guards against
+  // an older in-flight load landing after a newer type change superseded it —
+  // relevant for any future renderer type whose `load()` is genuinely async.
+  const componentCache = new Map<RendererKey, ComponentType<SvelteComponent>>();
+  let currentComponent: ComponentType<SvelteComponent> | undefined;
+  let currentComponentType: RendererKey | undefined;
+  let loadToken = 0;
+
+  $: void loadRenderer(canvas.type);
+
+  async function loadRenderer(type: CanvasState["type"]) {
+    if (type === "empty") {
+      currentComponent = undefined;
+      currentComponentType = undefined;
+      return;
+    }
+    const cached = componentCache.get(type);
+    if (cached) {
+      currentComponent = cached;
+      currentComponentType = type;
+      return;
+    }
+    const token = ++loadToken;
+    const Component = await rendererRegistry[type].load();
+    if (token !== loadToken) return;
+    componentCache.set(type, Component);
+    currentComponent = Component;
+    currentComponentType = type;
+  }
+
+  $: rendererProps = currentComponentType
+    ? rendererRegistry[currentComponentType].props({ canvas, clickable, nodeActions, nodeToFrameEnabled })
+    : {};
 
   let cleanup: (() => void) | null = null;
 
@@ -58,16 +95,8 @@
     <div class="canvas">
       {#if canvas.type === "empty"}
         <p class="placeholder">Waiting for content…</p>
-      {:else if canvas.type === "step-frames-placeholder"}
-        <p class="placeholder">Building step-frames… {canvas.frameCount} frames</p>
-      {:else if canvas.type === "mermaid"}
-        <MermaidRenderer source={canvas.payload} {clickable} {nodeActions} nodeToFrame={nodeToFrameEnabled ? canvas.nodeToFrame : undefined} snapshotId={canvas.id} viewport={canvas.viewport} />
-      {:else if canvas.type === "svg" || canvas.type === "html"}
-        <HtmlRenderer source={canvas.payload} type={canvas.type} />
-      {:else if canvas.type === "katex"}
-        <KatexRenderer source={canvas.payload} />
-      {:else if canvas.type === "vega-lite"}
-        <VegaLiteRenderer source={canvas.payload} />
+      {:else if currentComponent && currentComponentType === canvas.type}
+        <svelte:component this={currentComponent} {...rendererProps} />
       {/if}
     </div>
   </div>
