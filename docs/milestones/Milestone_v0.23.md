@@ -1,6 +1,6 @@
 # Milestone v0.23 — Architecture Consolidation: Unified Projector (Sprint 36)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-07-07 via `/doc-creator-driver:intake`, slice A of the architecture consolidation promoted from `desing-analysis/` (FR22 in `01_input-ideas.md`; adoption/sequencing rationale in `02_assumptions-and-risks.md` §N; full target architecture in `04_architecture.md` §9). This is the analysis's own "80/20": the single highest-value, lowest-risk structural win, landed over today's `CanvasState` with no schema change.
 
