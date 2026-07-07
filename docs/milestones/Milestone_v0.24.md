@@ -1,6 +1,6 @@
 # Milestone v0.24 — Architecture Consolidation: Client Renderer Registry (Sprint 37)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-07-07 via `/doc-creator-driver:intake`, slice B of the architecture consolidation promoted from `desing-analysis/` (FR22 in `01_input-ideas.md`; adoption/sequencing rationale in `02_assumptions-and-risks.md` §N; full target architecture in `04_architecture.md` §9). Isolated to the client, low risk, cheap — the analysis's second-highest-value/lowest-cost slice.
 
