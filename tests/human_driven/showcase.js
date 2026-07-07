@@ -16,6 +16,8 @@ const { values } = parseArgs({
     popup:       { type: "boolean", short: "u", default: false   },
     edge:        { type: "boolean", short: "e", default: false   },
     exportid:    { type: "boolean", short: "x", default: false   },
+    incremental: { type: "boolean", short: "c", default: false   },
+    nodetoframe: { type: "boolean", short: "n", default: false   },
     all:         { type: "boolean", short: "a", default: false   },
     help:        { type: "boolean", short: "h", default: false   },
   },
@@ -32,7 +34,9 @@ Section flags (combinable, e.g. -ie runs Sections 9+11 only):
   -u, --popup           Section 10: node_actions popup menu (simulated)
   -e, --edge            Section 11: edge click demo
   -x, --exportid        Section 12: export by graph ID (v0.11)
-  -a, --all             All sections (equivalent to -siuex)
+  -c, --incremental     Section 13: incremental step-frames creation (init/append/commit, v0.8/v0.9)
+  -n, --nodetoframe     Section 14: node_to_frame autonomous navigation (v0.2, U4e)
+  -a, --all             All sections (equivalent to -siuexcn)
 
 Other options:
   -p, --port <port>     Server port (default: 3000)
@@ -46,12 +50,15 @@ Other options:
 
 // ── Section selection ─────────────────────────────────────────────────────────
 // No section flags → behave as -s (backwards-compatible default).
-const anySection = values.standard || values.interactive || values.popup || values.edge || values.exportid || values.all;
+const anySection = values.standard || values.interactive || values.popup || values.edge || values.exportid
+  || values.incremental || values.nodetoframe || values.all;
 const RUN_STANDARD    = !anySection || values.standard    || values.all;
 const RUN_INTERACTIVE = values.interactive || values.all;
 const RUN_POPUP       = values.popup       || values.all;
 const RUN_EDGE        = values.edge        || values.all;
 const RUN_EXPORT_ID   = values.exportid    || values.all;
+const RUN_INCREMENTAL = values.incremental || values.all;
+const RUN_NODE_TO_FRAME = values.nodetoframe || values.all;
 
 const TYPE_FILTER = values.type
   ? new Set(values.type.split(",").map((t) => t.trim()).filter(Boolean))
@@ -274,7 +281,7 @@ if (RUN_STANDARD) {
   const tickNote = totalTicks !== activeSlides.length ? ` (${totalTicks} ticks after step-frames expansion)` : "";
   console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total${tickNote})…`);
 
-  const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS });
+  const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS, workspace: WORKSPACE });
   if (!result.ok) {
     console.error("✗ slideshow failed:", result.error);
     process.exit(1);
@@ -832,17 +839,104 @@ if (RUN_EXPORT_ID) {
   await runExportIdDemo();
 }
 
+// ── Section 13 — Incremental step-frames creation (v0.8; live preview v0.9) ──
+//
+// Three-tool protocol for building a step-frames sequence one frame at a
+// time instead of a single large payload: init_step_frames() creates an
+// empty skeleton and shows a 0-frame placeholder; append_frame() validates
+// and appends one frame, pushing the accumulated partial sequence to the
+// browser after each call (live preview — the user watches it grow);
+// commit_step_frames() finalizes the sequence (snapshot write only — the
+// visual is already fully shown by the last append).
+
+async function runIncrementalDemo() {
+  const PAUSE = Math.min(DELAY_MS, 2000);
+
+  const initRes = await post("/step-frames/init", {
+    frame_type: "mermaid",
+    workspace: WORKSPACE,
+    title: "13 — Incremental step-frames (init → append → commit)",
+  });
+  if (!initRes.ok) { console.error(`   ✗ init_step_frames failed: ${initRes.error}`); return; }
+  const { id } = initRes;
+  console.log(`   ✓ init_step_frames — id: ${id} (browser shows a 0-frame placeholder)`);
+  await new Promise((r) => setTimeout(r, PAUSE));
+
+  const frames = [
+    { label: "Frame 1 — Request arrives", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  style A fill:#4caf50,color:#fff\n  style B fill:#2196f3,color:#fff` },
+    { label: "Frame 2 — Auth check", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[Auth Service]\n  style A fill:#9e9e9e,color:#fff\n  style B fill:#9e9e9e,color:#fff\n  style C fill:#2196f3,color:#fff` },
+    { label: "Frame 3 — Response", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[Auth Service]\n  C --> D([Response])\n  style A fill:#9e9e9e,color:#fff\n  style B fill:#9e9e9e,color:#fff\n  style C fill:#9e9e9e,color:#fff\n  style D fill:#4caf50,color:#fff` },
+  ];
+
+  for (let i = 0; i < frames.length; i++) {
+    const appendRes = await post(`/step-frames/${id}/frame`, { payload: frames[i].payload, label: frames[i].label });
+    if (!appendRes.ok) { console.error(`   ✗ append_frame failed: ${appendRes.error}`); return; }
+    console.log(`   ✓ append_frame ${i + 1}/${frames.length} — frame_count: ${appendRes.frame_count} (live preview updated in browser)`);
+    await new Promise((r) => setTimeout(r, PAUSE));
+  }
+
+  const commitRes = await post(`/step-frames/${id}/commit`, {});
+  if (!commitRes.ok) { console.error(`   ✗ commit_step_frames failed: ${commitRes.error}`); return; }
+  console.log(`   ✓ commit_step_frames — sequence finalized, snapshot written${commitRes.id ? ` (id: ${commitRes.id})` : ""}`);
+}
+
+if (RUN_INCREMENTAL) {
+  console.log("\n── Section 13: incremental step-frames creation (init/append/commit) ──");
+  await runIncrementalDemo();
+}
+
+// ── Section 14 — node_to_frame autonomous navigation (v0.2, U4e) ────────────
+//
+// render(type="step-frames", options.node_to_frame={...}) attaches click
+// listeners in the browser automatically: clicking a mapped node jumps
+// directly to its frame via POST /seek, with no agent involvement (no
+// wait_click() call). This script can only render the sequence and print
+// instructions — the resulting seek() calls are browser → server directly
+// and produce no response this script can observe.
+
+async function runNodeToFrameDemo() {
+  const nodeToFrame = { A: 0, B: 1, C: 2 };
+  const payload = JSON.stringify({
+    frame_type: "mermaid",
+    frames: [
+      { label: "Frame 0 — Client", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style A fill:#4caf50,color:#fff` },
+      { label: "Frame 1 — Gateway", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style B fill:#2196f3,color:#fff` },
+      { label: "Frame 2 — Database", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style C fill:#e91e63,color:#fff` },
+    ],
+  });
+
+  const r = await post("/render", {
+    type: "step-frames",
+    payload,
+    options: { workspace: WORKSPACE, title: "14 — node_to_frame: click a node to jump", node_to_frame: nodeToFrame },
+  });
+  if (!r.ok) { console.error(`   ✗ render failed: ${r.error}`); return; }
+  console.log("   ✓ rendered — click a node in the browser to jump directly to its mapped frame (no agent involvement):");
+  console.log(`       Client (A) → frame 0  |  API Gateway (B) → frame 1  |  Database (C) → frame 2`);
+
+  const WAIT_MS = Math.max(DELAY_MS, 8000);
+  console.log(`   waiting ${WAIT_MS / 1000}s for you to try clicking nodes…`);
+  await new Promise((res) => setTimeout(res, WAIT_MS));
+}
+
+if (RUN_NODE_TO_FRAME) {
+  console.log("\n── Section 14: node_to_frame autonomous navigation ──");
+  await runNodeToFrameDemo();
+}
+
 console.log("\n✅  Showcase complete.\n");
 
 const skipped = [
-  !RUN_INTERACTIVE && "  -i  Section 9:  node click drill-down + Done button",
-  !RUN_POPUP       && "  -u  Section 10: node_actions popup menu (simulated)",
-  !RUN_EDGE        && "  -e  Section 11: edge click demo",
-  !RUN_EXPORT_ID   && "  -x  Section 12: export by graph ID (v0.11)",
+  !RUN_INTERACTIVE   && "  -i  Section 9:  node click drill-down + Done button",
+  !RUN_POPUP         && "  -u  Section 10: node_actions popup menu (simulated)",
+  !RUN_EDGE          && "  -e  Section 11: edge click demo",
+  !RUN_EXPORT_ID     && "  -x  Section 12: export by graph ID (v0.11)",
+  !RUN_INCREMENTAL   && "  -c  Section 13: incremental step-frames creation (init/append/commit)",
+  !RUN_NODE_TO_FRAME && "  -n  Section 14: node_to_frame autonomous navigation",
 ].filter(Boolean);
 
 if (skipped.length) {
   console.log("   Sections not run (add flags to include):");
   skipped.forEach((s) => console.log(`   ${s}`));
-  console.log("   (use -a / --all to run everything — equivalent to -siuex)\n");
+  console.log("   (use -a / --all to run everything — equivalent to -siuexcn)\n");
 }

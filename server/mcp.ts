@@ -209,7 +209,7 @@ export function createMcpServer(): McpServer {
       inputSchema: z.object({}),
     },
     () => {
-      cancelSlideshow();
+      cancelSlideshow({ persist: false }); // clear() must never produce a snapshot (F10)
       clearCanvas();
       broadcast({ action: "clear" });
       return {
@@ -218,7 +218,7 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // slideshow(slides, delay_ms) — auto-advance a playlist on a server-side timer.
+  // slideshow(slides, delay_ms, workspace) — auto-advance a playlist on a server-side timer.
   server.registerTool(
     "slideshow",
     {
@@ -226,8 +226,11 @@ export function createMcpServer(): McpServer {
         "Load a playlist of slides and auto-advance the canvas on a server-side timer.\n" +
         'slides: array of { type, payload, title? } — same types as render().\n' +
         'delay_ms: interval in milliseconds between slides.\n' +
+        "workspace: REQUIRED — same rules as render(). Individual ticks are never persisted; when the " +
+        "slideshow ends (runs to completion, is stopped, or is superseded by a new render()/slideshow() call), " +
+        "whatever is last on screen is written as a single snapshot to this workspace.\n" +
         "A new call cancels any running slideshow. Use slideshow_stop() to stop early.\n" +
-        'Example: slideshow({ slides: [{ type: "mermaid", payload: "graph TD; A-->B", title: "Slide 1" }], delay_ms: 3000 })',
+        'Example: slideshow({ slides: [{ type: "mermaid", payload: "graph TD; A-->B", title: "Slide 1" }], delay_ms: 3000, workspace: "course_2" })',
       inputSchema: z.object({
         slides: z
           .array(
@@ -243,9 +246,21 @@ export function createMcpServer(): McpServer {
           .number()
           .positive()
           .describe("Milliseconds between slide advances."),
+        workspace: z.string().describe(
+          "REQUIRED. Workspace to persist the finalize snapshot to (see description). " +
+          "Alphanumeric, dashes, underscores, dots, spaces — no path separators or '..'."
+        ),
       }),
     },
-    async ({ slides, delay_ms }) => {
+    async ({ slides, delay_ms, workspace: rawWorkspace }) => {
+      const workspaceResult = validateWorkspaceInput(rawWorkspace);
+      if (!workspaceResult.ok) {
+        return {
+          content: [{ type: "text", text: JSON.stringify({ ok: false, error: workspaceResult.error }) }],
+        };
+      }
+      const { workspace } = workspaceResult;
+
       // Validate each slide payload.
       for (let i = 0; i < slides.length; i++) {
         const s = slides[i];
@@ -290,7 +305,7 @@ export function createMcpServer(): McpServer {
           }
         }
       }
-      startSlideshow(slides, delay_ms);
+      startSlideshow(slides, delay_ms, workspace);
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
       };

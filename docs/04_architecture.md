@@ -19,7 +19,7 @@
 | Client-side rendering (export, Mermaid only) | Embedded `mermaid.js` bundle inline in exported HTML (v0.14, shipped) | Mermaid needs real browser text-layout to size nodes/edges correctly — `happy-dom` cannot provide this. Embedding the full library source (read from `mermaid/dist/mermaid.min.js`, not a CDN `<script src>`) preserves the "opens correctly offline" requirement (F17) while getting real layout from whatever browser opens the file. |
 | Transport (server→browser) | WebSocket                                                                                                                                                                                                                                                                                                    | Real-time incremental updates                                                                                                                                                                                                                          |
 | Packaging (v1)             | `npm run dev` — dev-only. **Future direction (NF8, FR17, not yet scheduled):** `npx agent-whiteboard`, chosen over global npm install / standalone binary / Electron / Chrome extension / Docker as the lowest-friction fit for this architecture — no rearchitecture, only a `bin` entry + static-serving for `dist/client` (currently missing from the Hono app) + real version/`private` fields. | Repo now has a GitHub remote (as of 2026-07); packaging is no longer a non-concern, but implementation is deferred — captured in `01`/`02`/`03` (FR17, G2d, NF8), not milestone-scheduled |
-| Dev server                 | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies `/render`, `/stream`, `/mcp` to Node. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2                                                                                                                                                  |
+| Dev server                 | Separate Vite dev server (`localhost:5173`) + Node server (`localhost:3000`); started together via `concurrently`; Vite proxies every browser-invoked endpoint (`/render`, `/clear`, `/export*`, `/step`, `/seek`, `/node-click`, `/wait-click`, `/snapshots*`, `/viewport`, `/user-done`, `/mcp`) to Node — matched by string-prefix, so e.g. `/export` also covers `/export-html`. **`/stream` requires `ws: true`** in Vite proxy config (WebSocket proxying is opt-in; HTTP proxy alone does not cover WS connections). **Gap found and fixed v0.22 (bug B16, see `01`):** `/seek` — the endpoint the browser calls directly for `node_to_frame` (U4e) clicks — was missing from the proxy list, so every such click 404'd in dev mode only (production, single-origin, was unaffected). Added. | HMR on Svelte side; Node server implementation unchanged; production static build deferred to Phase 2                                                                                                                                                  |
 | Browser auto-open          | `open` npm package                                                                                                                                                                                                                                                                                           | Cross-platform (macOS/Linux/Windows) with a single API call; no platform-specific logic                                                                                                                                                                |
 | Linting (planned, v0.20)   | ESLint, with `eslint-plugin-svelte` (client) + `@typescript-eslint` (client + server), runnable via an npm script                                                                                                                                                                                           | Codebase had no automated lint through Sprint 32; added retroactively rather than at project start. Scoped conservatively to catch real bugs (the a11y/unsafe-cast class of finding from the 2026-07-04 review), not full stylistic conformance — does not gate `npm run build` yet. See M1 in `02`, NF9 in `03`. |
 
@@ -286,19 +286,23 @@ Timeout (10 minutes with no click):
 ### Slideshow Command (Phase 2 — Sprint 9)
 
 ```
-agent calls slideshow(slides=[...], delay_ms=1000)
-  → MCP server validates each slide (same rules as render)
-  → startSlideshow() begins server-side timer
+agent calls slideshow(slides=[...], delay_ms=1000, workspace="course_2")
+  → MCP server validates workspace (v0.22, same rule as render()) and each slide (same rules as render)
+  → startSlideshow() cancels any previous session (finalizing it — see below), begins server-side timer
   → each tick broadcasts a slide to browser:
       for non-step-frames slides:
-        { action: "replace", type: slide_type, payload: slide_payload, title?: slide_title }
+        { action: "replace", type: slide_type, payload: slide_payload, title?: slide_title, id }
       for step-frames slides (expanded into frame ticks):
-        frame N: { action: "replace", type: frames[N].type ?? frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frames[N].label }
-        (each frame broadcast at delay_ms intervals, using its own effective type — v0.17; frame labels shown as titles, not original slide title)
+        frame N: { action: "replace", type: frames[N].type ?? frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frames[N].label, id }
+        (each frame broadcast at delay_ms intervals, using its own effective type — v0.17; frame labels shown as titles, not original slide title; same id across all frames of one sequence — v0.22)
   → browser renders each slide in sequence
-  → after last slide, slideshow stops (no loop in v1)
+  → after last slide, slideshow stops (no loop in v1) and finalizes (persists) the session — see below
   → MCP tool returns { ok: true }
 ```
+
+**`id` parity fixed v0.22 (bug B15, see `01`/`02` C2d):** every tick above now carries a freshly-generated `id` (a plain slide gets its own id; a step-frames sequence gets one id shared across its frame ticks, mirroring `/step`'s continuation rule) — `generateSnapshotId()` is called directly in `slideshow.ts`, not through `commitRenderResult()`, since slideshow ticks are still not persisted to disk per-tick (see finalize-on-end below).
+
+**Finalize-on-end persistence + required `workspace` (v0.22, FR20 in `01`):** `slideshow()`/`POST /slideshow` previously had no `workspace` parameter at all — it's now required, validated the same way as `render()` (F14). Individual ticks are never written to disk; `slideshow.ts` tracks the session's workspace in module state and, when the session ends — the timer runs out naturally, `slideshow_stop()`/`cancelSlideshow()` is called explicitly, or a new `render()`/`slideshow()` call supersedes it — a `finalizeSlideshow()` helper reads the current in-memory canvas state (`getCanvas()`) and calls `saveSnapshot()` exactly once, reusing the `id` already broadcast live (assembling the full `{ frame_type, frames }` JSON for a step-frames session, not just the last frame). `clear()` is the one call site that skips this: `cancelSlideshow({ persist: false })`, preserving F10's "clear() never produces a snapshot" guarantee. This mirrors `commit_step_frames()`'s "transient until finalized" pattern (F15) rather than persisting once per slide.
 
 ### History Load (v0.4 — Sprint 17; extended v0.5 — Sprint 18)
 
@@ -668,7 +672,7 @@ agent-whiteboard/
 │   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17). v0.16: inline selection-mode UI (header icons, per-row checkboxes, select-bar, ws-actions-bar) removed — becomes pure browse/load.
 │   │   ├── DeleteExportModal.svelte  # 2-step delete/export modal (v0.16, shipped) — workspace picker → zoomed-in whole-workspace / subset action. Triggered from App.svelte's controls panel.
 │   │   └── renderers/    # one file per content type. Mermaid/KaTeX/Vega-Embed are currently all eagerly bundled — planned dynamic `import()` per type, v0.21, after the App.svelte decomposition above (see M6 in `02`, NF13 in `03`).
-│   │       ├── Mermaid.svelte  # (v0.19) auto-fit on new snapshot id; debounced POST /viewport on zoom/pan change; applies server-supplied viewport when present instead of auto-fitting
+│   │       ├── Mermaid.svelte  # (v0.19) auto-fit on new snapshot id; debounced POST /viewport on zoom/pan change; applies server-supplied viewport when present instead of auto-fitting. Pins the inserted SVG's width/height attributes to its viewBox right after insertion (v0.22, bug B17 in `01`) — Mermaid's own width="100%" SVG has no definite size to resolve against in this deliberately-unsized container, so some browsers silently substituted the CSS default replaced-element size (300x150) instead, breaking the fit-scale's assumed base size. Re-fit-per-frame for step-frames sequences of varying size is planned but not implemented (FR20 in `01`).
 │   │       ├── Html.svelte
 │   │       ├── Katex.svelte
 │   │       └── VegaLite.svelte
@@ -677,7 +681,7 @@ agent-whiteboard/
 │   ├── e2e/
 │   │   └── canvas.spec.ts      # Playwright e2e tests (16 tests) — Sprint 11
 │   ├── human_driven/
-│   │   ├── showcase.js          # manual slideshow demo
+│   │   ├── showcase.js          # manual demo — Sections 1-12 (renderers, seek, interactivity, export-by-id) + 13 (incremental step-frames, v0.22) + 14 (node_to_frame, v0.22); delete/export UI excluded by design (browser-only, no MCP/REST surface to script against beyond export-by-id)
 │   │   └── click-demo.js        # manual click/popup demo
 │   └── unit/
 │       ├── server/
@@ -715,6 +719,10 @@ Two test layers:
 MCP tool handlers are thin wrappers over the same session logic exercised by the REST tests. MCP correctness verified manually: `export()`, `render()`, and `clear()` confirmed working end-to-end (MCP → WebSocket → browser) on 2026-05-31.
 
 **Coverage gap (found 2026-07-04, code review) — remediation planned v0.20:** `export-html.ts`, `slideshow.ts`, `events.ts`, `ws.ts`, `channel.ts`, and `session.ts` have no unit tests today; `mcp.ts` is thin (15 cases) relative to `app.ts` (181). No client unit tests exist at all — only the e2e layer below. Blanket coverage across all of these is planned for v0.20 (NF10 in `03`), both as a real gap-fill and as a safety net for the v0.21 refactors (M2 in `02`).
+
+**Layer 3 — Manual showcase script (`tests/human_driven/showcase.js`)**
+
+Exercises the MCP/REST tool surface end-to-end against a running server + real browser tab, for human eyeballing rather than assertions. **Coverage audited v0.22** (user request, see `01` FR19): Sections 1–12 already covered every renderer type, slideshow (server- and client-driven), seek, `wait_done`/`wait_click` (plain, popup, edge), and export-by-id. Two shipped MCP features had no section: the incremental step-frames protocol (`init_step_frames`/`append_frame`/`commit_step_frames`, F15) and `node_to_frame` autonomous navigation (U4e) — added as Sections 13 and 14. Delete and export-modal UI (U7e–U7i) are deliberately excluded — they're browser-only interactions with no MCP/REST surface for a script to drive beyond what Section 12 (export-by-id) already exercises.
 
 **Layer 2 — Browser e2e tests (Playwright) — Sprint 11 ✅**
 

@@ -12,6 +12,7 @@ export default defineConfig({
       "/clear": "http://localhost:3000",
       "/export": "http://localhost:3000",
       "/step": "http://localhost:3000",
+      "/seek": "http://localhost:3000",
       "/node-click": "http://localhost:3000",
       "/wait-click": "http://localhost:3000",
       "/snapshots": "http://localhost:3000",

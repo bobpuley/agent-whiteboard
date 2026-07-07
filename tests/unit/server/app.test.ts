@@ -557,7 +557,7 @@ describe("POST /slideshow", () => {
     const res = await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000, workspace: WORKSPACE }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -594,6 +594,7 @@ describe("POST /slideshow", () => {
       body: JSON.stringify({
         slides: [{ type: "mermaid", payload: "not a diagram" }],
         delay_ms: 1000,
+        workspace: WORKSPACE,
       }),
     });
     const body = await res.json<{ ok: boolean; error: string }>();
@@ -606,7 +607,7 @@ describe("POST /slideshow", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000, workspace: WORKSPACE }),
     });
     // First slide rendered — canvas should hold slide 0 payload.
     const exportRes1 = await app.request("/export");
@@ -629,7 +630,7 @@ describe("POST /slideshow", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: slides3, delay_ms: 1000 }),
+      body: JSON.stringify({ slides: slides3, delay_ms: 1000, workspace: WORKSPACE }),
     });
 
     // t=0: slide 0 shown immediately.
@@ -652,13 +653,13 @@ describe("POST /slideshow", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 500 }),
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 500, workspace: WORKSPACE }),
     });
     // Second call replaces the first.
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: slides2, delay_ms: 500 }),
+      body: JSON.stringify({ slides: slides2, delay_ms: 500, workspace: WORKSPACE }),
     });
     // Canvas should reflect the new slideshow's first slide.
     const exportRes = await app.request("/export");
@@ -671,7 +672,7 @@ describe("POST /slideshow", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000, workspace: WORKSPACE }),
     });
     await app.request("/render", {
       method: "POST",
@@ -690,7 +691,7 @@ describe("POST /slideshow", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000, workspace: WORKSPACE }),
     });
     await app.request("/clear", { method: "POST" });
     vi.advanceTimersByTime(1000);
@@ -707,7 +708,7 @@ describe("POST /slideshow — step-frames slide", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000 }),
+      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
     });
     // export() returns the raw frames JSON (not a single frame payload).
     const exportRes = await app.request("/export");
@@ -721,7 +722,7 @@ describe("POST /slideshow — step-frames slide", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000 }),
+      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
     });
     // Should be at frame 0; step next moves to frame 1.
     const stepRes = await app.request("/step", {
@@ -743,7 +744,7 @@ describe("POST /slideshow — step-frames auto-advance (B2)", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000 }),
+      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
     });
 
     // t=0: frame 0. Two ticks advance to frame 2 (last).
@@ -766,7 +767,7 @@ describe("POST /slideshow — step-frames auto-advance (B2)", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000 }),
+      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
     });
 
     vi.advanceTimersByTime(2000); // advance past all 3 frames
@@ -794,7 +795,7 @@ describe("POST /slideshow — step-frames auto-advance (B2)", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000 }),
+      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
     });
 
     // 3 frames (ticks 0-2) + 1 svg slide (tick 3) = 4 ticks total.
@@ -945,7 +946,7 @@ describe("POST /slideshow/stop", () => {
     await app.request("/slideshow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000 }),
+      body: JSON.stringify({ slides: VALID_SLIDES, delay_ms: 1000, workspace: WORKSPACE }),
     });
     await app.request("/slideshow/stop", { method: "POST" });
     // Timer fires — slideshow is stopped so canvas stays at slide 0.

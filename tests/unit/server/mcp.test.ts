@@ -358,15 +358,25 @@ describe("MCP tool: slideshow / slideshow_stop", () => {
     const result = await callTool(server, "slideshow", {
       slides: [{ type: "svg", payload: "<svg>1</svg>" }, { type: "svg", payload: "<svg>2</svg>" }],
       delay_ms: 1000,
+      workspace: "ws1",
     });
     expect(result).toEqual({ ok: true });
-    expect(broadcast).toHaveBeenCalledWith({ action: "replace", type: "svg", payload: "<svg>1</svg>" });
+    expect(broadcast).toHaveBeenCalledWith({ action: "replace", type: "svg", payload: "<svg>1</svg>", id: "test-uuid-generated" });
+  });
+
+  it("rejects a slideshow with a missing workspace", async () => {
+    const result = await callTool(server, "slideshow", {
+      slides: [{ type: "svg", payload: "<svg>1</svg>" }],
+      delay_ms: 1000,
+    });
+    expect(result).toEqual({ ok: false, error: "workspace is required" });
   });
 
   it("rejects a slideshow with an invalid mermaid slide", async () => {
     const result = await callTool(server, "slideshow", {
       slides: [{ type: "mermaid", payload: "not a diagram" }],
       delay_ms: 1000,
+      workspace: "ws1",
     });
     expect(result).toMatchObject({ ok: false });
   });

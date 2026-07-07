@@ -360,12 +360,30 @@
       const { svg } = await mermaid.render(id, src);
       if (token !== renderToken) return; // superseded by a newer render
       if (container) container.innerHTML = svg;
-      if (fitOrRestore) {
-        const svgEl = container?.querySelector("svg");
-        if (svgEl) {
-          if (viewport) applyViewport(viewport);
-          else fitToView(svgEl);
+      const svgEl = container?.querySelector("svg");
+      if (svgEl) {
+        // Mermaid emits width="100%" with no explicit pixel size, and our CSS
+        // deliberately leaves the container unsized ("let the SVG size itself
+        // naturally"). With no definite containing-block width to resolve
+        // that percentage against, the browser can fall back to the CSS
+        // default replaced-element size (300x150) instead of the viewBox's
+        // real dimensions — some real browsers hit this fallback, headless
+        // test runners often don't, which is why this only reproduced live.
+        // fitToView()/applyViewport() below assume the SVG's natural
+        // (pre-transform) pixel size equals its viewBox size; pinning both
+        // attributes explicitly makes that assumption hold deterministically.
+        const viewBox = svgEl.getAttribute("viewBox");
+        if (viewBox) {
+          const parts = viewBox.trim().split(/\s+/).map(Number);
+          if (parts[2] && parts[3]) {
+            svgEl.setAttribute("width", String(parts[2]));
+            svgEl.setAttribute("height", String(parts[3]));
+          }
         }
+      }
+      if (fitOrRestore && svgEl) {
+        if (viewport) applyViewport(viewport);
+        else fitToView(svgEl);
       }
       if (clickable) attachClickListeners();
       else if (nodeToFrame) attachNodeToFrameListeners(nodeToFrame);

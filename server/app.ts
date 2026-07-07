@@ -174,7 +174,7 @@ export function createApp(): Hono {
   });
 
   app.post("/clear", (c) => {
-    cancelSlideshow();
+    cancelSlideshow({ persist: false }); // clear() must never produce a snapshot (F10)
     clearCanvas();
     broadcast({ action: "clear" });
     return c.json({ ok: true });
@@ -183,7 +183,7 @@ export function createApp(): Hono {
   // ── Slideshow (Phase 2 — Sprint 9) ───────────────────────────────────────────
 
   app.post("/slideshow", async (c) => {
-    const body = await c.req.json<{ slides?: unknown; delay_ms?: unknown }>();
+    const body = await c.req.json<{ slides?: unknown; delay_ms?: unknown; workspace?: unknown }>();
 
     if (!Array.isArray(body.slides) || body.slides.length === 0) {
       return c.json({ ok: false, error: "slides must be a non-empty array" }, 400);
@@ -191,6 +191,11 @@ export function createApp(): Hono {
     if (typeof body.delay_ms !== "number" || body.delay_ms <= 0) {
       return c.json({ ok: false, error: "delay_ms must be a positive number" }, 400);
     }
+    const workspaceResult = validateWorkspaceInput(body.workspace);
+    if (!workspaceResult.ok) {
+      return c.json({ ok: false, error: workspaceResult.error }, 400);
+    }
+    const { workspace } = workspaceResult;
 
     const rawSlides = body.slides as { type?: unknown; payload?: unknown; title?: unknown }[];
 
@@ -218,7 +223,7 @@ export function createApp(): Hono {
       });
     }
 
-    startSlideshow(validatedSlides, body.delay_ms);
+    startSlideshow(validatedSlides, body.delay_ms, workspace);
     return c.json({ ok: true });
   });
 
