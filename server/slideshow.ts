@@ -3,7 +3,8 @@
 
 import { broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { getCanvas, setCanvas, setStepFrames, seekStepFrame } from "./session.js";
-import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
+import { generateSnapshotId } from "./snapshot.js";
+import { assembleStepFramesPayload, persistContent } from "./persist.js";
 import type { CanvasType, StepFrame } from "./session.js";
 
 export interface Slide {
@@ -115,10 +116,22 @@ function finalizeSlideshow(): void {
   if (canvas.type === "empty") return;
 
   if (canvas.type === "step-frames") {
-    const payload = JSON.stringify({ frame_type: canvas.frameType, frames: canvas.frames });
-    saveSnapshot("step-frames", payload, { title: canvas.title, workspace: activeWorkspace }, canvas.id ?? generateSnapshotId());
+    const payload = assembleStepFramesPayload(canvas.frameType, canvas.frames);
+    persistContent("slideshow-end", {
+      type: "step-frames",
+      payload,
+      title: canvas.title,
+      workspace: activeWorkspace,
+      id: canvas.id ?? generateSnapshotId(),
+    });
   } else {
-    saveSnapshot(canvas.type, canvas.payload, { title: canvas.title, workspace: activeWorkspace }, canvas.id ?? generateSnapshotId());
+    persistContent("slideshow-end", {
+      type: canvas.type,
+      payload: canvas.payload,
+      title: canvas.title,
+      workspace: activeWorkspace,
+      id: canvas.id ?? generateSnapshotId(),
+    });
   }
 }
 
