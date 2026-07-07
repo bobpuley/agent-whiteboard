@@ -1,3 +1,11 @@
+## 0.23.0 — 2026-07-07
+
+- **Architecture Consolidation — Unified Projector milestone (Sprint 36):** slice A of the architecture consolidation promoted from `desing-analysis/` (FR22) — the analysis's own "80/20": the single highest-value, lowest-risk structural win, landed over today's `CanvasState` with no schema change
+- **One shared broadcast builder replaces 13 hand-built sites:** every server→browser `{ action: "replace", ... }` message — from `render()`, `step()`, `seek()`, history-load (`POST /snapshots/load`), and slideshow ticks/finalization — previously had its own hand-assembled construction spread across `app.ts` (×4), `mcp.ts` (×2), `render-core.ts` (×3), `slideshow.ts` (×3), and `ws.ts` (×1). All 13 now route through one new function, `broadcastReplace()` in `server/ws.ts` (plus `broadcastStepFrames()`, reimplemented as a thin convenience wrapper over it). This is the structural end of the B15/C2b/C2d drift class: a later broadcast producer forgetting a field (`id`, `viewport`, `nodeToFrame`, the step-frames cursor) that another producer already threads through is no longer possible, because there is only one producer
+- **Pure internal refactor, no contract change:** the content model, snapshot schema, and MCP payload contract are untouched — only *how* the existing broadcast shape gets constructed. No WebSocket message shape or API contract change; verified against the full unit + e2e suites
+- 371 unit tests (up from 365 — 6 new tests directly covering `broadcastReplace()`'s id/cursor/viewport/nodeToFrame inclusion rules) / 38 e2e tests, all pass unchanged
+- `04_architecture.md` §2/§3 updated to describe the single projector in place of the per-site broadcast descriptions; §9's target-architecture tables mark U5/Slice A as shipped
+
 ## 0.22.0 — 2026-07-07
 
 - **Showcase Coverage, Step-Frames Fit Fix & Slideshow Persistence milestone (Sprint 35):** opened from a feature request (does `tests/human_driven/showcase.js` demonstrate every shipped feature, excluding delete/export?) plus a step-frames fit bug report; three further items (B16, FR20, B17) surfaced during verification and were folded in rather than deferred, since each blocked verifying the item before it
