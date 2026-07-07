@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addClient, broadcast, broadcastStepFrames } from "../../../server/ws.js";
+import { addClient, broadcast, broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
 
 class FakeSocket {
   readyState = 1; // OPEN
@@ -96,6 +96,128 @@ describe("ws", () => {
       stepFrames: true,
       currentFrame: 0,
       totalFrames: 1,
+    });
+  });
+
+  // ── broadcastReplace — single "replace" builder (v0.23, U5) ─────────────────
+  // Every render/step/seek/history-load/slideshow call path funnels through
+  // this function; these tests cover its id/cursor/viewport/nodeToFrame
+  // inclusion rules directly, independent of any particular call site.
+
+  describe("broadcastReplace", () => {
+    it("includes only type/payload when every optional field is absent", () => {
+      const client = new FakeSocket();
+      addClient(client as never);
+      client.sent = [];
+
+      broadcastReplace({ type: "svg", payload: "<svg/>" });
+
+      expect(JSON.parse(client.sent[0])).toEqual({ action: "replace", type: "svg", payload: "<svg/>" });
+    });
+
+    it("includes title, id, and viewport when provided (plain render/history-load path)", () => {
+      const client = new FakeSocket();
+      addClient(client as never);
+      client.sent = [];
+
+      broadcastReplace({
+        type: "mermaid",
+        payload: "graph TD; A-->B",
+        title: "My diagram",
+        id: "snap-1",
+        viewport: { scale: 1.4, positionX: 0.1, positionY: -0.2 },
+      });
+
+      expect(JSON.parse(client.sent[0])).toEqual({
+        action: "replace",
+        type: "mermaid",
+        payload: "graph TD; A-->B",
+        title: "My diagram",
+        id: "snap-1",
+        viewport: { scale: 1.4, positionX: 0.1, positionY: -0.2 },
+      });
+    });
+
+    it("includes the step-frames cursor fields (frameLabel/stepFrames/currentFrame/totalFrames) when set", () => {
+      const client = new FakeSocket();
+      addClient(client as never);
+      client.sent = [];
+
+      broadcastReplace({
+        type: "mermaid",
+        payload: "graph TD; C-->D",
+        frameLabel: "Step 2",
+        stepFrames: true,
+        currentFrame: 1,
+        totalFrames: 3,
+      });
+
+      expect(JSON.parse(client.sent[0])).toEqual({
+        action: "replace",
+        type: "mermaid",
+        payload: "graph TD; C-->D",
+        frameLabel: "Step 2",
+        stepFrames: true,
+        currentFrame: 1,
+        totalFrames: 3,
+      });
+    });
+
+    it("includes nodeToFrame when provided (render/seek/history-load with autonomous navigation)", () => {
+      const client = new FakeSocket();
+      addClient(client as never);
+      client.sent = [];
+
+      broadcastReplace({
+        type: "mermaid",
+        payload: "graph TD; A-->B",
+        nodeToFrame: { A: 0, B: 1 },
+      });
+
+      expect(JSON.parse(client.sent[0])).toEqual({
+        action: "replace",
+        type: "mermaid",
+        payload: "graph TD; A-->B",
+        nodeToFrame: { A: 0, B: 1 },
+      });
+    });
+
+    it("includes frameCount (and omits payload) for the init_step_frames placeholder", () => {
+      const client = new FakeSocket();
+      addClient(client as never);
+      client.sent = [];
+
+      broadcastReplace({ type: "step-frames-placeholder", frameCount: 0, title: "TCP Handshake" });
+
+      const sent = JSON.parse(client.sent[0]);
+      expect(sent).toEqual({
+        action: "replace",
+        type: "step-frames-placeholder",
+        frameCount: 0,
+        title: "TCP Handshake",
+      });
+      expect(sent).not.toHaveProperty("payload");
+    });
+
+    it("omits viewport/nodeToFrame/id/title when undefined, even for a step-frames broadcast", () => {
+      const client = new FakeSocket();
+      addClient(client as never);
+      client.sent = [];
+
+      broadcastReplace({
+        type: "mermaid",
+        payload: "graph TD; A-->B",
+        stepFrames: true,
+        currentFrame: 0,
+        totalFrames: 1,
+      });
+
+      const sent = JSON.parse(client.sent[0]);
+      expect(sent).not.toHaveProperty("viewport");
+      expect(sent).not.toHaveProperty("nodeToFrame");
+      expect(sent).not.toHaveProperty("id");
+      expect(sent).not.toHaveProperty("title");
+      expect(sent).not.toHaveProperty("frameLabel");
     });
   });
 });

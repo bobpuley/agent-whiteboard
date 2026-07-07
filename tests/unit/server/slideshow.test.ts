@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { broadcast } from "../../../server/ws.js";
+import { broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
 import { cancelSlideshow, isSlideshowRunning, startSlideshow } from "../../../server/slideshow.js";
 import { getCanvas, resetCanvas } from "../../../server/session.js";
 import { saveSnapshot } from "../../../server/snapshot.js";
 
 vi.mock("../../../server/ws.js", () => ({
   broadcast: vi.fn(),
+  broadcastReplace: vi.fn(),
+  broadcastStepFrames: vi.fn(),
 }));
 
 vi.mock("../../../server/snapshot.js", async (importOriginal) => {
@@ -18,7 +20,8 @@ const WORKSPACE = "test-workspace";
 describe("slideshow", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.mocked(broadcast).mockClear();
+    vi.mocked(broadcastReplace).mockClear();
+    vi.mocked(broadcastStepFrames).mockClear();
     vi.mocked(saveSnapshot).mockClear();
   });
 
@@ -31,13 +34,13 @@ describe("slideshow", () => {
   it("broadcasts the first slide immediately and does not start a timer for a single slide", () => {
     startSlideshow([{ type: "svg", payload: "<svg/>" }], 1000, WORKSPACE);
 
-    expect(broadcast).toHaveBeenCalledTimes(1);
+    expect(broadcastReplace).toHaveBeenCalledTimes(1);
     // A fresh id is required on every slide broadcast — without it the browser's
     // isNewSnapshot() check never fires and Mermaid diagrams never auto-fit (F19/C3).
-    expect(broadcast).toHaveBeenCalledWith({
-      action: "replace",
+    expect(broadcastReplace).toHaveBeenCalledWith({
       type: "svg",
       payload: "<svg/>",
+      title: undefined,
       id: expect.any(String),
     });
     expect(isSlideshowRunning()).toBe(false);
@@ -54,25 +57,25 @@ describe("slideshow", () => {
       WORKSPACE
     );
     expect(isSlideshowRunning()).toBe(true);
-    expect(broadcast).toHaveBeenCalledTimes(1);
-    const id1 = vi.mocked(broadcast).mock.calls[0][0].id;
+    expect(broadcastReplace).toHaveBeenCalledTimes(1);
+    const id1 = vi.mocked(broadcastReplace).mock.calls[0][0].id;
     expect(id1).toEqual(expect.any(String));
 
     vi.advanceTimersByTime(1000);
-    expect(broadcast).toHaveBeenCalledTimes(2);
-    expect(broadcast).toHaveBeenLastCalledWith({ action: "replace", type: "svg", payload: "<svg>2</svg>", id: expect.any(String) });
-    const id2 = vi.mocked(broadcast).mock.calls[1][0].id;
+    expect(broadcastReplace).toHaveBeenCalledTimes(2);
+    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>2</svg>", title: undefined, id: expect.any(String) });
+    const id2 = vi.mocked(broadcastReplace).mock.calls[1][0].id;
     expect(id2).not.toBe(id1); // distinct slides get distinct ids
     expect(isSlideshowRunning()).toBe(true);
 
     vi.advanceTimersByTime(1000);
-    expect(broadcast).toHaveBeenCalledTimes(3);
-    expect(broadcast).toHaveBeenLastCalledWith({ action: "replace", type: "svg", payload: "<svg>3</svg>", id: expect.any(String) });
+    expect(broadcastReplace).toHaveBeenCalledTimes(3);
+    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>3</svg>", title: undefined, id: expect.any(String) });
     expect(isSlideshowRunning()).toBe(false);
 
     // No further ticks after the last slide.
     vi.advanceTimersByTime(5000);
-    expect(broadcast).toHaveBeenCalledTimes(3);
+    expect(broadcastReplace).toHaveBeenCalledTimes(3);
   });
 
   it("expands a step-frames slide into one tick per frame, reusing the same id across frames", () => {
@@ -82,35 +85,20 @@ describe("slideshow", () => {
     });
     startSlideshow([{ type: "step-frames", payload, title: "Seq" }], 500, WORKSPACE);
 
-    expect(broadcast).toHaveBeenCalledTimes(1);
-    const frame0Call = vi.mocked(broadcast).mock.calls[0][0];
-    expect(frame0Call).toEqual({
-      action: "replace",
-      type: "mermaid",
-      payload: "graph A",
-      frameLabel: undefined,
-      stepFrames: true,
-      currentFrame: 0,
-      totalFrames: 2,
-      title: "Seq",
-      id: expect.any(String),
-    });
+    expect(broadcastStepFrames).toHaveBeenCalledTimes(1);
+    const frame0Call = vi.mocked(broadcastStepFrames).mock.calls[0];
+    const [frames0, frameType0, currentFrame0, title0, id0] = frame0Call;
+    expect(frames0).toEqual([{ payload: "graph A" }, { payload: "graph B" }]);
+    expect(frameType0).toBe("mermaid");
+    expect(currentFrame0).toBe(0);
+    expect(title0).toBe("Seq");
+    expect(id0).toEqual(expect.any(String));
     expect(isSlideshowRunning()).toBe(true);
 
     vi.advanceTimersByTime(500);
     // Same id as frame 0 — this is a continuation of the same sequence, not a
     // new diagram, so the browser must not re-fit (F19/C3).
-    expect(broadcast).toHaveBeenLastCalledWith({
-      action: "replace",
-      type: "mermaid",
-      payload: "graph B",
-      frameLabel: undefined,
-      stepFrames: true,
-      currentFrame: 1,
-      totalFrames: 2,
-      title: "Seq",
-      id: frame0Call.id,
-    });
+    expect(broadcastStepFrames).toHaveBeenLastCalledWith(frames0, "mermaid", 1, "Seq", id0);
     expect(isSlideshowRunning()).toBe(false);
 
     const canvas = getCanvas();
@@ -130,7 +118,7 @@ describe("slideshow", () => {
     expect(isSlideshowRunning()).toBe(false);
 
     vi.advanceTimersByTime(5000);
-    expect(broadcast).toHaveBeenCalledTimes(1); // only the initial broadcast
+    expect(broadcastReplace).toHaveBeenCalledTimes(1); // only the initial broadcast
   });
 
   it("a new startSlideshow call cancels any previously running slideshow", () => {
@@ -144,13 +132,13 @@ describe("slideshow", () => {
     );
     startSlideshow([{ type: "svg", payload: "<svg>new</svg>" }], 1000, WORKSPACE);
 
-    expect(broadcast).toHaveBeenLastCalledWith({ action: "replace", type: "svg", payload: "<svg>new</svg>", id: expect.any(String) });
+    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>new</svg>", title: undefined, id: expect.any(String) });
     expect(isSlideshowRunning()).toBe(false);
 
     // The cancelled first slideshow's timer must not fire.
-    const callsBefore = vi.mocked(broadcast).mock.calls.length;
+    const callsBefore = vi.mocked(broadcastReplace).mock.calls.length;
     vi.advanceTimersByTime(5000);
-    expect(vi.mocked(broadcast).mock.calls.length).toBe(callsBefore);
+    expect(vi.mocked(broadcastReplace).mock.calls.length).toBe(callsBefore);
   });
 
   // ── Finalize-on-end persistence (v0.22) ─────────────────────────────────────

@@ -17,13 +17,14 @@ vi.mock("../../../server/snapshot-reader.js", () => ({
 
 vi.mock("../../../server/ws.js", () => ({
   broadcast: vi.fn(),
+  broadcastReplace: vi.fn(),
   broadcastStepFrames: vi.fn(),
   addClient: vi.fn(),
 }));
 
 import { createMcpServer } from "../../../server/mcp.js";
 import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
-import { broadcast, broadcastStepFrames } from "../../../server/ws.js";
+import { broadcast, broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
 import { signalClick, signalDone } from "../../../server/events.js";
 import { getCanvas, resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 
@@ -97,8 +98,8 @@ describe("MCP tool: render — step-frames per-frame validation (v0.17, B5 regre
   });
 
   it("accepts and broadcasts a mixed-type sequence using each frame's own type", async () => {
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
     spy.mockClear();
 
     const payload = JSON.stringify({
@@ -225,7 +226,7 @@ describe("MCP tool: render — basic types", () => {
   afterEach(() => {
     resetCanvas();
     resetLastWorkspace();
-    vi.mocked(broadcast).mockClear();
+    vi.mocked(broadcastReplace).mockClear();
   });
 
   it("renders svg and broadcasts the replace action", async () => {
@@ -236,7 +237,7 @@ describe("MCP tool: render — basic types", () => {
     });
     expect(result).toMatchObject({ ok: true });
     expect(getCanvas()).toMatchObject({ type: "svg", payload: "<svg/>" });
-    expect(broadcast).toHaveBeenCalledWith(expect.objectContaining({ action: "replace", type: "svg", payload: "<svg/>" }));
+    expect(broadcastReplace).toHaveBeenCalledWith(expect.objectContaining({ type: "svg", payload: "<svg/>" }));
   });
 
   it("returns an error when workspace is missing", async () => {
@@ -277,7 +278,8 @@ describe("MCP tool: step / seek", () => {
 
   afterEach(() => {
     resetCanvas();
-    vi.mocked(broadcast).mockClear();
+    vi.mocked(broadcastReplace).mockClear();
+    vi.mocked(broadcastStepFrames).mockClear();
   });
 
   it("step returns an error when no step-frames sequence is loaded", async () => {
@@ -291,11 +293,13 @@ describe("MCP tool: step / seek", () => {
       payload: JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }] }),
       options: { workspace: "ws1" },
     });
-    vi.mocked(broadcast).mockClear();
+    vi.mocked(broadcastStepFrames).mockClear();
 
     const result = await callTool(server, "step", { direction: "next" });
     expect(result).toEqual({ ok: true, current_frame: 1, total_frames: 2 });
-    expect(broadcast).toHaveBeenCalledWith(expect.objectContaining({ currentFrame: 1, payload: "graph TD; C-->D" }));
+    const [frames, , currentFrame] = vi.mocked(broadcastStepFrames).mock.calls[0];
+    expect(currentFrame).toBe(1);
+    expect(frames[currentFrame]).toMatchObject({ payload: "graph TD; C-->D" });
   });
 
   it("seek jumps directly to a frame index", async () => {
@@ -351,7 +355,7 @@ describe("MCP tool: slideshow / slideshow_stop", () => {
 
   afterEach(() => {
     resetCanvas();
-    vi.mocked(broadcast).mockClear();
+    vi.mocked(broadcastReplace).mockClear();
   });
 
   it("starts a slideshow and broadcasts the first slide", async () => {
@@ -361,7 +365,7 @@ describe("MCP tool: slideshow / slideshow_stop", () => {
       workspace: "ws1",
     });
     expect(result).toEqual({ ok: true });
-    expect(broadcast).toHaveBeenCalledWith({ action: "replace", type: "svg", payload: "<svg>1</svg>", id: "test-uuid-generated" });
+    expect(broadcastReplace).toHaveBeenCalledWith({ type: "svg", payload: "<svg>1</svg>", title: undefined, id: "test-uuid-generated" });
   });
 
   it("rejects a slideshow with a missing workspace", async () => {

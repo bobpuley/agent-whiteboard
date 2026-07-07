@@ -6,7 +6,7 @@ import { join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, stepCursor } from "./session.js";
-import { broadcast } from "./ws.js";
+import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
@@ -125,20 +125,9 @@ export function createMcpServer(): McpServer {
       }
       const state = getCanvas();
       if (state.type === "step-frames") {
-        const frame = state.frames[result.currentFrame];
-        broadcast({
-          action: "replace",
-          type: frame.type ?? state.frameType,
-          payload: frame.payload,
-          frameLabel: frame.label,
-          stepFrames: true,
-          currentFrame: result.currentFrame,
-          totalFrames: result.totalFrames,
-          ...(state.title !== undefined ? { title: state.title } : {}),
-          // Same id as when this sequence was created — tells the browser this is
-          // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-          ...(state.id !== undefined ? { id: state.id } : {}),
-        });
+        // Same id as when this sequence was created — tells the browser this is
+        // a continuation, not a new diagram, so it must not re-fit (F19/C3).
+        broadcastStepFrames(state.frames, state.frameType, result.currentFrame, state.title, state.id);
       }
       return {
         content: [
@@ -183,17 +172,16 @@ export function createMcpServer(): McpServer {
       }
       seekStepFrame(frame);
       const f = state.frames[frame];
-      broadcast({
-        action: "replace",
+      broadcastReplace({
         type: f.type ?? state.frameType,
         payload: f.payload,
         frameLabel: f.label,
         stepFrames: true,
         currentFrame: frame,
         totalFrames: total,
-        ...(state.title !== undefined ? { title: state.title } : {}),
-        ...(state.nodeToFrame !== undefined ? { nodeToFrame: state.nodeToFrame } : {}),
-        ...(state.id !== undefined ? { id: state.id } : {}),
+        title: state.title,
+        nodeToFrame: state.nodeToFrame,
+        id: state.id,
       });
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, current_frame: frame, total_frames: total }) }],

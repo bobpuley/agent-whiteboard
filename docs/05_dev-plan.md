@@ -26,7 +26,7 @@
 | v0.20 | Design Debt — Safety Net | 33 | released    | [Milestone_v0.20.md](./milestones/Milestone_v0.20.md) |
 | v0.21 | Design Debt — Core Consolidation | 34 | released    | [Milestone_v0.21.md](./milestones/Milestone_v0.21.md) |
 | v0.22 | Showcase Coverage, Step-Frames Fit Fix & Slideshow Persistence | 35 | released    | [Milestone_v0.22.md](./milestones/Milestone_v0.22.md) |
-| v0.23 | Architecture Consolidation — Unified Projector | 36 | planned     | [Milestone_v0.23.md](./milestones/Milestone_v0.23.md) |
+| v0.23 | Architecture Consolidation — Unified Projector | 36 | in progress | [Milestone_v0.23.md](./milestones/Milestone_v0.23.md) |
 | v0.24 | Architecture Consolidation — Client Renderer Registry | 37 | planned     | [Milestone_v0.24.md](./milestones/Milestone_v0.24.md) |
 | v0.25 | Architecture Consolidation — Persistence Policy & Finalize Dedup | 38 | planned     | [Milestone_v0.25.md](./milestones/Milestone_v0.25.md) |
 | v0.26 | Architecture Consolidation — Unified Presentation Model | 39 | planned     | [Milestone_v0.26.md](./milestones/Milestone_v0.26.md) |

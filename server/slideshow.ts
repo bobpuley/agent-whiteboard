@@ -1,7 +1,7 @@
 // Slideshow — server-side timer that auto-advances slides on the canvas.
 // Phase 2 feature (Sprint 9).
 
-import { broadcast } from "./ws.js";
+import { broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { getCanvas, setCanvas, setStepFrames, seekStepFrame } from "./session.js";
 import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
 import type { CanvasType, StepFrame } from "./session.js";
@@ -71,17 +71,8 @@ function broadcastTick(tick: Tick): void {
     seekStepFrame(frameIndex);
   }
   const state = getCanvas();
-  broadcast({
-    action: "replace",
-    type: frames[frameIndex].type ?? frameType,
-    payload: frames[frameIndex].payload,
-    frameLabel: frames[frameIndex].label,
-    stepFrames: true,
-    currentFrame: frameIndex,
-    totalFrames: frames.length,
-    ...(title !== undefined ? { title } : {}),
-    ...(state.type === "step-frames" && state.id !== undefined ? { id: state.id } : {}),
-  });
+  const id = state.type === "step-frames" ? state.id : undefined;
+  broadcastStepFrames(frames, frameType, frameIndex, title, id);
 }
 
 function broadcastSlide(slide: Slide): void {
@@ -94,29 +85,13 @@ function broadcastSlide(slide: Slide): void {
     const { frames, frame_type } = spec;
     const id = generateSnapshotId();
     setStepFrames(frames, frame_type, slide.payload, slide.title, undefined, id);
-    broadcast({
-      action: "replace",
-      type: frames[0].type ?? frame_type,
-      payload: frames[0].payload,
-      frameLabel: frames[0].label,
-      stepFrames: true,
-      currentFrame: 0,
-      totalFrames: frames.length,
-      ...(slide.title !== undefined ? { title: slide.title } : {}),
-      id,
-    });
+    broadcastStepFrames(frames, frame_type, 0, slide.title, id);
   } else {
     // Fresh id per plain slide so the browser auto-fits (F19/C3) — without
     // this the diagram never fits to view (stays at default scale/position).
     const id = generateSnapshotId();
     setCanvas(slide.type as CanvasType, slide.payload, slide.title, id);
-    broadcast({
-      action: "replace",
-      type: slide.type,
-      payload: slide.payload,
-      ...(slide.title !== undefined ? { title: slide.title } : {}),
-      id,
-    });
+    broadcastReplace({ type: slide.type, payload: slide.payload, title: slide.title, id });
   }
 }
 
