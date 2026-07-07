@@ -1,6 +1,6 @@
 # Milestone v0.25 — Architecture Consolidation: Persistence Policy & Finalize Dedup (Sprint 38)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-07-07 via `/doc-creator-driver:intake`, slice C of the architecture consolidation promoted from `desing-analysis/` (FR22 in `01_input-ideas.md`; adoption/sequencing rationale in `02_assumptions-and-risks.md` §N; full target architecture in `04_architecture.md` §9). Builds on v0.23's unified projector — this slice does the same consolidation for the persistence/finalize side.
 

@@ -28,7 +28,7 @@
 | v0.22 | Showcase Coverage, Step-Frames Fit Fix & Slideshow Persistence | 35 | released    | [Milestone_v0.22.md](./milestones/Milestone_v0.22.md) |
 | v0.23 | Architecture Consolidation — Unified Projector | 36 | released    | [Milestone_v0.23.md](./milestones/Milestone_v0.23.md) |
 | v0.24 | Architecture Consolidation — Client Renderer Registry | 37 | released    | [Milestone_v0.24.md](./milestones/Milestone_v0.24.md) |
-| v0.25 | Architecture Consolidation — Persistence Policy & Finalize Dedup | 38 | in progress | [Milestone_v0.25.md](./milestones/Milestone_v0.25.md) |
+| v0.25 | Architecture Consolidation — Persistence Policy & Finalize Dedup | 38 | released    | [Milestone_v0.25.md](./milestones/Milestone_v0.25.md) |
 | v0.26 | Architecture Consolidation — Unified Presentation Model | 39 | planned     | [Milestone_v0.26.md](./milestones/Milestone_v0.26.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
