@@ -63,6 +63,8 @@
     │  • Mermaid zoom/pan fit + persistence (v0.19, shipped — see FR18 in `01`, C3 in `02`): every new `render()`/`commit_step_frames()` result auto-fits (scale-to-contain, centered) on first display; `step()`/`seek()` within a sequence does not re-fit. Zoom/pan changes are debounced (~800ms) and POSTed to `/viewport`, keyed by snapshot `id`, and stored server-side in a viewport-cache file separate from the snapshot JSON files. The server includes the cached viewport in the WebSocket broadcast whenever that `id` is (re)displayed; the browser applies it instead of auto-fitting. Mermaid-only; no MCP tool.
 ```
 
+**Unified broadcast projector (v0.23, shipped — U5 in §9.2):** every server→browser `{ action: "replace", ... }` message — from `render()`, `step()`, `seek()`, history-load (`POST /snapshots/load`), and slideshow ticks/finalization — is built by one function, `broadcastReplace()` in `server/ws.ts` (with `broadcastStepFrames()` as a thin convenience wrapper over it for the frames-array + index call shape). Previously each of `app.ts` (×4), `mcp.ts` (×2), `render-core.ts` (×3), `slideshow.ts` (×3), and `ws.ts` (×1) hand-assembled this object inline — 13 independent construction sites that could (and did — see B15) drift out of sync on which fields (`id`, `viewport`, `nodeToFrame`, the step-frames cursor) they remembered to include. All 13 now call `broadcastReplace()` (or `broadcastStepFrames()`, itself built on top of it), so a field one call path carries can no longer silently be missing from another. Pure internal refactor: the WebSocket message shape and every existing API contract are unchanged (verified by the full unit + e2e suites passing with unmodified behavior — see `05`, `Milestone_v0.23.md`).
+
 **Shipped in MVP (not Phase 2):**
 - Full server-side Mermaid parse validation — Sprint 6 ✅
 - `step()` tool + step-through frame sequences — Sprint 7 ✅
@@ -91,6 +93,8 @@
 ---
 
 ## 3. MCP Tool Implementations
+
+> **Broadcast construction (v0.23):** every "pushes ... to browser via WebSocket" action described in this table is implemented as a call to the single `broadcastReplace()` builder in `server/ws.ts` (or its `broadcastStepFrames()` convenience wrapper for the frames-array + index shape used by `step`, `append_frame`'s live preview, and `commit_step_frames`). There is no per-tool broadcast-construction code left — see §2's "Unified broadcast projector" note and §9.2 (U5).
 
 | Tool                              | Server-side action                                                                                                                                                                                                                  |
 |-----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -785,11 +789,11 @@ Everything renderable collapses to one atom and two orthogonal axes:
 | U2 | Content Model + Validation | `Frame`/`Presentation`; one `validateFrame()` looped over every frame | Partially shipped (per-frame validation since v0.17); the unified type replaces the 3-way union in v0.26 |
 | U3 | Canvas State (reducer) | Single source of truth: current presentation, cursor, `lastWorkspace`, arm-states, driver | Today's `session.ts`/`canvasStore.ts` 3-way union; rewritten in v0.26 |
 | U4 | Persistence | Snapshot read/write, viewport cache, list/delete; enforces the persist policy | Mechanism shipped; explicit required-trigger policy is new (v0.25); schema migration is v0.26 |
-| U5 | Projection / Broadcast | The one function building every server→browser message | New — collapses 13 hand-built sites into 1 (v0.23, the 80/20) |
+| U5 | Projection / Broadcast | The one function building every server→browser message | **Shipped (v0.23)** — `broadcastReplace()`/`broadcastStepFrames()` in `server/ws.ts` collapse the 13 hand-built sites into 1 |
 | U6 | Render Surface | Renderer registry (type→component) + canvas controller + auto-fit/viewport + async-ordering guard | Store/reducer decomposition shipped (v0.21); registry is new (v0.24) |
 | U7 | Return Channel | One arm/await/resolve Interaction primitive (`wait_done`/`wait_click`/`node_to_frame` as variants) | Today three separate-but-similar mechanisms; generalized in v0.26 |
 | U8 | Export (read-side) | `export()`/`export_html` over *persisted* presentations; strictly downstream of U4, read-only | Shipped (v0.13–v0.15); adapts to the new schema in v0.26 |
-| — | Playback controller | Timer advancing a cursor; owns no validation/broadcast/persist code of its own | Today `slideshow.ts` owns broadcast+persist logic directly; reduced to a thin controller by v0.23 (projector) + v0.25 (persist policy) |
+| — | Playback controller | Timer advancing a cursor; owns no validation/broadcast/persist code of its own | Broadcast construction moved out in v0.23 (`slideshow.ts` now calls `broadcastReplace`/`broadcastStepFrames`, same as every other call path); persist logic (`finalizeSlideshow()`) still lives in `slideshow.ts` until v0.25 (persist policy) |
 
 **Scope boundaries (one-way dependencies):** `U1 Sources → U0 Runner → {U2 Validate, U3 Reduce, U4 Persist(policy), U5 Project} → U6 Render Surface`; `U8 Export → U4 (read-only)`; `U7 Return Channel` emits browser events independently, coupled only to a `cursor`/`id` handle, never to content. U0 is the only unit that knows the pipeline's *sequence*; adapters (U1) never orchestrate.
 
@@ -809,7 +813,7 @@ Everything renderable collapses to one atom and two orthogonal axes:
 
 | Past failure | Root cause | Structural fix |
 |---|---|---|
-| B15/C2d — slideshow no `id`, no auto-fit | Second broadcast builder in `slideshow.ts` | U5 (v0.23): one Projection builder; slideshow becomes a controller, not a builder |
+| B15/C2d — slideshow no `id`, no auto-fit | Second broadcast builder in `slideshow.ts` | **U5 (v0.23, shipped):** one Projection builder (`broadcastReplace()`); slideshow calls it like every other producer instead of building its own message |
 | FR20/B15 — slideshow missing from history | `slideshow()` never called `saveSnapshot()` | D2/U4 (v0.25): persist trigger is required, not opt-in |
 | B5 — one-shot step-frames skipped validation | Two validation paths (one-shot vs. incremental) | U2 (v0.26): one `validateFrame()` over every frame, one content model |
 | B6 — `workspace:"."` wipe | `app.ts`/`mcp.ts` duplicated validation | U1/D5 (v0.26, full parity): one core, thin adapters |
@@ -819,7 +823,7 @@ Everything renderable collapses to one atom and two orthogonal axes:
 
 | Slice | Milestone | Scope | Risk |
 |---|---|---|---|
-| A — Unify the projector | **v0.23** | U5 only, over today's `CanvasState` — no schema change | Low-med; message shape unchanged |
+| A — Unify the projector | **v0.23 — shipped** | U5 only, over today's `CanvasState` — no schema change | Low-med; message shape unchanged (verified by full unit + e2e suites) |
 | B — Client renderer registry | **v0.24** | U6 registry, replacing the `{#if}` chain | Low; isolated to the client |
 | C — Persistence policy + finalize dedup | **v0.25** | U4 trigger vocabulary + shared finalize, after A | Low-med |
 | D — Full Presentation/Frame model + migration + contract break | **v0.26** | U0/U2/U3 rewrite, WS contract, snapshot schema, MCP payload, U7 return-channel generalization | High (C1–C4 in the retired `baseline-comparison.md`) — deliberately accepted per `02` N2, sequenced last, gated before any public release (`02` N4) |

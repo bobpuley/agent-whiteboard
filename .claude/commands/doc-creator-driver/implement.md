@@ -35,6 +35,7 @@ Do not change requirements or architecture.
       * Run the tests
       * Iterate implementation until tests pass
       * Update the sprint task in the in-progress milestone file (mark `- [x]`)
+      * commit
       * (TaskUpdate completed)
    6. Sprint completion gate (runs once, after ALL tasks pass):
       * AskUserQuestion: "Please run your manual / human-driven tests and report the results. All green?"

@@ -22,6 +22,7 @@ vi.mock("../../../server/snapshot-reader.js", () => ({
 
 vi.mock("../../../server/ws.js", () => ({
   broadcast: vi.fn(),
+  broadcastReplace: vi.fn(),
   broadcastStepFrames: vi.fn(),
   addClient: vi.fn(),
 }));
@@ -516,8 +517,8 @@ describe("POST /step", () => {
   });
 
   it("broadcasts a frame's own type override, not the sequence-wide frame_type", async () => {
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
 
     const mixedSequence = JSON.stringify({
       frame_type: "mermaid",
@@ -540,7 +541,8 @@ describe("POST /step", () => {
     });
 
     expect(spy).toHaveBeenCalledOnce();
-    expect(spy.mock.calls[0][0]).toMatchObject({ type: "katex", payload: "E = mc^2" });
+    const [frames, , currentFrame] = spy.mock.calls[0];
+    expect(frames[currentFrame]).toMatchObject({ type: "katex", payload: "E = mc^2" });
   });
 });
 
@@ -2049,8 +2051,9 @@ describe("POST /step-frames/:id/commit", () => {
   });
 
   it("a mermaid+katex sequence built via append_frame renders each frame's own type on step/seek", async () => {
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace, broadcastStepFrames } = await import("../../../server/ws.js");
+    const stepSpy = vi.mocked(broadcastStepFrames);
+    const seekSpy = vi.mocked(broadcastReplace);
 
     const initRes = await app.request("/step-frames/init", {
       method: "POST",
@@ -2070,23 +2073,24 @@ describe("POST /step-frames/:id/commit", () => {
     });
     await app.request(`/step-frames/${id}/commit`, { method: "POST" });
 
-    spy.mockClear();
+    stepSpy.mockClear();
     const stepRes = await app.request("/step", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ direction: "next" }),
     });
     expect(await stepRes.json()).toEqual({ ok: true, current_frame: 1, total_frames: 2 });
-    expect(spy.mock.calls[0][0]).toMatchObject({ type: "katex", payload: "E = mc^2" });
+    const [stepFrames, , stepCurrentFrame] = stepSpy.mock.calls[0];
+    expect(stepFrames[stepCurrentFrame]).toMatchObject({ type: "katex", payload: "E = mc^2" });
 
-    spy.mockClear();
+    seekSpy.mockClear();
     const seekRes = await app.request("/seek", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ frame: 0 }),
     });
     expect(await seekRes.json()).toEqual({ ok: true, current_frame: 0, total_frames: 2 });
-    expect(spy.mock.calls[0][0]).toMatchObject({ type: "mermaid", payload: "graph TD; A" });
+    expect(seekSpy.mock.calls[0][0]).toMatchObject({ type: "mermaid", payload: "graph TD; A" });
   });
 
   it("returns 404 for unknown id", async () => {
@@ -2700,13 +2704,14 @@ describe("POST /viewport (v0.19)", () => {
 
 describe("POST /render — id in broadcast (v0.19)", () => {
   beforeEach(async () => {
-    const { broadcast } = await import("../../../server/ws.js");
-    vi.mocked(broadcast).mockClear();
+    const { broadcastReplace, broadcastStepFrames } = await import("../../../server/ws.js");
+    vi.mocked(broadcastReplace).mockClear();
+    vi.mocked(broadcastStepFrames).mockClear();
   });
 
   it("includes id in the broadcast for a plain render", async () => {
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
 
     await app.request("/render", {
       method: "POST",
@@ -2718,8 +2723,8 @@ describe("POST /render — id in broadcast (v0.19)", () => {
   });
 
   it("includes id in the broadcast for a step-frames render", async () => {
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
 
     await app.request("/render", {
       method: "POST",
@@ -2737,8 +2742,8 @@ describe("POST /render — id in broadcast (v0.19)", () => {
       body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
 
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
     spy.mockClear();
 
     await app.request("/step", {
@@ -2747,7 +2752,8 @@ describe("POST /render — id in broadcast (v0.19)", () => {
       body: JSON.stringify({ direction: "next" }),
     });
 
-    expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated" });
+    const [, , , , id] = spy.mock.calls[0];
+    expect(id).toBe("test-uuid-generated");
   });
 
   it("seek() re-broadcasts the same id the sequence was created with", async () => {
@@ -2757,8 +2763,8 @@ describe("POST /render — id in broadcast (v0.19)", () => {
       body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
     });
 
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
     spy.mockClear();
 
     await app.request("/seek", {
@@ -2776,8 +2782,8 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
 
   beforeEach(async () => {
     process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
-    const { broadcast } = await import("../../../server/ws.js");
-    vi.mocked(broadcast).mockClear();
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    vi.mocked(broadcastReplace).mockClear();
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockClear();
   });
 
@@ -2797,8 +2803,8 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
   it("includes the loaded snapshot's id in the broadcast", async () => {
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(SNAPSHOT_WITH_ID);
 
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
 
     await app.request("/snapshots/load", {
       method: "POST",
@@ -2814,8 +2820,8 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
     const { setViewport } = await import("../../../server/viewport-cache.js");
     setViewport("loaded-id-1", { scale: 1.7, positionX: 0.2, positionY: -0.1 });
 
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
 
     await app.request("/snapshots/load", {
       method: "POST",
@@ -2832,8 +2838,8 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
   it("omits viewport when no cache entry exists for that id", async () => {
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(SNAPSHOT_WITH_ID);
 
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
 
     await app.request("/snapshots/load", {
       method: "POST",
@@ -2841,7 +2847,10 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
       body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
     });
 
-    expect(spy.mock.calls[0][0]).not.toHaveProperty("viewport");
+    // broadcastReplace() itself omits the key from the wire message when
+    // undefined (verified directly in ws.test.ts) — here we just confirm the
+    // call site passes no viewport through.
+    expect(spy.mock.calls[0][0].viewport).toBeUndefined();
   });
 
   it("omits id when the loaded snapshot predates v0.11 and has no id field", async () => {
@@ -2853,8 +2862,8 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
     });
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(legacySnapshot);
 
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
+    const { broadcastReplace } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastReplace);
 
     await app.request("/snapshots/load", {
       method: "POST",
@@ -2862,8 +2871,10 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
       body: JSON.stringify({ filename: "20260101_000000_screen.json" }),
     });
 
-    expect(spy.mock.calls[0][0]).not.toHaveProperty("id");
-    expect(spy.mock.calls[0][0]).not.toHaveProperty("viewport");
+    // broadcastReplace() itself omits both keys from the wire message when
+    // undefined (verified directly in ws.test.ts).
+    expect(spy.mock.calls[0][0].id).toBeUndefined();
+    expect(spy.mock.calls[0][0].viewport).toBeUndefined();
   });
 });
 

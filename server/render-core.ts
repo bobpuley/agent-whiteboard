@@ -2,7 +2,7 @@
 // workspace-validation — used identically by the REST handlers (app.ts) and
 // the MCP tool handlers (mcp.ts) so the two transports can never drift (NF12).
 import { cancelSlideshow } from "./slideshow.js";
-import { broadcast, broadcastStepFrames } from "./ws.js";
+import { broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId, saveSnapshot } from "./snapshot.js";
 import { isValidWorkspaceName } from "./validate.js";
 import { setCanvas, setLastWorkspace, setStepFrames } from "./session.js";
@@ -61,16 +61,15 @@ export function commitRenderResult(
     // report on it — a brand-new render() always mints a fresh id (F19/C3).
     const newId = generateSnapshotId();
     setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame, newId);
-    broadcast({
-      action: "replace",
+    broadcastReplace({
       type: frames[0].type ?? spec.frame_type,
       payload: frames[0].payload,
       frameLabel: frames[0].label,
       stepFrames: true,
       currentFrame: 0,
       totalFrames: frames.length,
-      ...(title !== undefined ? { title } : {}),
-      ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
+      title,
+      nodeToFrame,
       id: newId,
     });
     setLastWorkspace(workspace);
@@ -87,7 +86,7 @@ export function commitRenderResult(
   // svg, html, katex, mermaid, vega-lite
   const newId = generateSnapshotId();
   setCanvas(type as CanvasType, payload, title, newId);
-  broadcast({ action: "replace", type, payload, ...(title !== undefined ? { title } : {}), id: newId });
+  broadcastReplace({ type, payload, title, id: newId });
   setLastWorkspace(workspace);
   // F10 backstop — see comment above.
   let snapshotId: string | undefined;
@@ -109,12 +108,7 @@ export function initStepFramesResult(
   title: string | undefined,
 ): { id: string } {
   const id = createBuilder(frameType, workspace, title);
-  broadcast({
-    action: "replace",
-    type: "step-frames-placeholder",
-    frameCount: 0,
-    ...(title !== undefined ? { title } : {}),
-  });
+  broadcastReplace({ type: "step-frames-placeholder", frameCount: 0, title });
   return { id };
 }
 

@@ -9,7 +9,7 @@ import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js"
 import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
-import { broadcast } from "./ws.js";
+import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
@@ -125,20 +125,9 @@ export function createApp(): Hono {
     // Push new frame to browser.
     const state = getCanvas();
     if (state.type === "step-frames") {
-      const frame = state.frames[result.currentFrame];
-      broadcast({
-        action: "replace",
-        type: frame.type ?? state.frameType,
-        payload: frame.payload,
-        frameLabel: frame.label,
-        stepFrames: true,
-        currentFrame: result.currentFrame,
-        totalFrames: result.totalFrames,
-        ...(state.title !== undefined ? { title: state.title } : {}),
-        // Same id as when this sequence was created — tells the browser this is
-        // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-        ...(state.id !== undefined ? { id: state.id } : {}),
-      });
+      // Same id as when this sequence was created — tells the browser this is
+      // a continuation, not a new diagram, so it must not re-fit (F19/C3).
+      broadcastStepFrames(state.frames, state.frameType, result.currentFrame, state.title, state.id);
     }
     return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });
   });
@@ -158,17 +147,16 @@ export function createApp(): Hono {
     }
     seekStepFrame(body.frame);
     const frame = state.frames[body.frame];
-    broadcast({
-      action: "replace",
+    broadcastReplace({
       type: frame.type ?? state.frameType,
       payload: frame.payload,
       frameLabel: frame.label,
       stepFrames: true,
       currentFrame: body.frame,
       totalFrames: total,
-      ...(state.title !== undefined ? { title: state.title } : {}),
-      ...(state.nodeToFrame !== undefined ? { nodeToFrame: state.nodeToFrame } : {}),
-      ...(state.id !== undefined ? { id: state.id } : {}),
+      title: state.title,
+      nodeToFrame: state.nodeToFrame,
+      id: state.id,
     });
     return c.json({ ok: true, current_frame: body.frame, total_frames: total });
   });
@@ -447,29 +435,21 @@ export function createApp(): Hono {
     if (type === "step-frames") {
       const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
       setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame, snapshotId);
-      broadcast({
-        action: "replace",
+      broadcastReplace({
         type: spec.frames[0].type ?? spec.frame_type,
         payload: spec.frames[0].payload,
         frameLabel: spec.frames[0].label,
         stepFrames: true,
         currentFrame: 0,
         totalFrames: spec.frames.length,
-        ...(title !== undefined ? { title } : {}),
-        ...(nodeToFrame !== undefined ? { nodeToFrame } : {}),
-        ...(snapshotId !== undefined ? { id: snapshotId } : {}),
-        ...(viewport !== undefined ? { viewport } : {}),
+        title,
+        nodeToFrame,
+        id: snapshotId,
+        viewport,
       });
     } else {
       setCanvas(type as CanvasType, payload, title, snapshotId);
-      broadcast({
-        action: "replace",
-        type,
-        payload,
-        ...(title !== undefined ? { title } : {}),
-        ...(snapshotId !== undefined ? { id: snapshotId } : {}),
-        ...(viewport !== undefined ? { viewport } : {}),
-      });
+      broadcastReplace({ type, payload, title, id: snapshotId, viewport });
     }
 
     setLastWorkspace(workspace);
