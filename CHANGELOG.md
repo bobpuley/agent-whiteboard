@@ -1,3 +1,7 @@
+## 0.25.6 — 2026-07-08
+
+- **Sprint 44 — Snapshot migration real run (U2):** ran `server/migrate-snapshots.ts` against the real `~/.agent-whiteboard/` directory (161 snapshot files across ~10 workspaces). Backed up first to `~/.agent-whiteboard.backup-20260708-205116/`; verified a real run against a throwaway copy byte-for-byte against the backup (id/timestamp/workspace/title/nodeToFrame/frames/rawPayload all preserved, 0 mismatches, 0 pre-migration files missing an `id`) before running for real. Post-run: re-diffed against the backup (0 mismatches), confirmed idempotency (re-run reports 0 migrated / 161 already-migrated / 0 errors), and smoke-tested `GET /snapshots` / `POST /snapshots/load` / `GET /export` end-to-end against real migrated data with a live server. No code changes — operational only
+
 ## 0.25.5 — 2026-07-08
 
 - **Sprint 43 — Snapshot schema + migration script (U2):** on-disk snapshot files move from the old top-level `type`/`payload`/`options` triple to a `Presentation`-shaped `{ id, timestamp, workspace, cursor, frames[], title?, nodeToFrame?, rawPayload? }` schema (`SnapshotFile` in `server/snapshot.ts`). A one-shot render is a single-element `frames` array; a step-frames sequence is the full array with each frame's already-resolved effective type. `rawPayload` — the verbatim step-frames envelope, kept only when `frames.length > 1` — lets `export(id)` return byte-identical content instead of a reconstruction; a committed 1-frame sequence collapses into a plain record with no `rawPayload`, mirroring the WS contract's Sprint 42 policy
