@@ -10,6 +10,7 @@ import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, isStepSequence, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
+import { generateSnapshotId } from "./snapshot.js";
 import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, KNOWN_TYPES, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
@@ -124,7 +125,7 @@ export function createApp(): Hono {
       const { frames, title, id } = state.presentation;
       // Same id as when this sequence was created — tells the browser this is
       // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-      broadcastStepFrames(frames, state.frameType, result.currentFrame, title, id);
+      broadcastStepFrames(frames, state.frameType, result.currentFrame, id ?? generateSnapshotId(), title);
     }
     return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });
   });
@@ -149,12 +150,11 @@ export function createApp(): Hono {
       type: frame.type,
       payload: frame.payload,
       frameLabel: frame.label,
-      stepFrames: true,
-      currentFrame: body.frame,
-      totalFrames: total,
+      cursor: body.frame,
+      total,
       title,
       nodeToFrame: state.nodeToFrame,
-      id,
+      id: id ?? generateSnapshotId(),
     });
     return c.json({ ok: true, current_frame: body.frame, total_frames: total });
   });
@@ -429,24 +429,30 @@ export function createApp(): Hono {
     const title = options?.title;
     const nodeToFrame = options?.node_to_frame;
 
+    // A concrete id is required on every broadcast (v0.26 Sprint 42) — pre-v0.11
+    // snapshots may lack one (J1, `02`), so synthesize a fresh one here. It only
+    // ever affects auto-fit-vs-restore on the client, same as the "no id" case
+    // this replaces: a synthesized id has no viewport-cache entry either, so the
+    // browser still auto-fits.
+    const resolvedId = snapshotId ?? generateSnapshotId();
+
     if (type === "step-frames") {
       const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
-      setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame, snapshotId);
+      setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame, resolvedId);
       broadcastReplace({
         type: spec.frames[0].type ?? spec.frame_type,
         payload: spec.frames[0].payload,
         frameLabel: spec.frames[0].label,
-        stepFrames: true,
-        currentFrame: 0,
-        totalFrames: spec.frames.length,
+        cursor: 0,
+        total: spec.frames.length,
         title,
         nodeToFrame,
-        id: snapshotId,
+        id: resolvedId,
         viewport,
       });
     } else {
-      setCanvas(type as CanvasType, payload, title, snapshotId);
-      broadcastReplace({ type, payload, title, id: snapshotId, viewport });
+      setCanvas(type as CanvasType, payload, title, resolvedId);
+      broadcastReplace({ type, payload, title, id: resolvedId, cursor: 0, total: 1, viewport });
     }
 
     setLastWorkspace(workspace);

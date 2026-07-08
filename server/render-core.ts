@@ -66,9 +66,8 @@ export function commitRenderResult(
       type: frames[0].type ?? spec.frame_type,
       payload: frames[0].payload,
       frameLabel: frames[0].label,
-      stepFrames: true,
-      currentFrame: 0,
-      totalFrames: frames.length,
+      cursor: 0,
+      total: frames.length,
       title,
       nodeToFrame,
       id: newId,
@@ -88,7 +87,7 @@ export function commitRenderResult(
   // svg, html, katex, mermaid, vega-lite
   const newId = generateSnapshotId();
   setCanvas(type as CanvasType, payload, title, newId);
-  broadcastReplace({ type, payload, title, id: newId });
+  broadcastReplace({ type, payload, title, id: newId, cursor: 0, total: 1 });
   setLastWorkspace(workspace);
   const { id: snapshotId } = persistContent("render", {
     type: type as CanvasType,
@@ -136,7 +135,7 @@ export async function appendFrameAndBroadcast(
     // frame and treats subsequent appends as a continuation (F19/C3) — this
     // is distinct from the final snapshot id minted at commit time.
     const { frames, frame_type, title } = result;
-    broadcastStepFrames(frames, frame_type, frames.length - 1, title, id);
+    broadcastStepFrames(frames, frame_type, frames.length - 1, id, title);
   }
   return result;
 }
@@ -172,6 +171,6 @@ export function commitStepFramesResult(id: string): CommitStepFramesResult {
     id: commitId,
   });
   // Final broadcast for consistency (handles clear() called between appends).
-  broadcastStepFrames(frames, frame_type, 0, title, commitId);
+  broadcastStepFrames(frames, frame_type, 0, commitId, title);
   return { ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) };
 }

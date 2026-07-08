@@ -34,41 +34,59 @@ export function broadcast(message: object): void {
  * history-load, slideshow tick/finalize, and the step-frames builder preview —
  * goes through this function instead of hand-assembling the message inline.
  * A field one caller already threads through (id, viewport, nodeToFrame,
- * step-frames cursor) can no longer silently be missing from another
- * broadcast producer — this is the structural fix for the B15/C2b/C2d drift
- * class (docs/05, Milestone_v0.23).
+ * cursor/total) can no longer silently be missing from another broadcast
+ * producer — this is the structural fix for the B15/C2b/C2d drift class
+ * (docs/05, Milestone_v0.23).
  *
- * `payload`/`frameCount` are mutually exclusive: every real content replace
- * carries `payload`; only the `init_step_frames()` 0-frame placeholder
- * carries `frameCount` instead (it has no content yet).
+ * Content replaces and the `init_step_frames()` 0-frame placeholder are two
+ * genuinely different shapes (the placeholder has no content yet), modeled
+ * as a discriminated union rather than an all-optional bag of fields.
+ *
+ * `id`/`cursor`/`total` are mandatory on every content replace (v0.26 Sprint
+ * 42, U3/D3) — they replace the old `stepFrames` boolean flag entirely. A
+ * one-shot render is `cursor: 0, total: 1`; a step-frames frame is `cursor:
+ * N, total: M`. The client derives step-bar visibility from `total > 1`
+ * rather than a separate driver flag (a 1-frame step-frames sequence is
+ * indistinguishable from a one-shot render and needs no navigation UI).
  */
-export interface ReplaceBroadcast {
-  type: string;
-  payload?: string;
-  frameCount?: number;
-  frameLabel?: string;
-  stepFrames?: boolean;
-  currentFrame?: number;
-  totalFrames?: number;
-  title?: string;
-  nodeToFrame?: Record<string, number>;
-  id?: string;
-  viewport?: Viewport;
-}
+export type ReplaceBroadcast =
+  | {
+      type: string;
+      payload: string;
+      id: string;
+      cursor: number;
+      total: number;
+      frameLabel?: string;
+      title?: string;
+      nodeToFrame?: Record<string, number>;
+      viewport?: Viewport;
+    }
+  | {
+      type: "step-frames-placeholder";
+      frameCount: number;
+      title?: string;
+    };
 
 export function broadcastReplace(msg: ReplaceBroadcast): void {
+  if (!("payload" in msg)) {
+    broadcast({
+      action: "replace",
+      type: msg.type,
+      frameCount: msg.frameCount,
+      ...(msg.title !== undefined ? { title: msg.title } : {}),
+    });
+    return;
+  }
   broadcast({
     action: "replace",
     type: msg.type,
-    ...(msg.payload !== undefined ? { payload: msg.payload } : {}),
+    payload: msg.payload,
+    id: msg.id,
+    cursor: msg.cursor,
+    total: msg.total,
     ...(msg.frameLabel !== undefined ? { frameLabel: msg.frameLabel } : {}),
-    ...(msg.stepFrames !== undefined ? { stepFrames: msg.stepFrames } : {}),
-    ...(msg.currentFrame !== undefined ? { currentFrame: msg.currentFrame } : {}),
-    ...(msg.totalFrames !== undefined ? { totalFrames: msg.totalFrames } : {}),
-    ...(msg.frameCount !== undefined ? { frameCount: msg.frameCount } : {}),
     ...(msg.title !== undefined ? { title: msg.title } : {}),
     ...(msg.nodeToFrame !== undefined ? { nodeToFrame: msg.nodeToFrame } : {}),
-    ...(msg.id !== undefined ? { id: msg.id } : {}),
     ...(msg.viewport !== undefined ? { viewport: msg.viewport } : {}),
   });
 }
@@ -77,18 +95,17 @@ export function broadcastReplace(msg: ReplaceBroadcast): void {
 export function broadcastStepFrames(
   frames: Array<{ payload: string; label?: string; type?: string }>,
   frameType: string,
-  currentFrame: number,
-  title?: string,
-  id?: string
+  cursor: number,
+  id: string,
+  title?: string
 ): void {
   broadcastReplace({
-    type: frames[currentFrame].type ?? frameType,
-    payload: frames[currentFrame].payload,
-    frameLabel: frames[currentFrame].label,
-    stepFrames: true,
-    currentFrame,
-    totalFrames: frames.length,
-    title,
+    type: frames[cursor].type ?? frameType,
+    payload: frames[cursor].payload,
+    frameLabel: frames[cursor].label,
+    cursor,
+    total: frames.length,
     id,
+    title,
   });
 }

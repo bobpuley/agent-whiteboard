@@ -2,14 +2,17 @@
 // render in response to WebSocket render commands: the canvas content
 // itself, click-armed state, node action menus, and node-to-frame nav.
 //
-// Unified reducer (U3, v0.26 Sprint 41): mirrors session.ts's server-side
+// Unified reducer (U3, v0.26 Sprint 41-42): mirrors session.ts's server-side
 // Presentation + driver model instead of a `type`-tagged union — "step-frames"
-// is not a branch here. `driver` is "static" for a one-frame render, "manual"
-// whenever the current content is part of a step-frames sequence. `cursor`
-// stays 0 (frames always holds just the one currently-displayed frame) until
-// Sprint 42 changes the WS payload to carry the full sequence; `currentFrame`/
-// `totalFrames` are separate display-only metadata for the step-bar, not a
-// meaningful index into `frames` yet.
+// is not a branch here. `driver` is derived from `cmd.total > 1`: a one-shot
+// render and a 1-frame step-frames sequence are indistinguishable and both
+// need no navigation UI, so "manual" only kicks in once there's more than one
+// frame to navigate between (v0.26 Sprint 42 — replaces the old `stepFrames`
+// boolean flag, which no longer exists on the wire). `cursor` stays 0 (frames
+// always holds just the one currently-displayed frame — the server still
+// resolves and sends only the current frame, not the full sequence);
+// `currentFrame`/`totalFrames` are separate display-only metadata for the
+// step-bar, not a meaningful index into `frames`.
 import { writable } from "svelte/store";
 import type { RenderCommand, Viewport } from "../ws.js";
 import type { Frame, Presentation } from "../presentation.js";
@@ -63,16 +66,16 @@ function reduce(state: CanvasViewState, cmd: RenderCommand): CanvasViewState {
     const presentation: Presentation = {
       cursor: 0,
       frames: [frame],
+      id: cmd.id,
       ...(cmd.title !== undefined ? { title: cmd.title } : {}),
-      ...(cmd.id !== undefined ? { id: cmd.id } : {}),
     };
     return {
       ...state,
       presentation,
-      driver: cmd.stepFrames ? "manual" : "static",
+      driver: cmd.total > 1 ? "manual" : "static",
       placeholder: null,
-      currentFrame: cmd.currentFrame,
-      totalFrames: cmd.totalFrames,
+      currentFrame: cmd.cursor,
+      totalFrames: cmd.total,
       viewport: cmd.viewport,
       nodeToFrame: cmd.nodeToFrame,
       nodeToFrameEnabled: cmd.nodeToFrame !== undefined,

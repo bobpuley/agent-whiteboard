@@ -72,8 +72,8 @@ function broadcastTick(tick: Tick): void {
     seekStepFrame(frameIndex);
   }
   const state = getCanvas();
-  const id = isStepSequence(state) ? state.presentation.id : undefined;
-  broadcastStepFrames(frames, frameType, frameIndex, title, id);
+  const id = (isStepSequence(state) ? state.presentation.id : undefined) ?? generateSnapshotId();
+  broadcastStepFrames(frames, frameType, frameIndex, id, title);
 }
 
 function broadcastSlide(slide: Slide): void {
@@ -86,13 +86,13 @@ function broadcastSlide(slide: Slide): void {
     const { frames, frame_type } = spec;
     const id = generateSnapshotId();
     setStepFrames(frames, frame_type, slide.payload, slide.title, undefined, id);
-    broadcastStepFrames(frames, frame_type, 0, slide.title, id);
+    broadcastStepFrames(frames, frame_type, 0, id, slide.title);
   } else {
     // Fresh id per plain slide so the browser auto-fits (F19/C3) — without
     // this the diagram never fits to view (stays at default scale/position).
     const id = generateSnapshotId();
     setCanvas(slide.type as CanvasType, slide.payload, slide.title, id);
-    broadcastReplace({ type: slide.type, payload: slide.payload, title: slide.title, id });
+    broadcastReplace({ type: slide.type, payload: slide.payload, title: slide.title, id, cursor: 0, total: 1 });
   }
 }
 

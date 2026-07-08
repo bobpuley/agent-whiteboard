@@ -42,6 +42,8 @@ describe("slideshow", () => {
       payload: "<svg/>",
       title: undefined,
       id: expect.any(String),
+      cursor: 0,
+      total: 1,
     });
     expect(isSlideshowRunning()).toBe(false);
   });
@@ -63,14 +65,14 @@ describe("slideshow", () => {
 
     vi.advanceTimersByTime(1000);
     expect(broadcastReplace).toHaveBeenCalledTimes(2);
-    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>2</svg>", title: undefined, id: expect.any(String) });
+    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>2</svg>", title: undefined, id: expect.any(String), cursor: 0, total: 1 });
     const id2 = vi.mocked(broadcastReplace).mock.calls[1][0].id;
     expect(id2).not.toBe(id1); // distinct slides get distinct ids
     expect(isSlideshowRunning()).toBe(true);
 
     vi.advanceTimersByTime(1000);
     expect(broadcastReplace).toHaveBeenCalledTimes(3);
-    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>3</svg>", title: undefined, id: expect.any(String) });
+    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>3</svg>", title: undefined, id: expect.any(String), cursor: 0, total: 1 });
     expect(isSlideshowRunning()).toBe(false);
 
     // No further ticks after the last slide.
@@ -87,10 +89,10 @@ describe("slideshow", () => {
 
     expect(broadcastStepFrames).toHaveBeenCalledTimes(1);
     const frame0Call = vi.mocked(broadcastStepFrames).mock.calls[0];
-    const [frames0, frameType0, currentFrame0, title0, id0] = frame0Call;
+    const [frames0, frameType0, cursor0, id0, title0] = frame0Call;
     expect(frames0).toEqual([{ payload: "graph A" }, { payload: "graph B" }]);
     expect(frameType0).toBe("mermaid");
-    expect(currentFrame0).toBe(0);
+    expect(cursor0).toBe(0);
     expect(title0).toBe("Seq");
     expect(id0).toEqual(expect.any(String));
     expect(isSlideshowRunning()).toBe(true);
@@ -98,7 +100,7 @@ describe("slideshow", () => {
     vi.advanceTimersByTime(500);
     // Same id as frame 0 — this is a continuation of the same sequence, not a
     // new diagram, so the browser must not re-fit (F19/C3).
-    expect(broadcastStepFrames).toHaveBeenLastCalledWith(frames0, "mermaid", 1, "Seq", id0);
+    expect(broadcastStepFrames).toHaveBeenLastCalledWith(frames0, "mermaid", 1, id0, "Seq");
     expect(isSlideshowRunning()).toBe(false);
 
     const canvas = getCanvas();
@@ -132,7 +134,7 @@ describe("slideshow", () => {
     );
     startSlideshow([{ type: "svg", payload: "<svg>new</svg>" }], 1000, WORKSPACE);
 
-    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>new</svg>", title: undefined, id: expect.any(String) });
+    expect(broadcastReplace).toHaveBeenLastCalledWith({ type: "svg", payload: "<svg>new</svg>", title: undefined, id: expect.any(String), cursor: 0, total: 1 });
     expect(isSlideshowRunning()).toBe(false);
 
     // The cancelled first slideshow's timer must not fire.

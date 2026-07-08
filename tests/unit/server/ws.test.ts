@@ -57,7 +57,7 @@ describe("ws", () => {
     expect(client.sent).toHaveLength(0);
   });
 
-  it("broadcastStepFrames broadcasts the frame at currentFrame with per-frame type override", () => {
+  it("broadcastStepFrames broadcasts the frame at cursor with per-frame type override", () => {
     const client = new FakeSocket();
     addClient(client as never);
     client.sent = [];
@@ -66,36 +66,35 @@ describe("ws", () => {
       { payload: "A", label: "Step 1" },
       { payload: "B", label: "Step 2", type: "katex" },
     ];
-    broadcastStepFrames(frames, "mermaid", 1, "Seq Title", "sf-1");
+    broadcastStepFrames(frames, "mermaid", 1, "sf-1", "Seq Title");
 
     expect(JSON.parse(client.sent[0])).toEqual({
       action: "replace",
       type: "katex",
       payload: "B",
       frameLabel: "Step 2",
-      stepFrames: true,
-      currentFrame: 1,
-      totalFrames: 2,
+      cursor: 1,
+      total: 2,
       title: "Seq Title",
       id: "sf-1",
     });
   });
 
-  it("broadcastStepFrames falls back to frameType and omits title/id when absent", () => {
+  it("broadcastStepFrames falls back to frameType and omits title when absent", () => {
     const client = new FakeSocket();
     addClient(client as never);
     client.sent = [];
 
-    broadcastStepFrames([{ payload: "A" }], "mermaid", 0);
+    broadcastStepFrames([{ payload: "A" }], "mermaid", 0, "sf-2");
 
     expect(JSON.parse(client.sent[0])).toEqual({
       action: "replace",
       type: "mermaid",
       payload: "A",
       frameLabel: undefined,
-      stepFrames: true,
-      currentFrame: 0,
-      totalFrames: 1,
+      cursor: 0,
+      total: 1,
+      id: "sf-2",
     });
   });
 
@@ -105,17 +104,24 @@ describe("ws", () => {
   // inclusion rules directly, independent of any particular call site.
 
   describe("broadcastReplace", () => {
-    it("includes only type/payload when every optional field is absent", () => {
+    it("includes only type/payload/id/cursor/total when every optional field is absent", () => {
       const client = new FakeSocket();
       addClient(client as never);
       client.sent = [];
 
-      broadcastReplace({ type: "svg", payload: "<svg/>" });
+      broadcastReplace({ type: "svg", payload: "<svg/>", id: "snap-0", cursor: 0, total: 1 });
 
-      expect(JSON.parse(client.sent[0])).toEqual({ action: "replace", type: "svg", payload: "<svg/>" });
+      expect(JSON.parse(client.sent[0])).toEqual({
+        action: "replace",
+        type: "svg",
+        payload: "<svg/>",
+        id: "snap-0",
+        cursor: 0,
+        total: 1,
+      });
     });
 
-    it("includes title, id, and viewport when provided (plain render/history-load path)", () => {
+    it("includes title and viewport when provided (plain render/history-load path)", () => {
       const client = new FakeSocket();
       addClient(client as never);
       client.sent = [];
@@ -123,8 +129,10 @@ describe("ws", () => {
       broadcastReplace({
         type: "mermaid",
         payload: "graph TD; A-->B",
-        title: "My diagram",
         id: "snap-1",
+        cursor: 0,
+        total: 1,
+        title: "My diagram",
         viewport: { scale: 1.4, positionX: 0.1, positionY: -0.2 },
       });
 
@@ -132,13 +140,15 @@ describe("ws", () => {
         action: "replace",
         type: "mermaid",
         payload: "graph TD; A-->B",
-        title: "My diagram",
         id: "snap-1",
+        cursor: 0,
+        total: 1,
+        title: "My diagram",
         viewport: { scale: 1.4, positionX: 0.1, positionY: -0.2 },
       });
     });
 
-    it("includes the step-frames cursor fields (frameLabel/stepFrames/currentFrame/totalFrames) when set", () => {
+    it("carries a cursor/total other than 0/1 plus frameLabel for a step-frames frame (v0.26 Sprint 42 — replaces the old stepFrames boolean)", () => {
       const client = new FakeSocket();
       addClient(client as never);
       client.sent = [];
@@ -146,20 +156,20 @@ describe("ws", () => {
       broadcastReplace({
         type: "mermaid",
         payload: "graph TD; C-->D",
+        id: "snap-2",
+        cursor: 1,
+        total: 3,
         frameLabel: "Step 2",
-        stepFrames: true,
-        currentFrame: 1,
-        totalFrames: 3,
       });
 
       expect(JSON.parse(client.sent[0])).toEqual({
         action: "replace",
         type: "mermaid",
         payload: "graph TD; C-->D",
+        id: "snap-2",
+        cursor: 1,
+        total: 3,
         frameLabel: "Step 2",
-        stepFrames: true,
-        currentFrame: 1,
-        totalFrames: 3,
       });
     });
 
@@ -171,6 +181,9 @@ describe("ws", () => {
       broadcastReplace({
         type: "mermaid",
         payload: "graph TD; A-->B",
+        id: "snap-3",
+        cursor: 0,
+        total: 1,
         nodeToFrame: { A: 0, B: 1 },
       });
 
@@ -178,11 +191,14 @@ describe("ws", () => {
         action: "replace",
         type: "mermaid",
         payload: "graph TD; A-->B",
+        id: "snap-3",
+        cursor: 0,
+        total: 1,
         nodeToFrame: { A: 0, B: 1 },
       });
     });
 
-    it("includes frameCount (and omits payload) for the init_step_frames placeholder", () => {
+    it("includes frameCount (and omits payload/id/cursor/total) for the init_step_frames placeholder", () => {
       const client = new FakeSocket();
       addClient(client as never);
       client.sent = [];
@@ -197,9 +213,12 @@ describe("ws", () => {
         title: "TCP Handshake",
       });
       expect(sent).not.toHaveProperty("payload");
+      expect(sent).not.toHaveProperty("id");
+      expect(sent).not.toHaveProperty("cursor");
+      expect(sent).not.toHaveProperty("total");
     });
 
-    it("omits viewport/nodeToFrame/id/title when undefined, even for a step-frames broadcast", () => {
+    it("omits viewport/nodeToFrame/title/frameLabel when undefined, even for a step-frames broadcast", () => {
       const client = new FakeSocket();
       addClient(client as never);
       client.sent = [];
@@ -207,15 +226,14 @@ describe("ws", () => {
       broadcastReplace({
         type: "mermaid",
         payload: "graph TD; A-->B",
-        stepFrames: true,
-        currentFrame: 0,
-        totalFrames: 1,
+        id: "snap-4",
+        cursor: 0,
+        total: 1,
       });
 
       const sent = JSON.parse(client.sent[0]);
       expect(sent).not.toHaveProperty("viewport");
       expect(sent).not.toHaveProperty("nodeToFrame");
-      expect(sent).not.toHaveProperty("id");
       expect(sent).not.toHaveProperty("title");
       expect(sent).not.toHaveProperty("frameLabel");
     });

@@ -2201,7 +2201,7 @@ describe("POST /step-frames/:id/frame — live preview (v0.9)", () => {
       body: JSON.stringify({ payload: "graph TD; A" }),
     });
 
-    const [, , , title] = spy.mock.calls[0];
+    const [, , , , title] = spy.mock.calls[0];
     expect(title).toBe("TCP Handshake");
   });
 
@@ -2752,7 +2752,7 @@ describe("POST /render — id in broadcast (v0.19)", () => {
       body: JSON.stringify({ direction: "next" }),
     });
 
-    const [, , , , id] = spy.mock.calls[0];
+    const [, , , id] = spy.mock.calls[0];
     expect(id).toBe("test-uuid-generated");
   });
 
@@ -2853,7 +2853,7 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
     expect(spy.mock.calls[0][0].viewport).toBeUndefined();
   });
 
-  it("omits id when the loaded snapshot predates v0.11 and has no id field", async () => {
+  it("synthesizes a fresh id when the loaded snapshot predates v0.11 and has no id field", async () => {
     const legacySnapshot = JSON.stringify({
       timestamp: "2026-01-01T00:00:00.000Z",
       workspace: "agent-whiteboard",
@@ -2871,9 +2871,11 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
       body: JSON.stringify({ filename: "20260101_000000_screen.json" }),
     });
 
-    // broadcastReplace() itself omits both keys from the wire message when
-    // undefined (verified directly in ws.test.ts).
-    expect(spy.mock.calls[0][0].id).toBeUndefined();
+    // id/cursor/total are mandatory on every broadcast (v0.26 Sprint 42) — a
+    // legacy snapshot with no id field gets a freshly synthesized one instead
+    // of omitting the key; it has no viewport-cache entry either, so the
+    // browser still auto-fits exactly as it did when id was omitted.
+    expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated", cursor: 0, total: 1 });
     expect(spy.mock.calls[0][0].viewport).toBeUndefined();
   });
 });

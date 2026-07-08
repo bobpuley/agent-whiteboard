@@ -16,14 +16,16 @@ export type RenderCommand =
       action: "replace";
       type: RendererType;
       payload: string;
-      title?: string;        // optional label shown above the canvas
-      frameLabel?: string;   // present when this is a step-frames frame
-      stepFrames?: boolean;  // true when this is part of a step-frames sequence
-      currentFrame?: number; // step-frames cursor position (0-indexed)
-      totalFrames?: number;  // total frames in the loaded sequence
+      // id/cursor/total are always present (v0.26 Sprint 42) — they replace
+      // the old stepFrames boolean flag entirely. A one-shot render is
+      // cursor: 0, total: 1; a step-frames frame is cursor: N, total: M.
+      id: string;             // snapshot id — present on new content, echoed on step()/seek() continuations
+      cursor: number;         // frame index within the sequence (0-indexed)
+      total: number;          // total frames in the loaded sequence
+      title?: string;         // optional label shown above the canvas
+      frameLabel?: string;    // present when this is a step-frames frame
       nodeToFrame?: Record<string, number>; // node ID → frame index for autonomous navigation
-      id?: string;           // snapshot id (v0.19) — present on new content, echoed on step()/seek() continuations
-      viewport?: Viewport;   // cached zoom/pan to restore instead of auto-fitting (v0.19)
+      viewport?: Viewport;    // cached zoom/pan to restore instead of auto-fitting (v0.19)
     }
   | {
       action: "replace";
