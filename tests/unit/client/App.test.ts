@@ -23,7 +23,7 @@ describe("App.svelte", () => {
     const { container } = render(App);
     await waitFor(() => expect(capturedHandler).not.toBeNull());
 
-    capturedHandler!({ action: "replace", type: "svg", payload: '<svg><circle r="5"/></svg>' });
+    capturedHandler!({ action: "replace", type: "svg", payload: '<svg><circle r="5"/></svg>', id: "id-1", cursor: 0, total: 1 });
 
     await waitFor(() => expect(container.querySelector(".html-renderer circle")).toBeTruthy());
   });
