@@ -4,7 +4,6 @@
   import HistoryPanel from "./HistoryPanel.svelte";
   import DeleteExportModal from "./DeleteExportModal.svelte";
   import { canvasStore } from "./stores/canvasStore.js";
-  import type { CanvasState } from "./stores/canvasStore.js";
   import { doneStore } from "./stores/doneStore.js";
   import { modalStore } from "./stores/modalStore.js";
   import { stepNav } from "./stores/stepNav.js";
@@ -12,7 +11,7 @@
   import { rendererRegistry } from "./renderers/registry.js";
   import type { RendererKey } from "./renderers/registry.js";
 
-  $: ({ canvas, clickable, nodeActions, nodeToFrameEnabled } = $canvasStore);
+  $: ({ presentation, driver, placeholder, currentFrame, totalFrames, viewport, nodeToFrame, clickable, nodeActions, nodeToFrameEnabled } = $canvasStore);
 
   // Renderer registry wiring (v0.24, U6 in docs/04_architecture.md §9): looks
   // up and caches the component for the current canvas type via the registry's
@@ -25,30 +24,31 @@
   let currentComponentType: RendererKey | undefined;
   let loadToken = 0;
 
-  $: void loadRenderer(canvas.type);
+  $: rendererKey = placeholder !== null ? "step-frames-placeholder" : presentation?.frames[0]?.type as RendererKey | undefined;
+  $: void loadRenderer(rendererKey);
 
-  async function loadRenderer(type: CanvasState["type"]) {
-    if (type === "empty") {
+  async function loadRenderer(key: RendererKey | undefined) {
+    if (key === undefined) {
       currentComponent = undefined;
       currentComponentType = undefined;
       return;
     }
-    const cached = componentCache.get(type);
+    const cached = componentCache.get(key);
     if (cached) {
       currentComponent = cached;
-      currentComponentType = type;
+      currentComponentType = key;
       return;
     }
     const token = ++loadToken;
-    const Component = await rendererRegistry[type].load();
+    const Component = await rendererRegistry[key].load();
     if (token !== loadToken) return;
-    componentCache.set(type, Component);
+    componentCache.set(key, Component);
     currentComponent = Component;
-    currentComponentType = type;
+    currentComponentType = key;
   }
 
   $: rendererProps = currentComponentType
-    ? rendererRegistry[currentComponentType].props({ canvas, clickable, nodeActions, nodeToFrameEnabled })
+    ? rendererRegistry[currentComponentType].props({ presentation, placeholder, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport })
     : {};
 
   let cleanup: (() => void) | null = null;
@@ -88,35 +88,35 @@
   {/if}
 
   <div class="canvas-frame">
-    {#if canvas.type !== "empty" && canvas.title}
-      <header class="canvas-title">{canvas.title}</header>
+    {#if presentation !== null && presentation.title}
+      <header class="canvas-title">{presentation.title}</header>
     {/if}
 
     <div class="canvas">
-      {#if canvas.type === "empty"}
+      {#if presentation === null && placeholder === null}
         <p class="placeholder">Waiting for content…</p>
-      {:else if currentComponent && currentComponentType === canvas.type}
+      {:else if currentComponent && currentComponentType === rendererKey}
         <svelte:component this={currentComponent} {...rendererProps} />
       {/if}
     </div>
   </div>
 
-  {#if canvas.type !== "empty" && canvas.type !== "step-frames-placeholder" && canvas.stepFrames}
+  {#if presentation !== null && driver === "manual"}
     <div class="step-bar">
       <button
         class="step-btn"
         on:click={() => stepNav("prev")}
         aria-label="Previous frame"
-        disabled={canvas.currentFrame === 0}
+        disabled={currentFrame === 0}
       >&#8592; Prev</button>
-      {#if canvas.frameLabel}
-        <span class="step-label">{canvas.frameLabel}</span>
+      {#if presentation.frames[0].label}
+        <span class="step-label">{presentation.frames[0].label}</span>
       {/if}
       <button
         class="step-btn"
         on:click={() => stepNav("next")}
         aria-label="Next frame"
-        disabled={canvas.totalFrames !== undefined && canvas.currentFrame === canvas.totalFrames - 1}
+        disabled={totalFrames !== undefined && currentFrame === totalFrames - 1}
       >Next &#8594;</button>
     </div>
   {/if}

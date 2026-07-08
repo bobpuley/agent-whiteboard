@@ -1,29 +1,34 @@
 // Canvas state reducer — owns everything App.svelte's canvas needs to
 // render in response to WebSocket render commands: the canvas content
 // itself, click-armed state, node action menus, and node-to-frame nav.
+//
+// Unified reducer (U3, v0.26 Sprint 41): mirrors session.ts's server-side
+// Presentation + driver model instead of a `type`-tagged union — "step-frames"
+// is not a branch here. `driver` is "static" for a one-frame render, "manual"
+// whenever the current content is part of a step-frames sequence. `cursor`
+// stays 0 (frames always holds just the one currently-displayed frame) until
+// Sprint 42 changes the WS payload to carry the full sequence; `currentFrame`/
+// `totalFrames` are separate display-only metadata for the step-bar, not a
+// meaningful index into `frames` yet.
 import { writable } from "svelte/store";
 import type { RenderCommand, Viewport } from "../ws.js";
+import type { Frame, Presentation } from "../presentation.js";
 
-export type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
+export type Driver = "static" | "manual" | "timed";
 
-export type CanvasState =
-  | { type: "empty" }
-  | { type: "step-frames-placeholder"; frameCount: number; title?: string }
-  | {
-      type: CanvasType;
-      payload: string;
-      title?: string;
-      stepFrames?: boolean;
-      frameLabel?: string;
-      currentFrame?: number;
-      totalFrames?: number;
-      nodeToFrame?: Record<string, number>;
-      id?: string;
-      viewport?: Viewport;
-    };
+export interface Placeholder {
+  frameCount: number;
+  title?: string;
+}
 
 export interface CanvasViewState {
-  canvas: CanvasState;
+  presentation: Presentation | null; // null = nothing rendered yet, or clear()
+  driver: Driver;
+  placeholder: Placeholder | null; // step-frames-placeholder — incremental builder in progress, no content yet
+  currentFrame?: number;
+  totalFrames?: number;
+  viewport?: Viewport;
+  nodeToFrame?: Record<string, number>;
   clickable: boolean;
   nodeActions: Record<string, string[]> | undefined;
   // nodeToFrameEnabled is set true on replace with nodeToFrame, and set false when
@@ -33,7 +38,9 @@ export interface CanvasViewState {
 }
 
 const initialState: CanvasViewState = {
-  canvas: { type: "empty" },
+  presentation: null,
+  driver: "static",
+  placeholder: null,
   clickable: false,
   nodeActions: undefined,
   nodeToFrameEnabled: false,
@@ -41,30 +48,33 @@ const initialState: CanvasViewState = {
 
 function reduce(state: CanvasViewState, cmd: RenderCommand): CanvasViewState {
   if (cmd.action === "clear") {
-    return { canvas: { type: "empty" }, clickable: false, nodeActions: undefined, nodeToFrameEnabled: false };
+    return { presentation: null, driver: "static", placeholder: null, clickable: false, nodeActions: undefined, nodeToFrameEnabled: false };
   }
   if (cmd.action === "replace" && cmd.type === "step-frames-placeholder") {
     return {
       ...state,
-      canvas: { type: "step-frames-placeholder", frameCount: cmd.frameCount, title: cmd.title },
+      presentation: null,
+      placeholder: { frameCount: cmd.frameCount, title: cmd.title },
       nodeToFrameEnabled: false,
     };
   }
   if (cmd.action === "replace") {
+    const frame: Frame = { type: cmd.type, payload: cmd.payload, ...(cmd.frameLabel !== undefined ? { label: cmd.frameLabel } : {}) };
+    const presentation: Presentation = {
+      cursor: 0,
+      frames: [frame],
+      ...(cmd.title !== undefined ? { title: cmd.title } : {}),
+      ...(cmd.id !== undefined ? { id: cmd.id } : {}),
+    };
     return {
       ...state,
-      canvas: {
-        type: cmd.type as CanvasType,
-        payload: cmd.payload,
-        title: cmd.title,
-        stepFrames: cmd.stepFrames,
-        frameLabel: cmd.frameLabel,
-        currentFrame: cmd.currentFrame,
-        totalFrames: cmd.totalFrames,
-        nodeToFrame: cmd.nodeToFrame,
-        id: cmd.id,
-        viewport: cmd.viewport,
-      },
+      presentation,
+      driver: cmd.stepFrames ? "manual" : "static",
+      placeholder: null,
+      currentFrame: cmd.currentFrame,
+      totalFrames: cmd.totalFrames,
+      viewport: cmd.viewport,
+      nodeToFrame: cmd.nodeToFrame,
       nodeToFrameEnabled: cmd.nodeToFrame !== undefined,
     };
   }

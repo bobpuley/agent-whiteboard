@@ -13,7 +13,7 @@
 
 ### Sprint 41 — Client reducer rewrite (U3, canvasStore.ts)
 > Depends on Sprint 40's server reducer (mirrors its shape).
-- [ ] **Rewrite the client-side canvas-state store.** Replace `canvasStore.ts`'s client-side mirror union with the same Presentation + cursor + driver model. *Acceptance: `canvasStore.ts` doesn't branch on `type === "step-frames"` anywhere; `canvasStore.ts` tests are rewritten against the new shape.*
+- [x] **Rewrite the client-side canvas-state store.** Replace `canvasStore.ts`'s client-side mirror union with the same Presentation + cursor + driver model. *Acceptance: `canvasStore.ts` doesn't branch on `type === "step-frames"` anywhere; `canvasStore.ts` tests are rewritten against the new shape.*
 
 ### Sprint 42 — WebSocket contract update
 > Depends on Sprint 41's client reducer.
