@@ -1,3 +1,10 @@
+## 0.25.2 — 2026-07-08
+
+- **Sprint 40 — Server reducer rewrite (U3):** `session.ts`'s `CanvasState` 3-way union (`empty` | single-type | `step-frames`) is replaced by one `{ presentation: Presentation | null; driver }` model. `driver` is `"static"` for a one-frame render, `"manual"` whenever a step-frames sequence is loaded (one-shot render, `append_frame`, `commit_step_frames`, or a slideshow tick/finalize) — exactly the set of cases the old `type === "step-frames"` branch covered, so `step()`/`seek()` behavior (including "Prev/Next keeps working during a slideshow", F7) is unchanged
+- **`setStepFrames()` resolves each frame's effective type once, at intake** (`frame.type ?? frameType`), instead of every reader doing that lookup inline
+- **New `isStepSequence()` type guard** replaces the old `canvas.type === "step-frames"` check at every read site (`app.ts`'s `/step`/`/seek`, `mcp.ts`'s `step`/`seek` tools, `slideshow.ts`'s tick broadcast and finalize)
+- **Pure internal refactor, no contract change:** no WS/MCP/snapshot schema change (that's Sprint 42/45); verified by the full unit suite (413 tests — `session.test.ts` rewritten against the new shape) and the e2e suite (37/38 passing; the one failure is the pre-existing webServer-startup race noted in the 0.24.0 changelog, unrelated since this change only touches `server/*.ts`)
+
 ## 0.25.1 — 2026-07-08
 
 - **v0.26 (Architecture Consolidation — Unified Presentation Model) split into 10 sprints (39–48):** the milestone's original single Sprint 39 bundled 7 tasks together; split along real seams (server/client reducer, migration build/run, return-channel refactor/new-behavior) and folded contract-test rewrites into each sprint that introduces the change instead of one final rewrite sprint — see `docs/05_dev-plan.md` and `docs/milestones/Milestone_v0.26.md`
