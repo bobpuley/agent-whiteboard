@@ -9,7 +9,7 @@
 
 ### Sprint 40 — Server reducer rewrite (U3, session.ts)
 > Depends on Sprint 39's data model.
-- [ ] **Rewrite the server-side canvas-state reducer.** Replace `session.ts`'s `CanvasState` 3-way union with the single Presentation + cursor + driver (`static|manual|timed`) model. *Acceptance: `session.ts` doesn't branch on `type === "step-frames"` anywhere; it is the one server-side source of truth for the current presentation and cursor; `session.ts` unit tests are rewritten against the new shape.*
+- [x] **Rewrite the server-side canvas-state reducer.** Replace `session.ts`'s `CanvasState` 3-way union with the single Presentation + cursor + driver (`static|manual|timed`) model. *Acceptance: `session.ts` doesn't branch on `type === "step-frames"` anywhere; it is the one server-side source of truth for the current presentation and cursor; `session.ts` unit tests are rewritten against the new shape.*
 
 ### Sprint 41 — Client reducer rewrite (U3, canvasStore.ts)
 > Depends on Sprint 40's server reducer (mirrors its shape).

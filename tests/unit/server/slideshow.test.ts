@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
 import { cancelSlideshow, isSlideshowRunning, startSlideshow } from "../../../server/slideshow.js";
-import { getCanvas, resetCanvas } from "../../../server/session.js";
+import { getCanvas, isStepSequence, resetCanvas } from "../../../server/session.js";
 import { saveSnapshot } from "../../../server/snapshot.js";
 
 vi.mock("../../../server/ws.js", () => ({
@@ -102,7 +102,7 @@ describe("slideshow", () => {
     expect(isSlideshowRunning()).toBe(false);
 
     const canvas = getCanvas();
-    expect(canvas.type === "step-frames" && canvas.currentFrame).toBe(1);
+    expect(isStepSequence(canvas) && canvas.presentation.cursor).toBe(1);
   });
 
   it("cancelSlideshow stops the timer and leaves the last tick on screen", () => {
