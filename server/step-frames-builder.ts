@@ -2,7 +2,7 @@
 // Agents call init → append × N → commit instead of generating one large payload.
 
 import { randomUUID } from "crypto";
-import { validatePayload } from "./validate.js";
+import { validateFrame } from "./validate.js";
 
 const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -49,7 +49,7 @@ export async function appendFrame(
   if (!entry) {
     return { ok: false, error: "step-frames session not found or expired" };
   }
-  const validationError = await validatePayload(type ?? entry.frame_type, payload);
+  const validationError = await validateFrame({ type: type ?? entry.frame_type, payload });
   if (validationError) {
     return { ok: false, error: validationError };
   }

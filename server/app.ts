@@ -10,7 +10,7 @@ import type { ClickEvent } from "./events.js";
 import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
-import { hasMermaidKeyword, isValidWorkspaceName, validatePayload } from "./validate.js";
+import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, KNOWN_TYPES, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
@@ -31,10 +31,6 @@ export { MERMAID_KEYWORDS } from "./validate.js";
 export function isValidMermaid(payload: string): boolean {
   return hasMermaidKeyword(payload);
 }
-
-const KNOWN_TYPES: readonly (CanvasType | "step-frames")[] = [
-  "mermaid", "svg", "html", "katex", "vega-lite", "step-frames",
-];
 
 function isNodeActionsValid(v: unknown): v is Record<string, string[]> {
   if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
@@ -225,7 +221,6 @@ export function createApp(): Hono {
   app.post("/step-frames/init", async (c) => {
     const body = await c.req.json<{ frame_type?: unknown; workspace?: unknown; title?: unknown }>();
 
-    const FRAME_TYPES = ["mermaid", "svg", "html", "katex", "vega-lite"] as const;
     if (typeof body.frame_type !== "string" || !(FRAME_TYPES as readonly string[]).includes(body.frame_type)) {
       return c.json({
         ok: false,
