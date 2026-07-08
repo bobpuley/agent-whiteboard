@@ -13,20 +13,24 @@
 // page's own /stream WebSocket handshake completes) fail far more often in
 // the e2e suite.
 import type { ComponentType, SvelteComponent } from "svelte";
-import type { CanvasState, CanvasType } from "../stores/canvasStore.js";
+import type { CanvasViewState } from "../stores/canvasStore.js";
+import type { RendererType, Viewport } from "../ws.js";
 import Mermaid from "./Mermaid.svelte";
 import Html from "./Html.svelte";
 import Katex from "./Katex.svelte";
 import VegaLite from "./VegaLite.svelte";
 import StepFramesPlaceholder from "./StepFramesPlaceholder.svelte";
 
-export type RendererKey = CanvasType | "step-frames-placeholder";
+export type RendererKey = RendererType | "step-frames-placeholder";
 
 export interface RendererContext {
-  canvas: CanvasState;
+  presentation: CanvasViewState["presentation"];
+  placeholder: CanvasViewState["placeholder"];
   clickable: boolean;
   nodeActions: Record<string, string[]> | undefined;
   nodeToFrameEnabled: boolean;
+  nodeToFrame?: Record<string, number>;
+  viewport?: Viewport;
 }
 
 export interface RendererEntry {
@@ -35,8 +39,8 @@ export interface RendererEntry {
 }
 
 function htmlProps(type: "svg" | "html") {
-  return ({ canvas }: RendererContext) => ({
-    source: (canvas as Extract<CanvasState, { type: CanvasType }>).payload,
+  return ({ presentation }: RendererContext) => ({
+    source: presentation!.frames[0].payload,
     type,
   });
 }
@@ -44,17 +48,14 @@ function htmlProps(type: "svg" | "html") {
 export const rendererRegistry: Record<RendererKey, RendererEntry> = {
   mermaid: {
     load: () => Promise.resolve(Mermaid as unknown as ComponentType<SvelteComponent>),
-    props: ({ canvas, clickable, nodeActions, nodeToFrameEnabled }) => {
-      const c = canvas as Extract<CanvasState, { type: CanvasType }>;
-      return {
-        source: c.payload,
-        clickable,
-        nodeActions,
-        nodeToFrame: nodeToFrameEnabled ? c.nodeToFrame : undefined,
-        snapshotId: c.id,
-        viewport: c.viewport,
-      };
-    },
+    props: ({ presentation, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport }) => ({
+      source: presentation!.frames[0].payload,
+      clickable,
+      nodeActions,
+      nodeToFrame: nodeToFrameEnabled ? nodeToFrame : undefined,
+      snapshotId: presentation!.id,
+      viewport,
+    }),
   },
   svg: {
     load: () => Promise.resolve(Html as unknown as ComponentType<SvelteComponent>),
@@ -66,16 +67,14 @@ export const rendererRegistry: Record<RendererKey, RendererEntry> = {
   },
   katex: {
     load: () => Promise.resolve(Katex as unknown as ComponentType<SvelteComponent>),
-    props: ({ canvas }) => ({ source: (canvas as Extract<CanvasState, { type: CanvasType }>).payload }),
+    props: ({ presentation }) => ({ source: presentation!.frames[0].payload }),
   },
   "vega-lite": {
     load: () => Promise.resolve(VegaLite as unknown as ComponentType<SvelteComponent>),
-    props: ({ canvas }) => ({ source: (canvas as Extract<CanvasState, { type: CanvasType }>).payload }),
+    props: ({ presentation }) => ({ source: presentation!.frames[0].payload }),
   },
   "step-frames-placeholder": {
     load: () => Promise.resolve(StepFramesPlaceholder as unknown as ComponentType<SvelteComponent>),
-    props: ({ canvas }) => ({
-      frameCount: (canvas as Extract<CanvasState, { type: "step-frames-placeholder" }>).frameCount,
-    }),
+    props: ({ placeholder }) => ({ frameCount: placeholder!.frameCount }),
   },
 };

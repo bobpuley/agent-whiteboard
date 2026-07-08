@@ -6,7 +6,7 @@ import Katex from "../../../client/src/renderers/Katex.svelte";
 import VegaLite from "../../../client/src/renderers/VegaLite.svelte";
 import StepFramesPlaceholder from "../../../client/src/renderers/StepFramesPlaceholder.svelte";
 
-const baseCtx = { clickable: false, nodeActions: undefined, nodeToFrameEnabled: false };
+const baseCtx = { clickable: false, nodeActions: undefined, nodeToFrameEnabled: false, placeholder: null };
 
 describe("rendererRegistry", () => {
   it("has an entry for every canvas type the server can send, plus the placeholder", () => {
@@ -19,14 +19,18 @@ describe("rendererRegistry", () => {
     const Component = await rendererRegistry.mermaid.load();
     expect(Component).toBe(Mermaid);
 
-    const canvas = {
-      type: "mermaid" as const,
-      payload: "graph TD; A-->B",
+    const presentation = {
+      cursor: 0,
+      frames: [{ type: "mermaid", payload: "graph TD; A-->B" }],
       id: "abc",
+    };
+    expect(rendererRegistry.mermaid.props({
+      ...baseCtx,
+      presentation,
+      nodeToFrameEnabled: true,
       nodeToFrame: { A: 0 },
       viewport: { scale: 1, positionX: 0, positionY: 0 },
-    };
-    expect(rendererRegistry.mermaid.props({ ...baseCtx, canvas, nodeToFrameEnabled: true })).toEqual({
+    })).toEqual({
       source: "graph TD; A-->B",
       clickable: false,
       nodeActions: undefined,
@@ -40,9 +44,9 @@ describe("rendererRegistry", () => {
     expect(await rendererRegistry.svg.load()).toBe(Html);
     expect(await rendererRegistry.html.load()).toBe(Html);
 
-    const canvas = { type: "svg" as const, payload: "<svg></svg>" };
-    expect(rendererRegistry.svg.props({ ...baseCtx, canvas })).toEqual({ source: "<svg></svg>", type: "svg" });
-    expect(rendererRegistry.html.props({ ...baseCtx, canvas: { ...canvas, type: "html" } })).toEqual({
+    const presentation = { cursor: 0, frames: [{ type: "svg", payload: "<svg></svg>" }] };
+    expect(rendererRegistry.svg.props({ ...baseCtx, presentation })).toEqual({ source: "<svg></svg>", type: "svg" });
+    expect(rendererRegistry.html.props({ ...baseCtx, presentation })).toEqual({
       source: "<svg></svg>",
       type: "html",
     });
@@ -50,19 +54,22 @@ describe("rendererRegistry", () => {
 
   it("katex loads Katex.svelte and maps source", async () => {
     expect(await rendererRegistry.katex.load()).toBe(Katex);
-    const canvas = { type: "katex" as const, payload: "E=mc^2" };
-    expect(rendererRegistry.katex.props({ ...baseCtx, canvas })).toEqual({ source: "E=mc^2" });
+    const presentation = { cursor: 0, frames: [{ type: "katex", payload: "E=mc^2" }] };
+    expect(rendererRegistry.katex.props({ ...baseCtx, presentation })).toEqual({ source: "E=mc^2" });
   });
 
   it("vega-lite loads VegaLite.svelte and maps source", async () => {
     expect(await rendererRegistry["vega-lite"].load()).toBe(VegaLite);
-    const canvas = { type: "vega-lite" as const, payload: "{}" };
-    expect(rendererRegistry["vega-lite"].props({ ...baseCtx, canvas })).toEqual({ source: "{}" });
+    const presentation = { cursor: 0, frames: [{ type: "vega-lite", payload: "{}" }] };
+    expect(rendererRegistry["vega-lite"].props({ ...baseCtx, presentation })).toEqual({ source: "{}" });
   });
 
   it("step-frames-placeholder loads its component and maps frameCount", async () => {
     expect(await rendererRegistry["step-frames-placeholder"].load()).toBe(StepFramesPlaceholder);
-    const canvas = { type: "step-frames-placeholder" as const, frameCount: 3 };
-    expect(rendererRegistry["step-frames-placeholder"].props({ ...baseCtx, canvas })).toEqual({ frameCount: 3 });
+    expect(rendererRegistry["step-frames-placeholder"].props({
+      ...baseCtx,
+      presentation: null,
+      placeholder: { frameCount: 3 },
+    })).toEqual({ frameCount: 3 });
   });
 });
