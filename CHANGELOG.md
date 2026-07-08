@@ -1,3 +1,10 @@
+## 0.25.1 — 2026-07-08
+
+- **v0.26 (Architecture Consolidation — Unified Presentation Model) split into 10 sprints (39–48):** the milestone's original single Sprint 39 bundled 7 tasks together; split along real seams (server/client reducer, migration build/run, return-channel refactor/new-behavior) and folded contract-test rewrites into each sprint that introduces the change instead of one final rewrite sprint — see `docs/05_dev-plan.md` and `docs/milestones/Milestone_v0.26.md`
+- **Sprint 39 — Presentation/Frame data model (U2):** introduces `Presentation`/`Frame` as the target content model (`docs/04_architecture.md` §9.1) in new `server/presentation.ts`, and extracts `validateFrame()` as the single atomic-frame validator. `validatePayload()` is now a thin step-frames-envelope dispatcher that loops `validateFrame()` per frame; `step-frames-builder.ts`'s `appendFrame()` calls `validateFrame()` directly instead of going through the envelope path
+- **Removes a real duplication:** `app.ts` had its own locally-redeclared `KNOWN_TYPES`/`FRAME_TYPES` literals, independent copies of `validate.ts`'s lists — both now import the canonical exports
+- **Pure internal refactor, no contract change:** no MCP tool signature, WebSocket message shape, or snapshot schema changed; verified by the full test suite (409 tests, up from 392 — 17 new tests directly covering `validateFrame()`/`validatePayload()`) passing unchanged
+
 ## 0.25.0 — 2026-07-07
 
 - **Architecture Consolidation — Persistence Policy & Finalize Dedup milestone (Sprint 38):** slice C of the architecture consolidation promoted from `desing-analysis/` (FR22) — the persistence/finalize-side counterpart to v0.23's unified broadcast projector
