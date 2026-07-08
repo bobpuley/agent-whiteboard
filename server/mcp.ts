@@ -7,6 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clearCanvas, exportCanvas, getCanvas, isStepSequence, seekStepFrame, stepCursor } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
+import { generateSnapshotId } from "./snapshot.js";
 import { hasMermaidKeyword, parseMermaid, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
@@ -128,7 +129,7 @@ export function createMcpServer(): McpServer {
         const { frames, title, id } = state.presentation;
         // Same id as when this sequence was created — tells the browser this is
         // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-        broadcastStepFrames(frames, state.frameType, result.currentFrame, title, id);
+        broadcastStepFrames(frames, state.frameType, result.currentFrame, id ?? generateSnapshotId(), title);
       }
       return {
         content: [
@@ -178,12 +179,11 @@ export function createMcpServer(): McpServer {
         type: f.type,
         payload: f.payload,
         frameLabel: f.label,
-        stepFrames: true,
-        currentFrame: frame,
-        totalFrames: total,
+        cursor: frame,
+        total,
         title,
         nodeToFrame: state.nodeToFrame,
-        id,
+        id: id ?? generateSnapshotId(),
       });
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, current_frame: frame, total_frames: total }) }],

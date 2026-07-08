@@ -107,7 +107,7 @@
 | `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label, action: null }` on click (`action` is always present; null in Sprint 12 because no popup menu exists yet); `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
 | `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action }` — `action` is **always present**: null when no popup was shown or when user clicked without selecting a menu item; string value when a menu item was selected. (Phase 2 — Sprint 14) |
 | `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
-| `append_frame(id, payload, label?, type?)` *(v0.8; live preview v0.9; per-frame `type` v0.17)* | Looks up the builder entry by ID. Validates `payload` against `type ?? frame_type` (same hard gate as `render()`). Appends `{ label?, payload, type? }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (same event format as `render(type="step-frames", ...)`, `currentFrame` set to N-1 so the browser shows the latest frame, using that frame's effective type). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
+| `append_frame(id, payload, label?, type?)` *(v0.8; live preview v0.9; per-frame `type` v0.17)* | Looks up the builder entry by ID. Validates `payload` against `type ?? frame_type` (same hard gate as `render()`). Appends `{ label?, payload, type? }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (same event format as `render(type="step-frames", ...)`, `cursor` set to N-1 so the browser shows the latest frame, using that frame's effective type). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
 | `commit_step_frames(id)` *(v0.8; finalization-only v0.9)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
 | `list_snapshots(workspace)` *(v0.15)* | Validates `workspace` (same safety check as `render()`). Calls `listSnapshots(workspace, dir)` in `server/snapshot-reader.ts` (the same function `GET /snapshots` uses). Returns `{ ok: true, snapshots: [{ id, timestamp, type, title? }] }`, newest-first. Empty array if the workspace has no snapshots. |
 | `export_html(workspace, ids, output_path?)` *(v0.15)* | Validates `workspace` (same safety check as `render()`) and that `ids` is a non-empty array. Builds `items = ids.map(id => ({ workspace, id }))` and calls the same `generateExportHtml()` pipeline as `POST /export-html` (`server/export-html.ts`), extended to resolve `{ workspace, id }` items via a new `findSnapshotByIdInWorkspace(workspace, id, dir)` lookup (scoped variant of `findSnapshotById`, restricted to one workspace directory). Unresolvable ids are skipped; if none resolve, returns `{ ok: false, error: "no valid items to export" }`. On success, writes the assembled HTML to `output_path` (creating parent directories as needed) or, if omitted, to `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html` (reusing `buildDownloadFilename()`). Returns `{ ok: true, path: "<absolute path>" }`, or `{ ok: false, error: "..." }` on a write failure. |
@@ -295,10 +295,10 @@ agent calls slideshow(slides=[...], delay_ms=1000, workspace="course_2")
   → startSlideshow() cancels any previous session (finalizing it — see below), begins server-side timer
   → each tick broadcasts a slide to browser:
       for non-step-frames slides:
-        { action: "replace", type: slide_type, payload: slide_payload, title?: slide_title, id }
+        { action: "replace", type: slide_type, payload: slide_payload, id, cursor: 0, total: 1, title?: slide_title }
       for step-frames slides (expanded into frame ticks):
-        frame N: { action: "replace", type: frames[N].type ?? frame_type, payload: frames[N].payload, stepFrames: true, currentFrame: N, totalFrames: M, title?: frames[N].label, id }
-        (each frame broadcast at delay_ms intervals, using its own effective type — v0.17; frame labels shown as titles, not original slide title; same id across all frames of one sequence — v0.22)
+        frame N: { action: "replace", type: frames[N].type ?? frame_type, payload: frames[N].payload, id, cursor: N, total: M, title?: frames[N].label }
+        (each frame broadcast at delay_ms intervals, using its own effective type — v0.17; frame labels shown as titles, not original slide title; same id across all frames of one sequence — v0.22; `cursor`/`total` replace the old `stepFrames`/`currentFrame`/`totalFrames` fields — v0.26 Sprint 42)
   → browser renders each slide in sequence
   → after last slide, slideshow stops (no loop in v1) and finalizes (persists) the session — see below
   → MCP tool returns { ok: true }
@@ -366,10 +366,12 @@ agent calls append_frame(id="<uuid>", payload="graph TD; A-->B", label="Step 1")
   → IF valid: appends { label: "Step 1", payload: "graph TD; A-->B" } to frames[]
   → resets TTL timer
   → pushes partial step-frames to browser via WebSocket (v0.9 live preview):
-      { action: "replace", type: "mermaid", stepFrames: true,
-        frames: [<all frames so far>], currentFrame: 0, totalFrames: 1,
-        title?: <builder title> }
-      (browser shows growing step-frames sequence, positioned at latest frame)
+      { action: "replace", type: "mermaid", payload: "graph TD; A-->B",
+        frameLabel: "Step 1", id, cursor: 0, total: 1, title?: <builder title> }
+      (only the latest frame's resolved type/payload is sent, not the full
+      frames[] array — the browser always displays exactly one frame at a
+      time; cursor/total replace the old stepFrames/currentFrame/totalFrames
+      fields — v0.26 Sprint 42)
   → in-memory canvas state is NOT updated yet
   → returns { ok: true, frame_count: 1 }
 

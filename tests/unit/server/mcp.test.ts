@@ -365,7 +365,7 @@ describe("MCP tool: slideshow / slideshow_stop", () => {
       workspace: "ws1",
     });
     expect(result).toEqual({ ok: true });
-    expect(broadcastReplace).toHaveBeenCalledWith({ type: "svg", payload: "<svg>1</svg>", title: undefined, id: "test-uuid-generated" });
+    expect(broadcastReplace).toHaveBeenCalledWith({ type: "svg", payload: "<svg>1</svg>", title: undefined, id: "test-uuid-generated", cursor: 0, total: 1 });
   });
 
   it("rejects a slideshow with a missing workspace", async () => {
@@ -443,7 +443,7 @@ describe("MCP tool: init_step_frames / append_frame / commit_step_frames", () =>
 
     const appendResult = await callTool(server, "append_frame", { id, payload: "graph TD; A-->B", label: "Step 1" });
     expect(appendResult).toEqual({ ok: true, frame_count: 1 });
-    expect(broadcastStepFrames).toHaveBeenCalledWith([{ payload: "graph TD; A-->B", label: "Step 1" }], "mermaid", 0, "My Sequence", id);
+    expect(broadcastStepFrames).toHaveBeenCalledWith([{ payload: "graph TD; A-->B", label: "Step 1" }], "mermaid", 0, id, "My Sequence");
 
     const commitResult = await callTool(server, "commit_step_frames", { id });
     expect(commitResult).toMatchObject({ ok: true });

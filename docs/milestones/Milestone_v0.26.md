@@ -17,7 +17,7 @@
 
 ### Sprint 42 — WebSocket contract update
 > Depends on Sprint 41's client reducer.
-- [ ] **Update the WebSocket contract.** The v0.23 projector now always carries `id` + `cursor` + `total`, replacing the `stepFrames` boolean flag entirely. *Acceptance: the new shape is documented in `04_architecture.md`; unit tests assert it on every broadcast path (render, step, seek, history-load, slideshow tick/finalize); old `stepFrames`-boolean assertions are removed.*
+- [x] **Update the WebSocket contract.** The v0.23 projector now always carries `id` + `cursor` + `total`, replacing the `stepFrames` boolean flag entirely. *Acceptance: the new shape is documented in `04_architecture.md`; unit tests assert it on every broadcast path (render, step, seek, history-load, slideshow tick/finalize); old `stepFrames`-boolean assertions are removed.*
 
 ### Sprint 43 — Snapshot schema + migration script (build)
 > Depends on Sprint 42's finalized on-disk-facing schema.
