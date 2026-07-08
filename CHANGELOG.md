@@ -1,3 +1,10 @@
+## 0.25.4 — 2026-07-08
+
+- **Sprint 42 — WebSocket contract update (U3):** the v0.23 broadcast projector now always carries `id`, `cursor`, and `total` on every content `replace` message, replacing the old `stepFrames` boolean plus optional `currentFrame`/`totalFrames` pair. A one-shot render is `cursor: 0, total: 1`; a step-frames frame is `cursor: N, total: M`. `ReplaceBroadcast` in `server/ws.ts` becomes a discriminated union (content vs. the `init_step_frames` placeholder) so the type system requires every real call site to supply `id`/`cursor`/`total`; `broadcastStepFrames()`'s signature reorders to `(frames, frameType, cursor, id, title?)` since `id` is no longer optional
+- **Every server call site updated:** `render-core.ts`, `slideshow.ts`, `app.ts`, and `mcp.ts` now pass `cursor`/`total` on every broadcast; a fresh id is synthesized via `generateSnapshotId()` wherever the in-memory `Presentation` or an on-disk snapshot might lack one (legacy pre-v0.11 snapshots loaded via `POST /snapshots/load`), rather than omitting the field as before
+- **Client step-bar visibility now derives from `total > 1`** instead of the removed `stepFrames` flag: a committed 1-frame step-frames sequence is now treated as static (no navigation UI needed, matching a one-shot render) — a deliberate behavior decision, not an oversight
+- Verified by the full unit suite (415 tests, up from 414 — `ws.test.ts`/`canvasStore.test.ts`/`app.test.ts`/`mcp.test.ts`/`slideshow.test.ts` rewritten against the new shape) and typecheck (`tsc` + `svelte-check`, 0 errors); e2e: 36/38, the same 2 pre-existing dev-server-race failures confirmed present at the same rate on unmodified pre-Sprint-42 code via a stash-and-compare run
+
 ## 0.25.3 — 2026-07-08
 
 - **Sprint 41 — Client reducer rewrite (U3):** `canvasStore.ts` mirrors `session.ts`'s server-side shape: `{ presentation: Presentation | null; driver }` instead of a `type`-tagged `CanvasState` union. New `client/src/presentation.ts` defines `Frame`/`Presentation`, matching `server/presentation.ts`
