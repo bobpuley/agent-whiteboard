@@ -7,6 +7,7 @@
 
 import { saveSnapshot } from "./snapshot.js";
 import type { CanvasType, StepFrame } from "./session.js";
+import type { Frame } from "./presentation.js";
 
 /**
  * Every command path that can produce persistable content must declare one
@@ -62,6 +63,30 @@ export interface PersistResult {
 }
 
 /**
+ * Converts the caller-facing `type`/`payload` shape (still a `step-frames`
+ * envelope string for a sequence, per `render-core.ts`/`slideshow.ts`'s
+ * construction) into the unified `frames[]`/`rawPayload` shape `saveSnapshot()`
+ * writes to disk (v0.26 Sprint 43). `rawPayload` is kept only when there's
+ * more than one frame — a 1-frame step-frames sequence collapses into a plain
+ * single-frame record, same policy as the WS contract (Sprint 42).
+ */
+function toFrames(content: PersistableContent): { frames: Frame[]; rawPayload?: string } {
+  if (content.type !== "step-frames") {
+    return { frames: [{ type: content.type, payload: content.payload }] };
+  }
+  const spec = JSON.parse(content.payload) as {
+    frame_type: string;
+    frames: Array<{ payload: string; label?: string; type?: string }>;
+  };
+  const frames: Frame[] = spec.frames.map((f) => ({
+    type: f.type ?? spec.frame_type,
+    payload: f.payload,
+    ...(f.label !== undefined ? { label: f.label } : {}),
+  }));
+  return frames.length > 1 ? { frames, rawPayload: content.payload } : { frames };
+}
+
+/**
  * The one shared write path. Looks up `command`'s declared trigger:
  * `immediate`/`on-finalize` write now; `transient`/`never` are deliberate
  * no-ops. F10's "a write failure must never block rendering" backstop lives
@@ -73,10 +98,11 @@ export function persistContent(command: string, content: PersistableContent): Pe
   if (trigger === "transient" || trigger === "never") return {};
 
   try {
+    const { frames, rawPayload } = toFrames(content);
     const id = saveSnapshot(
-      content.type,
-      content.payload,
+      frames,
       { title: content.title, node_to_frame: content.nodeToFrame, workspace: content.workspace },
+      rawPayload,
       content.id
     );
     return { id };

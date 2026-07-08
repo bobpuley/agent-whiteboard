@@ -55,9 +55,9 @@ describe("persist — persistContent write behavior per trigger", () => {
     });
     expect(saveSnapshot).toHaveBeenCalledTimes(1);
     expect(saveSnapshot).toHaveBeenCalledWith(
-      "mermaid",
-      "graph TD; A",
+      [{ type: "mermaid", payload: "graph TD; A" }],
       { title: "T", node_to_frame: undefined, workspace: "ws" },
+      undefined,
       "pregenerated-id"
     );
     expect(result).toEqual({ id: "generated-id" });
@@ -71,6 +71,36 @@ describe("persist — persistContent write behavior per trigger", () => {
     });
     expect(saveSnapshot).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ id: "generated-id" });
+  });
+
+  it("converts a multi-frame step-frames payload into frames[] + rawPayload for saveSnapshot (v0.26 Sprint 43)", () => {
+    const payload = JSON.stringify({
+      frame_type: "mermaid",
+      frames: [{ payload: "graph A" }, { payload: "graph B", label: "Step 2" }],
+    });
+    persistContent("commit_step_frames", { type: "step-frames", payload, workspace: "ws" });
+
+    expect(saveSnapshot).toHaveBeenCalledWith(
+      [
+        { type: "mermaid", payload: "graph A" },
+        { type: "mermaid", payload: "graph B", label: "Step 2" },
+      ],
+      { title: undefined, node_to_frame: undefined, workspace: "ws" },
+      payload,
+      undefined
+    );
+  });
+
+  it("collapses a 1-frame step-frames payload into a plain record with no rawPayload", () => {
+    const payload = JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph A" }] });
+    persistContent("commit_step_frames", { type: "step-frames", payload, workspace: "ws" });
+
+    expect(saveSnapshot).toHaveBeenCalledWith(
+      [{ type: "mermaid", payload: "graph A" }],
+      { title: undefined, node_to_frame: undefined, workspace: "ws" },
+      undefined,
+      undefined
+    );
   });
 
   it("transient: never touches disk", () => {

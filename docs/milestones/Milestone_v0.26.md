@@ -21,7 +21,8 @@
 
 ### Sprint 43 — Snapshot schema + migration script (build)
 > Depends on Sprint 42's finalized on-disk-facing schema.
-- [ ] **Define the schema and build the migration script.** Define the unified `frames[]` on-disk schema. Write a one-time, deterministic, idempotent migration script upgrading old snapshot files to the new schema (no legacy dual-read path — OQ5a). *Acceptance: migration script is covered by tests against representative fixture snapshots of every content type (mermaid/svg/html/katex/vega-lite, one-shot and step-frames).*
+- [x] **Define the schema and build the migration script.** Define the unified `frames[]` on-disk schema. Write a one-time, deterministic, idempotent migration script upgrading old snapshot files to the new schema (no legacy dual-read path — OQ5a). *Acceptance: migration script is covered by tests against representative fixture snapshots of every content type (mermaid/svg/html/katex/vega-lite, one-shot and step-frames).*
+  - Full cutover (user decision): every read path (`snapshot-reader.ts`, `POST /snapshots/load`, `POST /export-html`, `export-html.ts`) rewritten onto the new schema in this same sprint, not deferred — the repo stays in a working state after Sprint 44's real migration runs, with no window where migrated data can't be read.
 
 ### Sprint 44 — Snapshot migration real run
 > Depends on Sprint 43's tested script. Do not start until Sprints 39–43 are stable and reviewed — a bug in the reducer/contract discovered after migrating real data is a much worse position than discovering it before.

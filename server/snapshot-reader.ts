@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
+import type { Frame } from "./presentation.js";
 
 export interface WorkspaceGroup {
   name: string;
@@ -13,6 +14,43 @@ export interface SnapshotEntry {
   timestamp: string;
   type: string;
   title?: string;
+}
+
+interface ParsedSnapshotFile {
+  id?: unknown;
+  timestamp?: unknown;
+  workspace?: unknown;
+  frames?: unknown;
+  title?: unknown;
+  nodeToFrame?: unknown;
+  rawPayload?: unknown;
+}
+
+function isFrameArray(value: unknown): value is Frame[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (f) =>
+        f !== null &&
+        typeof f === "object" &&
+        typeof (f as Frame).type === "string" &&
+        typeof (f as Frame).payload === "string"
+    )
+  );
+}
+
+/**
+ * Display "type badge" for a snapshot's frame list (v0.26 Sprint 43 — the
+ * unified schema has no top-level `type` field anymore). A multi-frame
+ * sequence badges as "step-frames", same literal value the old schema's
+ * `type` field held for one; a single frame badges as its own resolved type
+ * — this reproduces the exact old badge values for every real case,
+ * including the "1-frame step-frames === plain render" policy already
+ * applied to the WS contract (Sprint 42) and `rawPayload` (this schema).
+ */
+export function badgeType(frames: Frame[]): string {
+  return frames.length > 1 ? "step-frames" : frames[0].type;
 }
 
 export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
@@ -30,14 +68,9 @@ export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
   for (const filename of files) {
     try {
       const raw = readFileSync(join(workspaceDir, filename), "utf-8");
-      const parsed = JSON.parse(raw) as {
-        id?: unknown;
-        timestamp?: unknown;
-        type?: unknown;
-        options?: { title?: unknown };
-      };
+      const parsed = JSON.parse(raw) as ParsedSnapshotFile;
 
-      if (typeof parsed.timestamp !== "string" || typeof parsed.type !== "string") {
+      if (typeof parsed.timestamp !== "string" || !isFrameArray(parsed.frames)) {
         console.error(`[agent-whiteboard] snapshot-reader: skipping malformed file: ${filename}`);
         continue;
       }
@@ -45,16 +78,15 @@ export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
       const entry: SnapshotEntry = {
         filename,
         timestamp: parsed.timestamp,
-        type: parsed.type,
+        type: badgeType(parsed.frames),
       };
 
       if (typeof parsed.id === "string") {
         entry.id = parsed.id;
       }
 
-      const title = parsed.options?.title;
-      if (typeof title === "string" && title.length > 0) {
-        entry.title = title;
+      if (typeof parsed.title === "string" && parsed.title.length > 0) {
+        entry.title = parsed.title;
       }
 
       entries.push(entry);
@@ -113,7 +145,9 @@ export function loadSnapshotContent(workspace: string, dir: string, filename: st
 
 /**
  * Scan all workspace subdirectories under `dir` for a snapshot whose `id` field matches.
- * Returns the snapshot's `payload` string if found, or null if no match.
+ * Returns the snapshot's original re-renderable payload string if found, or null if no
+ * match. `rawPayload` (the verbatim step-frames envelope) wins when present — this
+ * mirrors `session.ts`'s `exportCanvas()`: `rawPayload ?? frames[0].payload`.
  * Old snapshots without an `id` field are silently skipped.
  */
 export function findSnapshotById(id: string, dir: string): string | null {
@@ -138,9 +172,9 @@ export function findSnapshotById(id: string, dir: string): string | null {
     for (const filename of files) {
       try {
         const raw = readFileSync(join(workspaceDir, filename), "utf-8");
-        const parsed = JSON.parse(raw) as { id?: unknown; payload?: unknown };
-        if (parsed.id === id && typeof parsed.payload === "string") {
-          return parsed.payload;
+        const parsed = JSON.parse(raw) as ParsedSnapshotFile;
+        if (parsed.id === id && isFrameArray(parsed.frames)) {
+          return typeof parsed.rawPayload === "string" ? parsed.rawPayload : parsed.frames[0].payload;
         }
       } catch (err) {
         console.error(
@@ -155,17 +189,18 @@ export function findSnapshotById(id: string, dir: string): string | null {
 }
 
 export interface SnapshotRecord {
-  type: string;
-  payload: string;
+  frames: Frame[];
   timestamp: string;
-  options?: { title?: string };
+  title?: string;
+  nodeToFrame?: Record<string, number>;
 }
 
 /**
  * Scan a single workspace directory for a snapshot whose `id` field matches.
- * Returns the full parsed record (type, payload, timestamp, options) needed by
- * the export pipeline, or null if no match (or the workspace directory is absent).
- * Old snapshots without an `id` field are silently skipped.
+ * Returns the full parsed record (frames, timestamp, title?, nodeToFrame?)
+ * needed by the export pipeline, or null if no match (or the workspace
+ * directory is absent). Old snapshots without an `id` field are silently
+ * skipped.
  */
 export function findSnapshotByIdInWorkspace(workspace: string, id: string, dir: string): SnapshotRecord | null {
   const workspaceDir = join(dir, workspace);
@@ -180,26 +215,17 @@ export function findSnapshotByIdInWorkspace(workspace: string, id: string, dir: 
   for (const filename of files) {
     try {
       const raw = readFileSync(join(workspaceDir, filename), "utf-8");
-      const parsed = JSON.parse(raw) as {
-        id?: unknown;
-        type?: unknown;
-        payload?: unknown;
-        timestamp?: unknown;
-        options?: { title?: unknown };
-      };
-      if (
-        parsed.id === id &&
-        typeof parsed.type === "string" &&
-        typeof parsed.payload === "string" &&
-        typeof parsed.timestamp === "string"
-      ) {
+      const parsed = JSON.parse(raw) as ParsedSnapshotFile;
+      if (parsed.id === id && typeof parsed.timestamp === "string" && isFrameArray(parsed.frames)) {
         const record: SnapshotRecord = {
-          type: parsed.type,
-          payload: parsed.payload,
+          frames: parsed.frames,
           timestamp: parsed.timestamp,
         };
-        if (typeof parsed.options?.title === "string") {
-          record.options = { title: parsed.options.title };
+        if (typeof parsed.title === "string") {
+          record.title = parsed.title;
+        }
+        if (parsed.nodeToFrame !== null && typeof parsed.nodeToFrame === "object") {
+          record.nodeToFrame = parsed.nodeToFrame as Record<string, number>;
         }
         return record;
       }
