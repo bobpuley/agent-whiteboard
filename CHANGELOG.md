@@ -1,3 +1,11 @@
+## 0.25.3 — 2026-07-08
+
+- **Sprint 41 — Client reducer rewrite (U3):** `canvasStore.ts` mirrors `session.ts`'s server-side shape: `{ presentation: Presentation | null; driver }` instead of a `type`-tagged `CanvasState` union. New `client/src/presentation.ts` defines `Frame`/`Presentation`, matching `server/presentation.ts`
+- **`frames` holds just the current frame; `cursor` stays 0 until Sprint 42** changes the WS payload to carry the full sequence — the client only ever receives one frame per broadcast today. `currentFrame`/`totalFrames` stay as separate display-only metadata for the step-bar
+- **`driver` is `"manual"` whenever the current content is part of a step-frames sequence** (`cmd.stepFrames`), mirroring `session.ts`'s driver semantics — the step-bar now shows on `driver === "manual"` instead of a `type !== "step-frames-placeholder" && stepFrames` check
+- **`App.svelte` and `registry.ts` updated** to read `presentation`/`driver`/`placeholder` instead of pattern-matching `canvas.type`
+- **Pure internal refactor, no WS contract change** (that's Sprint 42): verified by the full unit suite (414 tests, `canvasStore.test.ts`/`registry.test.ts` rewritten against the new shape) and typecheck (`tsc` + `svelte-check`, 0 errors); e2e failures across repeated runs are a pre-existing dev-server race, confirmed present at the same rate on unmodified pre-Sprint-41 code
+
 ## 0.25.2 — 2026-07-08
 
 - **Sprint 40 — Server reducer rewrite (U3):** `session.ts`'s `CanvasState` 3-way union (`empty` | single-type | `step-frames`) is replaced by one `{ presentation: Presentation | null; driver }` model. `driver` is `"static"` for a one-frame render, `"manual"` whenever a step-frames sequence is loaded (one-shot render, `append_frame`, `commit_step_frames`, or a slideshow tick/finalize) — exactly the set of cases the old `type === "step-frames"` branch covered, so `step()`/`seek()` behavior (including "Prev/Next keeps working during a slideshow", F7) is unchanged
