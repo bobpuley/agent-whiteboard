@@ -2,9 +2,9 @@
 // Phase 2 feature (Sprint 9).
 
 import { broadcastReplace, broadcastStepFrames } from "./ws.js";
-import { getCanvas, setCanvas, setStepFrames, seekStepFrame } from "./session.js";
+import { getCanvas, isStepSequence, setCanvas, setStepFrames, seekStepFrame } from "./session.js";
 import { generateSnapshotId } from "./snapshot.js";
-import { assembleStepFramesPayload, persistContent } from "./persist.js";
+import { persistContent } from "./persist.js";
 import type { CanvasType, StepFrame } from "./session.js";
 
 export interface Slide {
@@ -72,7 +72,7 @@ function broadcastTick(tick: Tick): void {
     seekStepFrame(frameIndex);
   }
   const state = getCanvas();
-  const id = state.type === "step-frames" ? state.id : undefined;
+  const id = isStepSequence(state) ? state.presentation.id : undefined;
   broadcastStepFrames(frames, frameType, frameIndex, title, id);
 }
 
@@ -113,24 +113,24 @@ let activeWorkspace: string | undefined;
 function finalizeSlideshow(): void {
   if (activeWorkspace === undefined) return;
   const canvas = getCanvas();
-  if (canvas.type === "empty") return;
+  if (canvas.presentation === null) return;
 
-  if (canvas.type === "step-frames") {
-    const payload = assembleStepFramesPayload(canvas.frameType, canvas.frames);
+  const { frames, title, id } = canvas.presentation;
+  if (isStepSequence(canvas)) {
     persistContent("slideshow-end", {
       type: "step-frames",
-      payload,
-      title: canvas.title,
+      payload: canvas.rawPayload,
+      title,
       workspace: activeWorkspace,
-      id: canvas.id ?? generateSnapshotId(),
+      id: id ?? generateSnapshotId(),
     });
   } else {
     persistContent("slideshow-end", {
-      type: canvas.type,
-      payload: canvas.payload,
-      title: canvas.title,
+      type: frames[0].type as CanvasType,
+      payload: frames[0].payload,
+      title,
       workspace: activeWorkspace,
-      id: canvas.id ?? generateSnapshotId(),
+      id: id ?? generateSnapshotId(),
     });
   }
 }

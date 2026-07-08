@@ -7,7 +7,7 @@ import { existsSync, readFileSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./events.js";
 import type { ClickEvent } from "./events.js";
-import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, isStepSequence, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, KNOWN_TYPES, validatePayload } from "./validate.js";
@@ -120,10 +120,11 @@ export function createApp(): Hono {
     }
     // Push new frame to browser.
     const state = getCanvas();
-    if (state.type === "step-frames") {
+    if (isStepSequence(state)) {
+      const { frames, title, id } = state.presentation;
       // Same id as when this sequence was created — tells the browser this is
       // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-      broadcastStepFrames(state.frames, state.frameType, result.currentFrame, state.title, state.id);
+      broadcastStepFrames(frames, state.frameType, result.currentFrame, title, id);
     }
     return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });
   });
@@ -134,25 +135,26 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "frame must be an integer" }, 400);
     }
     const state = getCanvas();
-    if (state.type !== "step-frames") {
+    if (!isStepSequence(state)) {
       return c.json({ ok: false, error: "no step-frames sequence is loaded" });
     }
-    const total = state.frames.length;
+    const { frames, title, id } = state.presentation;
+    const total = frames.length;
     if (body.frame < 0 || body.frame >= total) {
       return c.json({ ok: false, error: `frame out of range: must be 0–${total - 1}` });
     }
     seekStepFrame(body.frame);
-    const frame = state.frames[body.frame];
+    const frame = frames[body.frame];
     broadcastReplace({
-      type: frame.type ?? state.frameType,
+      type: frame.type,
       payload: frame.payload,
       frameLabel: frame.label,
       stepFrames: true,
       currentFrame: body.frame,
       totalFrames: total,
-      title: state.title,
+      title,
       nodeToFrame: state.nodeToFrame,
-      id: state.id,
+      id,
     });
     return c.json({ ok: true, current_frame: body.frame, total_frames: total });
   });

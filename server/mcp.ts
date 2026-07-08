@@ -5,7 +5,7 @@ import { homedir } from "os";
 import { join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearCanvas, exportCanvas, getCanvas, seekStepFrame, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getCanvas, isStepSequence, seekStepFrame, stepCursor } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { hasMermaidKeyword, parseMermaid, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
@@ -124,10 +124,11 @@ export function createMcpServer(): McpServer {
         };
       }
       const state = getCanvas();
-      if (state.type === "step-frames") {
+      if (isStepSequence(state)) {
+        const { frames, title, id } = state.presentation;
         // Same id as when this sequence was created — tells the browser this is
         // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-        broadcastStepFrames(state.frames, state.frameType, result.currentFrame, state.title, state.id);
+        broadcastStepFrames(frames, state.frameType, result.currentFrame, title, id);
       }
       return {
         content: [
@@ -159,29 +160,30 @@ export function createMcpServer(): McpServer {
     },
     ({ frame }) => {
       const state = getCanvas();
-      if (state.type !== "step-frames") {
+      if (!isStepSequence(state)) {
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: false, error: "no step-frames sequence is loaded" }) }],
         };
       }
-      const total = state.frames.length;
+      const { frames, title, id } = state.presentation;
+      const total = frames.length;
       if (frame < 0 || frame >= total) {
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: false, error: `frame out of range: must be 0–${total - 1}` }) }],
         };
       }
       seekStepFrame(frame);
-      const f = state.frames[frame];
+      const f = frames[frame];
       broadcastReplace({
-        type: f.type ?? state.frameType,
+        type: f.type,
         payload: f.payload,
         frameLabel: f.label,
         stepFrames: true,
         currentFrame: frame,
         totalFrames: total,
-        title: state.title,
+        title,
         nodeToFrame: state.nodeToFrame,
-        id: state.id,
+        id,
       });
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, current_frame: frame, total_frames: total }) }],

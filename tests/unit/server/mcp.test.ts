@@ -26,7 +26,7 @@ import { createMcpServer } from "../../../server/mcp.js";
 import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
 import { signalClick, signalDone } from "../../../server/events.js";
-import { getCanvas, resetCanvas, resetLastWorkspace } from "../../../server/session.js";
+import { getCanvas, isStepSequence, resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 
 interface ToolCallResult {
   content: { type: string; text: string }[];
@@ -236,7 +236,7 @@ describe("MCP tool: render — basic types", () => {
       options: { workspace: "ws1" },
     });
     expect(result).toMatchObject({ ok: true });
-    expect(getCanvas()).toMatchObject({ type: "svg", payload: "<svg/>" });
+    expect(getCanvas()).toMatchObject({ presentation: { frames: [{ type: "svg", payload: "<svg/>" }] } });
     expect(broadcastReplace).toHaveBeenCalledWith(expect.objectContaining({ type: "svg", payload: "<svg/>" }));
   });
 
@@ -345,7 +345,7 @@ describe("MCP tool: clear", () => {
     await callTool(server, "render", { type: "svg", payload: "<svg/>", options: { workspace: "ws1" } });
     const result = await callTool(server, "clear", {});
     expect(result).toEqual({ ok: true });
-    expect(getCanvas()).toEqual({ type: "empty" });
+    expect(getCanvas()).toEqual({ presentation: null, driver: "static" });
     expect(broadcast).toHaveBeenLastCalledWith({ action: "clear" });
   });
 });
@@ -449,7 +449,9 @@ describe("MCP tool: init_step_frames / append_frame / commit_step_frames", () =>
     expect(commitResult).toMatchObject({ ok: true });
 
     const canvas = getCanvas();
-    expect(canvas.type === "step-frames" && canvas.frames).toEqual([{ payload: "graph TD; A-->B", label: "Step 1" }]);
+    expect(isStepSequence(canvas) && canvas.presentation.frames).toEqual([
+      { type: "mermaid", payload: "graph TD; A-->B", label: "Step 1" },
+    ]);
   });
 
   it("append_frame returns an error for an unknown id", async () => {
