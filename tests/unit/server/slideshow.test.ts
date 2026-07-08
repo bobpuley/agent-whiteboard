@@ -173,9 +173,9 @@ describe("slideshow", () => {
       vi.advanceTimersByTime(1000); // last tick fires — slideshow completes naturally
       expect(saveSnapshot).toHaveBeenCalledTimes(1);
       expect(saveSnapshot).toHaveBeenCalledWith(
-        "svg",
-        "<svg>2</svg>",
+        [{ type: "svg", payload: "<svg>2</svg>" }],
         { title: undefined, workspace: WORKSPACE },
+        undefined,
         expect.any(String)
       );
     });
@@ -191,9 +191,13 @@ describe("slideshow", () => {
       vi.advanceTimersByTime(500); // frame 2 (last) — natural completion
       expect(saveSnapshot).toHaveBeenCalledTimes(1);
       expect(saveSnapshot).toHaveBeenCalledWith(
-        "step-frames",
-        payload,
+        [
+          { type: "mermaid", payload: "graph A" },
+          { type: "mermaid", payload: "graph B" },
+          { type: "mermaid", payload: "graph C" },
+        ],
         { title: "Seq", workspace: WORKSPACE },
+        payload,
         expect.any(String)
       );
     });
@@ -210,9 +214,9 @@ describe("slideshow", () => {
       cancelSlideshow();
       expect(saveSnapshot).toHaveBeenCalledTimes(1);
       expect(saveSnapshot).toHaveBeenCalledWith(
-        "svg",
-        "<svg>1</svg>",
+        [{ type: "svg", payload: "<svg>1</svg>" }],
         { title: undefined, workspace: WORKSPACE },
+        undefined,
         expect.any(String)
       );
     });
@@ -229,9 +233,9 @@ describe("slideshow", () => {
       startSlideshow([{ type: "svg", payload: "<svg>new</svg>" }], 1000, WORKSPACE);
       expect(saveSnapshot).toHaveBeenCalledTimes(1);
       expect(saveSnapshot).toHaveBeenCalledWith(
-        "svg",
-        "<svg>old</svg>",
+        [{ type: "svg", payload: "<svg>old</svg>" }],
         { title: undefined, workspace: WORKSPACE },
+        undefined,
         expect.any(String)
       );
     });

@@ -11,10 +11,13 @@ import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, isStepSequence,
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
-import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, KNOWN_TYPES, validatePayload } from "./validate.js";
+import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, KNOWN_TYPES, validateFrame, validatePayload } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
+import type { SnapshotRecord } from "./snapshot-reader.js";
+import { assembleStepFramesPayload } from "./persist.js";
+import type { Frame } from "./presentation.js";
 import {
   appendFrameAndBroadcast,
   commitRenderResult,
@@ -401,33 +404,46 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: `snapshot not found: ${filename}` });
     }
 
-    let snapshot: { id?: unknown; type?: unknown; payload?: unknown; options?: { title?: string; node_to_frame?: Record<string, number> } };
+    let snapshot: {
+      id?: unknown;
+      frames?: unknown;
+      title?: unknown;
+      nodeToFrame?: unknown;
+      rawPayload?: unknown;
+    };
     try {
       snapshot = JSON.parse(raw) as typeof snapshot;
     } catch {
       return c.json({ ok: false, error: "snapshot file is malformed JSON" });
     }
 
-    if (typeof snapshot.type !== "string" || typeof snapshot.payload !== "string") {
+    if (!Array.isArray(snapshot.frames) || snapshot.frames.length === 0) {
       return c.json({ ok: false, error: "snapshot file is missing required fields" });
     }
-
-    const type = snapshot.type;
-    const payload = snapshot.payload;
-    const options = snapshot.options;
+    const isFrame = (f: unknown): f is Frame =>
+      f !== null && typeof f === "object" && typeof (f as Frame).type === "string" && typeof (f as Frame).payload === "string";
+    if (!snapshot.frames.every(isFrame)) {
+      return c.json({ ok: false, error: "snapshot file is missing required fields" });
+    }
+    const frames = snapshot.frames as Frame[];
+    const title = typeof snapshot.title === "string" ? snapshot.title : undefined;
+    const nodeToFrame =
+      snapshot.nodeToFrame !== null && typeof snapshot.nodeToFrame === "object"
+        ? (snapshot.nodeToFrame as Record<string, number>)
+        : undefined;
     // Pre-v0.11 snapshots may lack an id (J1, `02`) — not addressable by the
     // viewport cache; the browser falls back to treating it as unseen (auto-fit).
     const snapshotId = typeof snapshot.id === "string" ? snapshot.id : undefined;
     const viewport = snapshotId !== undefined ? getViewport(snapshotId) : undefined;
 
-    const validationError = await validatePayload(type, payload);
-    if (validationError) {
-      return c.json({ ok: false, error: validationError });
+    for (const frame of frames) {
+      const validationError = await validateFrame(frame);
+      if (validationError) {
+        return c.json({ ok: false, error: validationError });
+      }
     }
 
     // Broadcast to browser and update in-memory state — write-silent (no saveSnapshot).
-    const title = options?.title;
-    const nodeToFrame = options?.node_to_frame;
 
     // A concrete id is required on every broadcast (v0.26 Sprint 42) — pre-v0.11
     // snapshots may lack one (J1, `02`), so synthesize a fresh one here. It only
@@ -436,23 +452,26 @@ export function createApp(): Hono {
     // browser still auto-fits.
     const resolvedId = snapshotId ?? generateSnapshotId();
 
-    if (type === "step-frames") {
-      const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
-      setStepFrames(spec.frames, spec.frame_type, payload, title, nodeToFrame, resolvedId);
+    if (frames.length > 1) {
+      const stepFrames: StepFrame[] = frames.map((f) => ({ payload: f.payload, type: f.type, ...(f.label !== undefined ? { label: f.label } : {}) }));
+      // rawPayload (v0.26 Sprint 43) carries the verbatim original step-frames
+      // envelope — reconstruct only if a hand-edited/pre-migration file lacks it.
+      const rawPayload = typeof snapshot.rawPayload === "string" ? snapshot.rawPayload : assembleStepFramesPayload(frames[0].type, stepFrames);
+      setStepFrames(stepFrames, frames[0].type, rawPayload, title, nodeToFrame, resolvedId);
       broadcastReplace({
-        type: spec.frames[0].type ?? spec.frame_type,
-        payload: spec.frames[0].payload,
-        frameLabel: spec.frames[0].label,
+        type: frames[0].type,
+        payload: frames[0].payload,
+        frameLabel: frames[0].label,
         cursor: 0,
-        total: spec.frames.length,
+        total: frames.length,
         title,
         nodeToFrame,
         id: resolvedId,
         viewport,
       });
     } else {
-      setCanvas(type as CanvasType, payload, title, resolvedId);
-      broadcastReplace({ type, payload, title, id: resolvedId, cursor: 0, total: 1, viewport });
+      setCanvas(frames[0].type as CanvasType, frames[0].payload, title, resolvedId);
+      broadcastReplace({ type: frames[0].type, payload: frames[0].payload, title, id: resolvedId, cursor: 0, total: 1, viewport });
     }
 
     setLastWorkspace(workspace);
@@ -602,25 +621,22 @@ export function createApp(): Hono {
         const raw = loadSnapshotContent(workspace, root, filename);
         if (raw === null) continue;
 
-        let record: { type?: unknown; payload?: unknown; timestamp?: unknown; options?: { title?: string } };
+        let parsed: { frames?: unknown; timestamp?: unknown; title?: unknown; nodeToFrame?: unknown };
         try {
-          record = JSON.parse(raw) as typeof record;
+          parsed = JSON.parse(raw) as typeof parsed;
         } catch {
           continue;
         }
 
-        if (typeof record.type !== "string" || typeof record.payload !== "string" || typeof record.timestamp !== "string") continue;
+        const isFrame = (f: unknown): f is Frame =>
+          f !== null && typeof f === "object" && typeof (f as Frame).type === "string" && typeof (f as Frame).payload === "string";
+        if (!Array.isArray(parsed.frames) || parsed.frames.length === 0 || !parsed.frames.every(isFrame) || typeof parsed.timestamp !== "string") continue;
 
-        validItems.push({
-          workspace,
-          filename,
-          record: {
-            type: record.type,
-            payload: record.payload,
-            timestamp: record.timestamp,
-            options: record.options,
-          },
-        });
+        const record: SnapshotRecord = { frames: parsed.frames as Frame[], timestamp: parsed.timestamp };
+        if (typeof parsed.title === "string") record.title = parsed.title;
+        if (parsed.nodeToFrame !== null && typeof parsed.nodeToFrame === "object") record.nodeToFrame = parsed.nodeToFrame as Record<string, number>;
+
+        validItems.push({ workspace, filename, record });
       } else if (typeof id === "string") {
         const record = findSnapshotByIdInWorkspace(workspace, id, root);
         if (record === null) continue;

@@ -12,8 +12,7 @@ function vegaItem(workspace: string, marker: string, mark: string): ValidatedExp
     workspace,
     filename: `${marker}_screen.json`,
     record: {
-      type: "vega-lite",
-      payload: JSON.stringify(spec),
+      frames: [{ type: "vega-lite", payload: JSON.stringify(spec) }],
       timestamp: new Date().toISOString(),
     },
   };

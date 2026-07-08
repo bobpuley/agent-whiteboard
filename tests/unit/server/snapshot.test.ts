@@ -20,8 +20,8 @@ describe("saveSnapshot — filename uniqueness (B7)", () => {
   });
 
   it("writes two distinct files for two saves in the same wall-clock second", () => {
-    const id1 = saveSnapshot("mermaid", "graph TD; A", { workspace: "ws" });
-    const id2 = saveSnapshot("mermaid", "graph TD; B", { workspace: "ws" });
+    const id1 = saveSnapshot([{ type: "mermaid", payload: "graph TD; A" }], { workspace: "ws" });
+    const id2 = saveSnapshot([{ type: "mermaid", payload: "graph TD; B" }], { workspace: "ws" });
 
     expect(id1).toBeDefined();
     expect(id2).toBeDefined();
@@ -33,7 +33,7 @@ describe("saveSnapshot — filename uniqueness (B7)", () => {
   });
 
   it("filename still matches the *_screen.json pattern used by load/delete endpoints", () => {
-    saveSnapshot("mermaid", "graph TD; A", { workspace: "ws" });
+    saveSnapshot([{ type: "mermaid", payload: "graph TD; A" }], { workspace: "ws" });
     const files = readdirSync(join(root, "ws"));
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/^[^/]+_screen\.json$/);
@@ -64,7 +64,7 @@ describe("saveSnapshot — pre-generated id (v0.19, viewport persistence)", () =
 
   it("reuses a pre-generated id instead of minting a new one", () => {
     const pregenerated = generateSnapshotId();
-    const returned = saveSnapshot("mermaid", "graph TD; A", { workspace: "ws" }, pregenerated);
+    const returned = saveSnapshot([{ type: "mermaid", payload: "graph TD; A" }], { workspace: "ws" }, undefined, pregenerated);
     expect(returned).toBe(pregenerated);
 
     const files = readdirSync(join(root, "ws")).filter((f) => f.endsWith("_screen.json"));
@@ -74,7 +74,7 @@ describe("saveSnapshot — pre-generated id (v0.19, viewport persistence)", () =
   });
 
   it("still generates its own id when none is provided", () => {
-    const returned = saveSnapshot("mermaid", "graph TD; A", { workspace: "ws" });
+    const returned = saveSnapshot([{ type: "mermaid", payload: "graph TD; A" }], { workspace: "ws" });
     expect(returned).toBeDefined();
     expect(returned).toMatch(/^[0-9a-f-]{36}$/);
   });

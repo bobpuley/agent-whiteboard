@@ -217,22 +217,27 @@ agent calls render(type="mermaid", payload="graph TD; A-->B", options={workspace
   → IF payload validation passes:
       → stores as current canvas state (in-memory)
       → pushes render command over WebSocket to browser
-      → calls saveSnapshot(type, payload, options)  [snapshot.ts]
+      → persistContent() converts the type/payload shape into frames[]/rawPayload
+        (unwraps a step-frames envelope; a 1-frame sequence drops rawPayload —
+        see toFrames() in persist.ts, v0.26 Sprint 43)
+      → calls saveSnapshot(frames, options, rawPayload?, id?)  [snapshot.ts]
           → workspace: options.workspace (always present; no env var fallback)
           → resolves dir: WHITEBOARD_SNAPSHOTS_DIR env || ~/.agent-whiteboard/
-          → path: <dir>/<workspace>/<yyyyMMdd_HHmmss>_screen.json
+          → path: <dir>/<workspace>/<yyyyMMdd_HHmmss>_<id>_screen.json
           → creates directory if absent (mkdirSync recursive)
-          → writes JSON: { timestamp, workspace, type, payload, options }
+          → writes JSON: { id, timestamp, workspace, cursor: 0, frames, title?, nodeToFrame?, rawPayload? }
           → if write fails: logs warning to stderr, does NOT propagate error
   → IF payload validation fails: returns { ok: false, error: "..." } — no snapshot written
 ```
+
+**Unified `frames[]` snapshot schema (v0.26 Sprint 43):** replaces the old top-level `type`/`payload`/`options` triple. See `SnapshotFile` in `server/snapshot.ts` and F10 in `03_requirements.md` for the full field list. Every reader (`snapshot-reader.ts`, `POST /snapshots/load`, `export-html.ts`) understands only this shape — a one-time migration script (`server/migrate-snapshots.ts`) upgrades pre-Sprint-43 files; there is no dual-read path for the old shape (OQ5a in `02`).
 
 Snapshot directory layout:
 ```
 ~/.agent-whiteboard/
 └── my-course/                 ← workspace (from options.workspace, always agent-supplied — see F14/G2)
-    ├── 20260609_143000_screen.json
-    ├── 20260609_143215_screen.json
+    ├── 20260609_143000_<id>_screen.json
+    ├── 20260609_143215_<id>_screen.json
     └── …
 ```
 
@@ -382,7 +387,7 @@ agent calls commit_step_frames(id="<uuid>")
       { frame_type: "mermaid", frames: [{ label, payload }, ...] }
   → cancels any running slideshow (same as render())
   → updates in-memory canvas state (so export() returns the assembled JSON)
-  → calls saveSnapshot(type="step-frames", payload, options={workspace, title})
+  → persistContent() converts to frames[]/rawPayload, calls saveSnapshot(frames, {workspace, title}, rawPayload, id)
   → pushes final WebSocket broadcast (handles edge case where clear() was called between appends)
   → deletes builder entry for this id
   → returns { ok: true }

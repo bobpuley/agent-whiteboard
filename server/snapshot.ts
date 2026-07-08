@@ -1,11 +1,41 @@
 import { mkdirSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
+import type { Frame } from "./presentation.js";
 
 export interface RenderOptions {
   title?: string;
   node_to_frame?: Record<string, number>;
   workspace: string;
+}
+
+/**
+ * On-disk snapshot schema (v0.26 Sprint 43 — unified `frames[]` schema,
+ * replacing the old top-level `type`/`payload`/`options` triple). Every
+ * snapshot is a `Presentation`-shaped record: a one-shot render is a
+ * single-element `frames` array; a step-frames sequence is the full
+ * multi-element array with each frame's already-resolved effective type
+ * (`frame.type ?? frame_type`). `cursor` is always 0 at write time — history
+ * load always redisplays a sequence from its first frame, so there is
+ * nothing else to preserve.
+ *
+ * `rawPayload`, present only when `frames.length > 1`, mirrors
+ * `session.ts`'s `CanvasState.rawPayload`: the verbatim original step-frames
+ * envelope JSON (`{ frame_type, frames }`), kept solely so `export(id)` can
+ * return byte-identical content instead of a reconstructed approximation. A
+ * committed 1-frame step-frames sequence has no `rawPayload` — per the same
+ * policy applied to the WS contract in Sprint 42, it's indistinguishable
+ * from a one-shot render.
+ */
+export interface SnapshotFile {
+  id: string;
+  timestamp: string;
+  workspace: string;
+  cursor: number;
+  frames: Frame[];
+  title?: string;
+  nodeToFrame?: Record<string, number>;
+  rawPayload?: string;
 }
 
 /** Generate a snapshot id up front, before the write happens — lets callers
@@ -16,9 +46,9 @@ export function generateSnapshotId(): string {
 }
 
 export function saveSnapshot(
-  type: string,
-  payload: string,
+  frames: Frame[],
   options: RenderOptions,
+  rawPayload?: string,
   id?: string
 ): string | undefined {
   try {
@@ -32,19 +62,16 @@ export function saveSnapshot(
     // Include the (already-unique) id so two writes in the same second never collide.
     const filename = `${formatTimestamp(now)}_${usedId}_screen.json`;
 
-    const content: Record<string, unknown> = {
+    const content: SnapshotFile = {
       id: usedId,
       timestamp: now.toISOString(),
       workspace,
-      type,
-      payload,
+      cursor: 0,
+      frames,
+      ...(options.title !== undefined ? { title: options.title } : {}),
+      ...(options.node_to_frame !== undefined ? { nodeToFrame: options.node_to_frame } : {}),
+      ...(rawPayload !== undefined ? { rawPayload } : {}),
     };
-    if (options.title !== undefined || options.node_to_frame !== undefined) {
-      const cleanedOptions: Record<string, unknown> = {};
-      if (options.title !== undefined) cleanedOptions.title = options.title;
-      if (options.node_to_frame !== undefined) cleanedOptions.node_to_frame = options.node_to_frame;
-      content.options = cleanedOptions;
-    }
 
     writeFileSync(join(dir, filename), JSON.stringify(content, null, 2), "utf-8");
     return usedId;

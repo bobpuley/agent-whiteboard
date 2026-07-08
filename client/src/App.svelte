@@ -47,7 +47,14 @@
     currentComponentType = key;
   }
 
-  $: rendererProps = currentComponentType
+  // Only compute props once currentComponentType actually matches the live
+  // rendererKey — the same guard the template below uses to decide whether to
+  // render at all. Without it, a stale-but-still-cached currentComponentType
+  // (e.g. "mermaid" from before a clear()/WS-disconnect reset presentation to
+  // null) recomputes props eagerly against content that's no longer there,
+  // crashing on registry.ts's non-null assertions before the template ever
+  // gets a chance to fall back to the "Waiting for content…" branch.
+  $: rendererProps = currentComponentType && currentComponentType === rendererKey
     ? rendererRegistry[currentComponentType].props({ presentation, placeholder, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport })
     : {};
 

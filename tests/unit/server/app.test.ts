@@ -12,13 +12,17 @@ vi.mock("../../../server/snapshot.js", () => ({
   generateSnapshotId: vi.fn(() => "test-uuid-generated"),
 }));
 
-vi.mock("../../../server/snapshot-reader.js", () => ({
-  listSnapshots: vi.fn(),
-  listAllSnapshots: vi.fn(),
-  loadSnapshotContent: vi.fn(),
-  findSnapshotById: vi.fn(),
-  findSnapshotByIdInWorkspace: vi.fn(),
-}));
+vi.mock("../../../server/snapshot-reader.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/snapshot-reader.js")>();
+  return {
+    ...actual,
+    listSnapshots: vi.fn(),
+    listAllSnapshots: vi.fn(),
+    loadSnapshotContent: vi.fn(),
+    findSnapshotById: vi.fn(),
+    findSnapshotByIdInWorkspace: vi.fn(),
+  };
+});
 
 vi.mock("../../../server/ws.js", () => ({
   broadcast: vi.fn(),
@@ -1154,7 +1158,12 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     });
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { title: undefined, workspace: WORKSPACE }, "test-uuid-generated");
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
+      [{ type: "mermaid", payload }],
+      { title: undefined, workspace: WORKSPACE },
+      undefined,
+      "test-uuid-generated"
+    );
   });
 
   it("calls saveSnapshot with title when options.title is provided", async () => {
@@ -1166,7 +1175,12 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     });
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, { workspace: WORKSPACE, title: "My diagram" }, "test-uuid-generated");
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
+      [{ type: "mermaid", payload }],
+      { workspace: WORKSPACE, title: "My diagram" },
+      undefined,
+      "test-uuid-generated"
+    );
   });
 
   it("does NOT call saveSnapshot when render payload is invalid", async () => {
@@ -1198,9 +1212,13 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
-      "step-frames",
-      THREE_FRAME_SEQUENCE,
+      [
+        { type: "mermaid", label: "Step 1", payload: "graph TD; A" },
+        { type: "mermaid", label: "Step 2", payload: "graph TD; A --> B" },
+        { type: "mermaid", label: "Step 3", payload: "graph TD; A --> B --> C" },
+      ],
       { title: undefined, node_to_frame: undefined, workspace: WORKSPACE },
+      THREE_FRAME_SEQUENCE,
       "test-uuid-generated"
     );
   });
@@ -1325,23 +1343,28 @@ describe("GET /snapshots — explicit ?workspace= param (v0.15)", () => {
 const VALID_SNAPSHOT_JSON = JSON.stringify({
   timestamp: "2026-06-09T14:30:00.000Z",
   workspace: "agent-whiteboard",
-  type: "mermaid",
-  payload: "graph TD; A --> B",
-  options: { title: "Loaded diagram" },
+  cursor: 0,
+  frames: [{ type: "mermaid", payload: "graph TD; A --> B" }],
+  title: "Loaded diagram",
 });
 
 const VALID_SVG_SNAPSHOT_JSON = JSON.stringify({
   timestamp: "2026-06-09T14:31:00.000Z",
   workspace: "agent-whiteboard",
-  type: "svg",
-  payload: "<svg><circle r='5'/></svg>",
+  cursor: 0,
+  frames: [{ type: "svg", payload: "<svg><circle r='5'/></svg>" }],
 });
 
 const VALID_STEP_FRAMES_SNAPSHOT_JSON = JSON.stringify({
   timestamp: "2026-06-09T14:32:00.000Z",
   workspace: "agent-whiteboard",
-  type: "step-frames",
-  payload: THREE_FRAME_SEQUENCE,
+  cursor: 0,
+  frames: [
+    { type: "mermaid", label: "Step 1", payload: "graph TD; A" },
+    { type: "mermaid", label: "Step 2", payload: "graph TD; A --> B" },
+    { type: "mermaid", label: "Step 3", payload: "graph TD; A --> B --> C" },
+  ],
+  rawPayload: THREE_FRAME_SEQUENCE,
 });
 
 describe("POST /snapshots/load", () => {
@@ -1476,8 +1499,8 @@ describe("POST /snapshots/load", () => {
     const invalidSnapshot = JSON.stringify({
       timestamp: "2026-06-09T14:30:00.000Z",
       workspace: "agent-whiteboard",
-      type: "mermaid",
-      payload: "not a valid mermaid diagram",
+      cursor: 0,
+      frames: [{ type: "mermaid", payload: "not a valid mermaid diagram" }],
     });
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(invalidSnapshot);
 
@@ -1759,10 +1782,12 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, {
-      title: undefined,
-      workspace: "course_1",
-    }, "test-uuid-generated");
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
+      [{ type: "mermaid", payload }],
+      { title: undefined, workspace: "course_1" },
+      undefined,
+      "test-uuid-generated"
+    );
   });
 
   it("passes both title and workspace to saveSnapshot", async () => {
@@ -1774,10 +1799,12 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
     });
 
     expect(res.status).toBe(200);
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("mermaid", payload, {
-      title: "Lesson 1",
-      workspace: "course_2",
-    }, "test-uuid-generated");
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
+      [{ type: "mermaid", payload }],
+      { title: "Lesson 1", workspace: "course_2" },
+      undefined,
+      "test-uuid-generated"
+    );
   });
 
   it("rejects an invalid workspace name (path separator)", async () => {
@@ -1833,11 +1860,15 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
     });
 
     expect(res.status).toBe(200);
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith("step-frames", payload, {
-      title: undefined,
-      node_to_frame: undefined,
-      workspace: "course_3",
-    }, "test-uuid-generated");
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
+      [
+        { type: "mermaid", label: "A", payload: "graph TD; A" },
+        { type: "mermaid", label: "B", payload: "graph TD; B" },
+      ],
+      { title: undefined, node_to_frame: undefined, workspace: "course_3" },
+      payload,
+      "test-uuid-generated"
+    );
   });
 });
 
@@ -2124,11 +2155,9 @@ describe("POST /step-frames/:id/commit", () => {
     await app.request(`/step-frames/${id}/commit`, { method: "POST" });
 
     expect(snapshotSpy).toHaveBeenCalledOnce();
-    const [type, payload] = snapshotSpy.mock.calls[0];
-    expect(type).toBe("step-frames");
-    const parsed = JSON.parse(payload) as { frame_type: string; frames: unknown[] };
-    expect(parsed.frame_type).toBe("mermaid");
-    expect(parsed.frames).toHaveLength(1);
+    const [frames] = snapshotSpy.mock.calls[0];
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toMatchObject({ type: "mermaid" });
   });
 });
 
@@ -2796,8 +2825,8 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
     id: "loaded-id-1",
     timestamp: "2026-06-09T14:30:00.000Z",
     workspace: "agent-whiteboard",
-    type: "mermaid",
-    payload: "graph TD; A --> B",
+    cursor: 0,
+    frames: [{ type: "mermaid", payload: "graph TD; A --> B" }],
   });
 
   it("includes the loaded snapshot's id in the broadcast", async () => {
@@ -2853,14 +2882,14 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
     expect(spy.mock.calls[0][0].viewport).toBeUndefined();
   });
 
-  it("synthesizes a fresh id when the loaded snapshot predates v0.11 and has no id field", async () => {
-    const legacySnapshot = JSON.stringify({
+  it("synthesizes a fresh id when the loaded snapshot has no id field", async () => {
+    const noIdSnapshot = JSON.stringify({
       timestamp: "2026-01-01T00:00:00.000Z",
       workspace: "agent-whiteboard",
-      type: "mermaid",
-      payload: "graph TD; A",
+      cursor: 0,
+      frames: [{ type: "mermaid", payload: "graph TD; A" }],
     });
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(legacySnapshot);
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(noIdSnapshot);
 
     const { broadcastReplace } = await import("../../../server/ws.js");
     const spy = vi.mocked(broadcastReplace);
@@ -2947,8 +2976,7 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
 
 describe("POST /export-html (v0.13)", () => {
   const VALID_KATEX_RECORD = JSON.stringify({
-    type: "katex",
-    payload: "x^2 + y^2 = r^2",
+    frames: [{ type: "katex", payload: "x^2 + y^2 = r^2" }],
     timestamp: "2026-01-01T00:00:00.000Z",
   });
 
@@ -3080,28 +3108,22 @@ describe("POST /export-html (v0.13)", () => {
   // v0.14 — Mermaid export fix (Sprint 27): server no longer pre-renders
   // Mermaid via happy-dom; raw source is embedded and rendered client-side.
   const VALID_MERMAID_RECORD = JSON.stringify({
-    type: "mermaid",
-    payload: "graph TD; A --> B",
+    frames: [{ type: "mermaid", payload: "graph TD; A --> B" }],
     timestamp: "2026-01-01T00:00:00.000Z",
   });
 
   const STEP_FRAMES_MERMAID_RECORD = JSON.stringify({
-    type: "step-frames",
-    payload: JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        { label: "Phase 1", payload: "graph LR\n  A([Push]) --> B[Install deps]" },
-        { label: "Phase 2", payload: "graph LR\n  A([Push]) --> B[Install deps] --> C[Typecheck]" },
-      ],
-    }),
+    frames: [
+      { type: "mermaid", label: "Phase 1", payload: "graph LR\n  A([Push]) --> B[Install deps]" },
+      { type: "mermaid", label: "Phase 2", payload: "graph LR\n  A([Push]) --> B[Install deps] --> C[Typecheck]" },
+    ],
     timestamp: "2026-01-01T00:00:00.000Z",
   });
 
   // Regression: previously threw "Could not find a suitable point for the
   // given distance" under happy-dom (edge labels + cylinder node shape).
   const EDGE_LABEL_CYLINDER_RECORD = JSON.stringify({
-    type: "mermaid",
-    payload: "graph TD\n  FE[Frontend]\n  BE[Backend]\n  DB[(Database)]\n  FE -->|HTTP| BE\n  BE -->|Query| DB",
+    frames: [{ type: "mermaid", payload: "graph TD\n  FE[Frontend]\n  BE[Backend]\n  DB[(Database)]\n  FE -->|HTTP| BE\n  BE -->|Query| DB" }],
     timestamp: "2026-01-01T00:00:00.000Z",
   });
 
@@ -3193,8 +3215,7 @@ describe("POST /export-html (v0.13)", () => {
 
 describe("POST /export-html — { workspace, id } items (v0.15)", () => {
   const VALID_KATEX_RECORD = {
-    type: "katex",
-    payload: "x^2 + y^2 = r^2",
+    frames: [{ type: "katex", payload: "x^2 + y^2 = r^2" }],
     timestamp: "2026-01-01T00:00:00.000Z",
   };
 
@@ -3237,7 +3258,7 @@ describe("POST /export-html — { workspace, id } items (v0.15)", () => {
 
   it("accepts filename-based and id-based items in the same request", async () => {
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(
-      JSON.stringify({ type: "katex", payload: "a^2", timestamp: "2026-01-01T00:00:00.000Z" })
+      JSON.stringify({ frames: [{ type: "katex", payload: "a^2" }], timestamp: "2026-01-01T00:00:00.000Z" })
     );
     vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
 

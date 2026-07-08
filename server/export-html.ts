@@ -6,6 +6,8 @@ import katex from "katex";
 import * as vl from "vega-lite";
 import * as vega from "vega";
 import DOMPurify from "dompurify";
+import type { SnapshotRecord } from "./snapshot-reader.js";
+import { badgeType } from "./snapshot-reader.js";
 
 // ── Public interfaces ──────────────────────────────────────────────────────
 
@@ -13,12 +15,7 @@ export interface ValidatedExportItem {
   workspace: string;
   filename?: string;
   id?: string;
-  record: {
-    type: string;
-    payload: string;
-    timestamp: string;
-    options?: { title?: string };
-  };
+  record: SnapshotRecord;
 }
 
 export interface ExportResult {
@@ -132,33 +129,33 @@ async function renderByType(
   }
 }
 
-async function renderContent(
-  type: string,
-  payload: string,
+/**
+ * Renders a snapshot's already-resolved `frames[]` (v0.26 Sprint 43 — no more
+ * `JSON.parse(payload)` of a step-frames envelope; a sequence is just an
+ * array with more than one element). A single frame renders as one content
+ * block; multiple frames render as a step-frames section, each frame using
+ * its own already-resolved `type` (no `frame_type` fallback needed).
+ */
+async function renderFrames(
+  frames: Array<{ type: string; payload: string; label?: string }>,
   purify: ReturnType<typeof DOMPurify>
 ): Promise<RenderedContent> {
-  if (type === "step-frames") {
-    let spec: { frame_type: string; frames: Array<{ label?: string; payload: string }> };
-    try {
-      spec = JSON.parse(payload) as typeof spec;
-    } catch {
-      return { kind: "error", message: "step-frames: invalid JSON payload" };
-    }
-    const frames: RenderedFrame[] = [];
-    for (const frame of spec.frames) {
+  if (frames.length > 1) {
+    const rendered: RenderedFrame[] = [];
+    for (const frame of frames) {
       try {
-        const html = await renderByType(spec.frame_type, frame.payload, purify);
-        frames.push({ label: frame.label, html });
+        const html = await renderByType(frame.type, frame.payload, purify);
+        rendered.push({ label: frame.label, html });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        frames.push({ label: frame.label, html: `<p class="export-error">${escapeHtml(msg)}</p>` });
+        rendered.push({ label: frame.label, html: `<p class="export-error">${escapeHtml(msg)}</p>` });
       }
     }
-    return { kind: "stepFrames", frames };
+    return { kind: "stepFrames", frames: rendered };
   }
 
   try {
-    const html = await renderByType(type, payload, purify);
+    const html = await renderByType(frames[0].type, frames[0].payload, purify);
     return { kind: "html", html };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -347,16 +344,7 @@ function buildDownloadFilename(workspaces: string[]): string {
 }
 
 function itemsIncludeType(items: ValidatedExportItem[], type: string): boolean {
-  return items.some(({ record }) => {
-    if (record.type === type) return true;
-    if (record.type === "step-frames") {
-      try {
-        const spec = JSON.parse(record.payload) as { frame_type?: string };
-        return spec.frame_type === type;
-      } catch { return false; }
-    }
-    return false;
-  });
+  return items.some(({ record }) => record.frames.some((f) => f.type === type));
 }
 
 // ── Agent-facing disk write (v0.15) ─────────────────────────────────────────
@@ -394,12 +382,12 @@ async function generateExportHtmlInner(
   const rendered: RenderedItem[] = [];
   try {
     for (const { workspace, record } of items) {
-      const content = await renderContent(record.type, record.payload, purify);
+      const content = await renderFrames(record.frames, purify);
       rendered.push({
         workspace,
-        type: record.type,
+        type: badgeType(record.frames),
         timestamp: record.timestamp,
-        title: record.options?.title,
+        title: record.title,
         content,
       });
     }

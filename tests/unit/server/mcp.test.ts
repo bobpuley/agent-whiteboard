@@ -9,11 +9,15 @@ vi.mock("../../../server/snapshot.js", () => ({
   generateSnapshotId: vi.fn(() => "test-uuid-generated"),
 }));
 
-vi.mock("../../../server/snapshot-reader.js", () => ({
-  findSnapshotById: vi.fn(),
-  findSnapshotByIdInWorkspace: vi.fn(),
-  listSnapshots: vi.fn(),
-}));
+vi.mock("../../../server/snapshot-reader.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/snapshot-reader.js")>();
+  return {
+    ...actual,
+    findSnapshotById: vi.fn(),
+    findSnapshotByIdInWorkspace: vi.fn(),
+    listSnapshots: vi.fn(),
+  };
+});
 
 vi.mock("../../../server/ws.js", () => ({
   broadcast: vi.fn(),
@@ -138,8 +142,7 @@ describe("MCP tool: export_html (v0.15)", () => {
   let tmpRoot: string;
 
   const VALID_KATEX_RECORD = {
-    type: "katex",
-    payload: "x^2 + y^2 = r^2",
+    frames: [{ type: "katex", payload: "x^2 + y^2 = r^2" }],
     timestamp: "2026-01-01T00:00:00.000Z",
   };
 
