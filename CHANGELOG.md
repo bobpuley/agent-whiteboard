@@ -1,3 +1,10 @@
+## 0.25.8 — 2026-07-09
+
+- **Sprint 46 — Return channel: Interaction primitive unification (U7, D4):** `server/events.ts`'s bespoke EventEmitter bus is replaced by `server/interaction.ts`, which exposes two generic arm/await/resolve factories — `createBroadcastInteraction<E>()` (every pending `await()` resolves independently, one `resolve()` wakes all — the shape `wait_done()` needs) and `createSingleFlightInteraction<E>(cancelEvent)` (a new `await()` cancels the pending one with `cancelEvent` — the shape `wait_click()` needs)
+- `signalDone`/`waitForDone`/`getDoneArmed`/`setBroadcastFn` and `signalClick`/`waitForClick`/`resetClick`/`ClickEvent` are now thin configurations built on those two factories, with identical exported signatures — `app.ts`, `mcp.ts`, and `ws.ts` needed only an import-path change, no logic changes
+- `node_to_frame` (U4e) needed no code change: it was already the "local resolver" variant D4 describes — the browser calls `POST /seek` directly from `Mermaid.svelte`'s click listener, never round-tripping through the server's return channel — now documented as such in `04_architecture.md` §9.2 (U7) rather than force-fit into the new module
+- Behavior-preserving refactor: `tests/unit/server/events.test.ts` renamed to `interaction.test.ts`, all prior behavioral assertions kept verbatim, plus new tests exercising the two factories directly. Full suite: 431 tests passing (up from 423), `tsc --noEmit` and `npm run lint` clean
+
 ## 0.25.7 — 2026-07-09
 
 - **Sprint 45 — MCP payload contract update (U0/U2):** `type: "step-frames"` no longer exists as a top-level content type — `render()` is single-frame only (its `type` enum drops to the five `FRAME_TYPES`, `options.node_to_frame` removed). `init_step_frames`/`append_frame`/`commit_step_frames` is now the sole way to create a multi-frame sequence; `node_to_frame` moves to an optional `commit_step_frames(id, node_to_frame?)` parameter, its only entry point now (U4e). No back-compat shim, per `02` N4 — pre-release, zero external consumers
