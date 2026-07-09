@@ -112,7 +112,7 @@
     doneTimer = setTimeout(() => dispatch("close"), 1200);
   }
 
-  async function exportItems(items: Array<{ workspace: string; filename: string }>) {
+  async function exportItems(items: Array<{ workspace: string; id: string }>) {
     const res = await fetch("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -147,10 +147,13 @@
         dispatch("deleted");
         showDone(`Deleted entire workspace "${selectedWorkspace.name}"`);
       } else {
-        const items = selectedWorkspace.snapshots.map((s) => ({
-          workspace: selectedWorkspace!.name,
-          filename: s.filename,
-        }));
+        // ids-only (F4/NF21) — snapshots without an id (pre-migration only,
+        // see snapshotTypes.ts) are silently skipped, same as a server-side
+        // per-item lookup failure.
+        const items = selectedWorkspace.snapshots
+          .filter((s): s is typeof s & { id: string } => s.id !== undefined)
+          .map((s) => ({ workspace: selectedWorkspace!.name, id: s.id }));
+        if (items.length === 0) throw new Error("no exportable snapshots in this workspace");
         await exportItems(items);
         showDone(`Exported entire workspace "${selectedWorkspace.name}"`);
       }
@@ -178,7 +181,14 @@
         dispatch("deleted");
         showDone(`Deleted ${filenames.length} snapshot${filenames.length === 1 ? "" : "s"} from "${selectedWorkspace.name}"`);
       } else {
-        const items = filenames.map((filename) => ({ workspace: selectedWorkspace!.name, filename }));
+        // Selection is still tracked by filename (shared with delete mode) —
+        // resolve each selected filename to its id for the export request
+        // (F4/NF21). Snapshots without an id (pre-migration only) are skipped.
+        const byFilename = new Map(selectedWorkspace.snapshots.map((s) => [s.filename, s.id]));
+        const items = filenames
+          .map((filename) => ({ workspace: selectedWorkspace!.name, id: byFilename.get(filename) }))
+          .filter((item): item is { workspace: string; id: string } => item.id !== undefined);
+        if (items.length === 0) throw new Error("no exportable snapshots selected");
         await exportItems(items);
         showDone(`Exported ${filenames.length} snapshot${filenames.length === 1 ? "" : "s"} from "${selectedWorkspace.name}"`);
       }

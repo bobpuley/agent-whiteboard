@@ -2956,15 +2956,15 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
 
 // ── v0.13 — HTML Export ───────────────────────────────────────────────────────
 
-describe("POST /export-html (v0.13)", () => {
-  const VALID_KATEX_RECORD = JSON.stringify({
+describe("POST /export-html (v0.13, ids-only since v0.27/NF21)", () => {
+  const VALID_KATEX_RECORD = {
     frames: [{ type: "katex", payload: "x^2 + y^2 = r^2" }],
     timestamp: "2026-01-01T00:00:00.000Z",
-  });
+  };
 
   beforeEach(() => {
     process.env.WHITEBOARD_SNAPSHOTS_DIR = makeSnapRoot("export-html");
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockClear();
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReset();
   });
 
   afterEach(() => {
@@ -2996,28 +2996,14 @@ describe("POST /export-html (v0.13)", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: [{ workspace: "../evil", filename: "20260101_000000_screen.json" }],
+        items: [{ workspace: "../evil", id: "uuid-1" }],
       }),
     });
     expect(res.status).toBe(400);
     expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
   });
 
-  it("returns 400 when filename does not match the safe pattern", async () => {
-    const res = await app.request("/export-html", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: [{ workspace: "my-ws", filename: "../evil.json" }],
-      }),
-    });
-    expect(res.status).toBe(400);
-    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
-  });
-
-  it("returns 400 when all snapshots are unreadable (loadSnapshotContent returns null)", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(null);
-
+  it("returns 400 when an item has no id (filename addressing removed, F4/NF21)", async () => {
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3027,11 +3013,26 @@ describe("POST /export-html (v0.13)", () => {
     });
     expect(res.status).toBe(400);
     expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
+    expect(snapshotReaderModule.findSnapshotByIdInWorkspace).not.toHaveBeenCalled();
   });
 
-  it("skips unreadable snapshot and still exports the remaining valid item", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent)
-      .mockReturnValueOnce(null)                // first item: unreadable
+  it("returns 400 when all ids are unresolvable (findSnapshotByIdInWorkspace returns null)", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(null);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", id: "uuid-missing" }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
+  });
+
+  it("skips an unresolvable id and still exports the remaining valid item", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace)
+      .mockReturnValueOnce(null)                // first item: unresolvable
       .mockReturnValueOnce(VALID_KATEX_RECORD); // second item: valid
 
     const res = await app.request("/export-html", {
@@ -3039,8 +3040,8 @@ describe("POST /export-html (v0.13)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: [
-          { workspace: "my-ws", filename: "20260101_000000_screen.json" },
-          { workspace: "my-ws", filename: "20260101_000001_screen.json" },
+          { workspace: "my-ws", id: "uuid-missing" },
+          { workspace: "my-ws", id: "uuid-1" },
         ],
       }),
     });
@@ -3049,18 +3050,19 @@ describe("POST /export-html (v0.13)", () => {
   });
 
   it("returns 200 with HTML body and correct headers for a valid single-workspace export", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_KATEX_RECORD);
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
       }),
     });
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toMatch(/text\/html/);
+    expect(snapshotReaderModule.findSnapshotByIdInWorkspace).toHaveBeenCalledWith("my-ws", "uuid-1", expect.any(String));
     const disposition = res.headers.get("Content-Disposition") ?? "";
     expect(disposition).toContain("attachment");
     expect(disposition).toMatch(/my-ws/);
@@ -3069,15 +3071,15 @@ describe("POST /export-html (v0.13)", () => {
   });
 
   it("uses 'export-' filename prefix when items span multiple workspaces", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_KATEX_RECORD);
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: [
-          { workspace: "ws-a", filename: "20260101_000000_screen.json" },
-          { workspace: "ws-b", filename: "20260101_000001_screen.json" },
+          { workspace: "ws-a", id: "uuid-1" },
+          { workspace: "ws-b", id: "uuid-2" },
         ],
       }),
     });
@@ -3089,34 +3091,34 @@ describe("POST /export-html (v0.13)", () => {
 
   // v0.14 — Mermaid export fix (Sprint 27): server no longer pre-renders
   // Mermaid via happy-dom; raw source is embedded and rendered client-side.
-  const VALID_MERMAID_RECORD = JSON.stringify({
+  const VALID_MERMAID_RECORD = {
     frames: [{ type: "mermaid", payload: "graph TD; A --> B" }],
     timestamp: "2026-01-01T00:00:00.000Z",
-  });
+  };
 
-  const STEP_FRAMES_MERMAID_RECORD = JSON.stringify({
+  const STEP_FRAMES_MERMAID_RECORD = {
     frames: [
       { type: "mermaid", label: "Phase 1", payload: "graph LR\n  A([Push]) --> B[Install deps]" },
       { type: "mermaid", label: "Phase 2", payload: "graph LR\n  A([Push]) --> B[Install deps] --> C[Typecheck]" },
     ],
     timestamp: "2026-01-01T00:00:00.000Z",
-  });
+  };
 
   // Regression: previously threw "Could not find a suitable point for the
   // given distance" under happy-dom (edge labels + cylinder node shape).
-  const EDGE_LABEL_CYLINDER_RECORD = JSON.stringify({
+  const EDGE_LABEL_CYLINDER_RECORD = {
     frames: [{ type: "mermaid", payload: "graph TD\n  FE[Frontend]\n  BE[Backend]\n  DB[(Database)]\n  FE -->|HTTP| BE\n  BE -->|Query| DB" }],
     timestamp: "2026-01-01T00:00:00.000Z",
-  });
+  };
 
   it("embeds raw mermaid source in a .mermaid container instead of a pre-rendered SVG", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_MERMAID_RECORD);
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_MERMAID_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
       }),
     });
 
@@ -3127,13 +3129,13 @@ describe("POST /export-html (v0.13)", () => {
   });
 
   it("embeds the mermaid.js bundle and bootstrap script when mermaid items are present", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_MERMAID_RECORD);
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_MERMAID_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
       }),
     });
 
@@ -3144,13 +3146,13 @@ describe("POST /export-html (v0.13)", () => {
   });
 
   it("does not embed the mermaid bundle when no mermaid items are present", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(VALID_KATEX_RECORD);
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
       }),
     });
 
@@ -3159,13 +3161,13 @@ describe("POST /export-html (v0.13)", () => {
   });
 
   it("renders each mermaid frame of a step-frames sequence as its own container, with no export-error", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(STEP_FRAMES_MERMAID_RECORD);
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(STEP_FRAMES_MERMAID_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
       }),
     });
 
@@ -3176,13 +3178,13 @@ describe("POST /export-html (v0.13)", () => {
   });
 
   it("does not error on a mermaid diagram with edge labels and a cylinder node (regression)", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(EDGE_LABEL_CYLINDER_RECORD);
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(EDGE_LABEL_CYLINDER_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        items: [{ workspace: "my-ws", filename: "20260101_000000_screen.json" }],
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
       }),
     });
 
@@ -3191,72 +3193,19 @@ describe("POST /export-html (v0.13)", () => {
     expect(body).not.toContain('<p class="export-error">');
     expect(body).toContain('<pre class="mermaid">');
   });
-});
 
-// ── Sprint 28 — POST /export-html: { workspace, id } items (v0.15) ───────────
-
-describe("POST /export-html — { workspace, id } items (v0.15)", () => {
-  const VALID_KATEX_RECORD = {
-    frames: [{ type: "katex", payload: "x^2 + y^2 = r^2" }],
-    timestamp: "2026-01-01T00:00:00.000Z",
-  };
-
-  beforeEach(() => {
-    process.env.WHITEBOARD_SNAPSHOTS_DIR = makeSnapRoot("export-html-id");
-    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReset();
-  });
-
-  afterEach(() => {
-    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
-  });
-
-  it("resolves an { workspace, id } item via findSnapshotByIdInWorkspace and returns 200 HTML", async () => {
+  it("resolves multiple { workspace, id } items via findSnapshotByIdInWorkspace and returns 200 HTML", async () => {
     vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
 
     const res = await app.request("/export-html", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: [{ workspace: "my-ws", id: "uuid-1" }] }),
+      body: JSON.stringify({ items: [{ workspace: "my-ws", id: "uuid-1" }, { workspace: "my-ws", id: "uuid-2" }] }),
     });
 
     expect(res.status).toBe(200);
-    expect(snapshotReaderModule.findSnapshotByIdInWorkspace).toHaveBeenCalledWith("my-ws", "uuid-1", expect.any(String));
+    expect(snapshotReaderModule.findSnapshotByIdInWorkspace).toHaveBeenCalledTimes(2);
     const body = await res.text();
     expect(body).toContain("<!DOCTYPE html>");
-  });
-
-  it("skips an unresolvable id and returns 400 when it is the only item", async () => {
-    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(null);
-
-    const res = await app.request("/export-html", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: [{ workspace: "my-ws", id: "uuid-missing" }] }),
-    });
-
-    expect(res.status).toBe(400);
-    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
-  });
-
-  it("accepts filename-based and id-based items in the same request", async () => {
-    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(
-      JSON.stringify({ frames: [{ type: "katex", payload: "a^2" }], timestamp: "2026-01-01T00:00:00.000Z" })
-    );
-    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
-
-    const res = await app.request("/export-html", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: [
-          { workspace: "my-ws", filename: "20260101_000000_screen.json" },
-          { workspace: "my-ws", id: "uuid-1" },
-        ],
-      }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(snapshotReaderModule.loadSnapshotContent).toHaveBeenCalled();
-    expect(snapshotReaderModule.findSnapshotByIdInWorkspace).toHaveBeenCalled();
   });
 });

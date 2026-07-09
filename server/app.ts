@@ -15,7 +15,6 @@ import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, validateFrame } f
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
-import type { SnapshotRecord } from "./snapshot-reader.js";
 import { assembleStepFramesPayload } from "./persist.js";
 import type { Frame } from "./presentation.js";
 import {
@@ -598,39 +597,16 @@ export function createApp(): Hono {
 
     for (const item of body.items as unknown[]) {
       if (typeof item !== "object" || item === null) continue;
-      const { workspace, filename, id } = item as Record<string, unknown>;
+      const { workspace, id } = item as Record<string, unknown>;
 
       if (typeof workspace !== "string") continue;
       if (!isValidWorkspaceName(workspace)) continue;
+      if (typeof id !== "string") continue;
 
-      if (typeof filename === "string") {
-        if (!/^[^/]+_screen\.json$/.test(filename) || filename.includes("..")) continue;
+      const record = findSnapshotByIdInWorkspace(workspace, id, root);
+      if (record === null) continue;
 
-        const raw = loadSnapshotContent(workspace, root, filename);
-        if (raw === null) continue;
-
-        let parsed: { frames?: unknown; timestamp?: unknown; title?: unknown; nodeToFrame?: unknown };
-        try {
-          parsed = JSON.parse(raw) as typeof parsed;
-        } catch {
-          continue;
-        }
-
-        const isFrame = (f: unknown): f is Frame =>
-          f !== null && typeof f === "object" && typeof (f as Frame).type === "string" && typeof (f as Frame).payload === "string";
-        if (!Array.isArray(parsed.frames) || parsed.frames.length === 0 || !parsed.frames.every(isFrame) || typeof parsed.timestamp !== "string") continue;
-
-        const record: SnapshotRecord = { frames: parsed.frames as Frame[], timestamp: parsed.timestamp };
-        if (typeof parsed.title === "string") record.title = parsed.title;
-        if (parsed.nodeToFrame !== null && typeof parsed.nodeToFrame === "object") record.nodeToFrame = parsed.nodeToFrame as Record<string, number>;
-
-        validItems.push({ workspace, filename, record });
-      } else if (typeof id === "string") {
-        const record = findSnapshotByIdInWorkspace(workspace, id, root);
-        if (record === null) continue;
-
-        validItems.push({ workspace, id, record });
-      }
+      validItems.push({ workspace, id, record });
     }
 
     if (validItems.length === 0) {

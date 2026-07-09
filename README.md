@@ -238,7 +238,7 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `POST /snapshots/load` | `{ "filename": "..._screen.json", "workspace": "..." (optional) }` — loads a past snapshot onto the canvas (write-silent, no new snapshot is created) |
 | `POST /snapshots/delete-files` | `{ "workspace": "...", "filenames": ["..._screen.json", ...] }` — deletes specific snapshot files |
 | `POST /snapshots/delete-workspace` | `{ "workspace": "..." }` — deletes an entire workspace's snapshot folder |
-| `POST /export-html` | `{ "items": [{ "workspace": "...", "id": "..." }, ...] }` (or `{ "workspace", "filename" }` form) — returns the assembled HTML file as a download, not JSON |
+| `POST /export-html` | `{ "items": [{ "workspace": "...", "id": "..." }, ...] }` — returns the assembled HTML file as a download, not JSON |
 
 All endpoints return the same JSON shapes as the MCP tools, except `POST /export-html`, which streams the HTML file directly (`Content-Disposition: attachment`).
 
