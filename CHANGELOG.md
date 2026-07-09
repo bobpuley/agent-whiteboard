@@ -1,3 +1,11 @@
+## 0.26.5 — 2026-07-09
+
+**Milestone v0.27 — REST/MCP Parity Remediation, Sprint 53.** `GET /snapshots` (REST) fell back to `getLastWorkspace()` when `workspace` was omitted; MCP's `list_snapshots` already required it with no fallback — the same conceptual operation had different observable behavior depending on transport (F3).
+
+- Audited the browser's actual call sites first: `HistoryPanel.svelte` never calls bare `GET /snapshots` (only `/snapshots/all`, `/snapshots/load`, and the two delete endpoints), so removing the fallback has zero browser-visible surface area — `README.md`'s "used by the browser History panel" line for this endpoint was already stale and is corrected
+- `GET /snapshots` now goes through the same `validateWorkspaceInput()` that `render()`/`slideshow()`/`list_snapshots()` already use, returning `{ok:false,error:"workspace is required"}` (400) for a missing or empty workspace, exactly matching MCP's `list_snapshots`
+- Full suite: 461 unit tests passing (1:1 test swap — no new regression surface), `tsc --noEmit` and `npm run lint` clean
+
 ## 0.26.4 — 2026-07-09
 
 **Milestone v0.27 — REST/MCP Parity Remediation, Sprint 52.** `step`/`seek`'s business logic was copied verbatim between `app.ts` and `mcp.ts` (F2) instead of living in `render-core.ts` alongside `render`/`init_step_frames`/`append_frame`/`commit_step_frames` — the one hot-path pair `render-core.ts`'s own header comment (NF12, "the two transports can never drift") claimed was already covered.
