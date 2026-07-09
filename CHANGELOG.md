@@ -1,3 +1,14 @@
+## 0.27.1 — 2026-07-10
+
+**Milestone v0.28 — `app.ts` Responsibility Cleanup (Sprints 58–61) complete.** A follow-up manual review (`01` FR23, `02` §N7) found that v0.27's REST/MCP parity work, being scoped to REST↔MCP drift, couldn't see responsibilities misplaced *within* `app.ts` itself — duplication inside one transport's file, not between transports. This milestone cleaned up the four in-scope findings; item 5 (replacing string-matched error status derivation with a neutral `{ok,error,category?}` shape) remains explicitly deferred to a future intake.
+
+- **Sprint 58 (NF25):** `/snapshots/load`'s validate → set-canvas-state → broadcast → track-workspace sequence extracted into `applyLoadedSnapshotResult()` in `render-core.ts`, joining `commitRenderResult`/`commitStepFramesResult` (persist-trigger `never`)
+- **Sprint 59 (NF26):** `server/snapshot.ts` renamed to `server/snapshot-writer.ts`; `deleteSnapshotFiles()`/`deleteWorkspace()` and `validateWorkspaceForDelete()` moved out of `app.ts`'s delete handlers into the renamed module, paired with `snapshot-reader.ts`
+- **Sprint 60 (NF27):** `/snapshots/load`'s and `/export-html`'s remaining ad-hoc workspace checks consolidated onto `validateWorkspaceInput()`
+- **Sprint 61 (NF28):** the snapshot-filename safety regex, copy-pasted in two places, became one exported `isValidSnapshotFilename()` helper
+- Architectural note: `validateWorkspaceInput()` and `isValidSnapshotFilename()` ended up living in `validate.ts` rather than `render-core.ts`/`snapshot-writer.ts` as originally sketched — `snapshot-writer.ts` needing `validateWorkspaceInput()` would otherwise have cycled back through `render-core.ts`'s existing `generateSnapshotId()` import, which deadlocked Vitest's `vi.mock`/`importOriginal()` during test collection. `validate.ts` is a true leaf module, so both can depend on it one-directionally
+- Full suite: 444 unit tests, 38 e2e tests, `tsc --noEmit` (server+client), and `npm run lint` clean throughout. `02` §N7, `03` §9, `04` §9.7 updated from open/scheduled to resolved
+
 ## 0.27.0 — 2026-07-09
 
 **Milestone v0.27 — REST/MCP Parity Remediation (Sprints 51–57) complete.** A follow-up REST↔MCP duplication audit (`docs/raw/design-problems.md`, findings F1–F7) found that the v0.23 unified projector (NF14) and the rest of the v0.23–v0.26 architecture consolidation closed transport drift only for the commands already migrated to `render-core.ts` at the time each slice shipped. This milestone finished the job.
