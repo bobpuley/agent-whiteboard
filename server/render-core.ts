@@ -3,9 +3,9 @@
 // the MCP tool handlers (mcp.ts) so the two transports can never drift (NF12).
 import { cancelSlideshow } from "./slideshow.js";
 import { broadcastReplace, broadcastStepFrames } from "./ws.js";
-import { generateSnapshotId } from "./snapshot.js";
+import { generateSnapshotId } from "./snapshot-writer.js";
 import { assembleStepFramesPayload, persistContent } from "./persist.js";
-import { isValidWorkspaceName, validateFrame } from "./validate.js";
+import { validateFrame } from "./validate.js";
 import { getCanvas, isStepSequence, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import type { Frame } from "./presentation.js";
@@ -13,28 +13,11 @@ import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder
 import type { AppendResult, CommitResult } from "./step-frames-builder.js";
 import { getViewport } from "./viewport-cache.js";
 
-export type WorkspaceValidation =
-  | { ok: true; workspace: string }
-  | { ok: false; error: string };
-
-/**
- * Validates the `workspace` field required by render(), init_step_frames(),
- * list_snapshots(), and export_html() — same rule and error text everywhere
- * (F14/F15/F18 in docs/03).
- */
-export function validateWorkspaceInput(workspace: unknown): WorkspaceValidation {
-  if (!workspace) {
-    return { ok: false, error: "workspace is required" };
-  }
-  const ws = workspace as string;
-  if (!isValidWorkspaceName(ws)) {
-    return {
-      ok: false,
-      error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
-    };
-  }
-  return { ok: true, workspace: ws };
-}
+// Re-exported so app.ts/mcp.ts don't need to know it actually lives in
+// validate.ts — moved there (v0.28 Sprint 59) so snapshot-writer.ts can also
+// depend on it without a render-core.ts <-> snapshot-writer.ts import cycle.
+export { validateWorkspaceInput } from "./validate.js";
+export type { WorkspaceValidation } from "./validate.js";
 
 export interface RenderResult {
   ok: true;

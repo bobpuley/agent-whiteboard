@@ -1,8 +1,6 @@
 // Pure Hono application — no startup side effects.
 // Exported so tests can import it without spinning up a real server.
 
-import { join, resolve, sep } from "path";
-import { existsSync, readFileSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./interaction.js";
 import type { ClickEvent } from "./interaction.js";
@@ -13,6 +11,7 @@ import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, nodeActionsSchema
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, isFrameArray, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
+import { deleteSnapshotFiles, deleteWorkspace, validateWorkspaceForDelete } from "./snapshot-writer.js";
 import {
   applyLoadedSnapshotResult,
   appendFrameAndBroadcast,
@@ -25,7 +24,7 @@ import {
 } from "./render-core.js";
 import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
-import { deleteViewports, setViewport } from "./viewport-cache.js";
+import { setViewport } from "./viewport-cache.js";
 import type { Viewport } from "./viewport-cache.js";
 import { getSnapshotsRoot } from "./paths.js";
 
@@ -33,17 +32,6 @@ import { getSnapshotsRoot } from "./paths.js";
 export { MERMAID_KEYWORDS } from "./validate.js";
 export function isValidMermaid(payload: string): boolean {
   return hasMermaidKeyword(payload);
-}
-
-/** Best-effort read of a snapshot file's `id` field, for viewport-cache cleanup on delete. */
-function readSnapshotIdSafe(fullPath: string): string | undefined {
-  try {
-    const raw = readFileSync(fullPath, "utf-8");
-    const parsed = JSON.parse(raw) as { id?: unknown };
-    return typeof parsed.id === "string" ? parsed.id : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 // Defense-in-depth only (see M3 in docs/02_assumptions-and-risks.md) — SVG/HTML
@@ -435,31 +423,12 @@ export function createApp(): Hono {
 
   // ── Snapshot delete endpoints (v0.12) ─────────────────────────────────────
 
-  function validateWorkspaceForDelete(workspace: unknown, root: string): { workspace: string } | { error: string; status: number } {
-    if (typeof workspace !== "string" || workspace.length === 0) {
-      return { error: "workspace must be a non-empty string", status: 400 };
-    }
-    if (!isValidWorkspaceName(workspace)) {
-      return { error: "invalid workspace: path traversal not allowed", status: 400 };
-    }
-    const dir = join(root, workspace);
-    // Belt-and-suspenders containment check: reject anything that resolves
-    // outside (or exactly onto) the snapshots root — e.g. workspace ".".
-    if (!resolve(dir).startsWith(resolve(root) + sep)) {
-      return { error: "invalid workspace: path traversal not allowed", status: 400 };
-    }
-    if (!existsSync(dir)) {
-      return { error: "workspace not found", status: 404 };
-    }
-    return { workspace };
-  }
-
   app.post("/snapshots/delete-files", async (c) => {
     const body = await c.req.json<{ workspace?: unknown; filenames?: unknown }>();
     const root = getSnapshotsRoot();
     const validated = validateWorkspaceForDelete(body.workspace, root);
-    if ("error" in validated) {
-      return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
+    if (!validated.ok) {
+      return c.json({ ok: false, error: validated.error }, validated.status);
     }
     const { workspace } = validated;
 
@@ -471,58 +440,28 @@ export function createApp(): Hono {
       if (typeof f !== "string") {
         return c.json({ ok: false, error: "each filename must be a string" }, 400);
       }
-      if (!/^[^/]+_screen\.json$/.test(f) || f.includes("..")) {
-        return c.json({ ok: false, error: `invalid filename: ${f}` }, 400);
-      }
     }
 
-    const workspaceDir = join(root, workspace);
-    let deleted = 0;
-    const deletedIds: string[] = [];
-    for (const f of filenames as string[]) {
-      const fullPath = join(workspaceDir, f);
-      const id = readSnapshotIdSafe(fullPath);
-      try {
-        unlinkSync(fullPath);
-        deleted++;
-        if (id !== undefined) deletedIds.push(id);
-      } catch {
-        // Missing files are silently skipped.
-      }
+    const result = deleteSnapshotFiles(workspace, root, filenames as string[]);
+    if (!result.ok) {
+      return c.json({ ok: false, error: result.error }, 400);
     }
-    // Clean up any viewport-cache entries so deleted snapshots don't leave
-    // orphaned rows behind (C3, `02`).
-    deleteViewports(deletedIds);
-    return c.json({ ok: true, deleted });
+    return c.json({ ok: true, deleted: result.deleted });
   });
 
   app.post("/snapshots/delete-workspace", async (c) => {
     const body = await c.req.json<{ workspace?: unknown }>();
     const root = getSnapshotsRoot();
     const validated = validateWorkspaceForDelete(body.workspace, root);
-    if ("error" in validated) {
-      return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
+    if (!validated.ok) {
+      return c.json({ ok: false, error: validated.error }, validated.status);
     }
     const { workspace } = validated;
 
-    const workspaceDir = join(root, workspace);
-    let idsToClean: string[] = [];
-    try {
-      idsToClean = readdirSync(workspaceDir)
-        .filter((f) => f.endsWith("_screen.json"))
-        .map((f) => readSnapshotIdSafe(join(workspaceDir, f)))
-        .filter((id): id is string => id !== undefined);
-    } catch {
-      // Workspace directory unreadable/absent — nothing to clean up.
-    }
-
-    rmSync(workspaceDir, { recursive: true, force: true });
+    deleteWorkspace(workspace, root);
     if (getLastWorkspace() === workspace) {
       setLastWorkspace("");
     }
-    // Clean up viewport-cache entries for every snapshot that lived in this
-    // workspace (C3, `02`).
-    deleteViewports(idsToClean);
     return c.json({ ok: true });
   });
 

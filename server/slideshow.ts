@@ -5,7 +5,7 @@
 
 import { broadcastReplace } from "./ws.js";
 import { getCanvas, setCanvas } from "./session.js";
-import { generateSnapshotId } from "./snapshot.js";
+import { generateSnapshotId } from "./snapshot-writer.js";
 import { persistContent } from "./persist.js";
 import type { CanvasType } from "./session.js";
 

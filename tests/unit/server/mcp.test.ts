@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-vi.mock("../../../server/snapshot.js", () => ({
+vi.mock("../../../server/snapshot-writer.js", () => ({
   saveSnapshot: vi.fn(),
   generateSnapshotId: vi.fn(() => "test-uuid-generated"),
 }));

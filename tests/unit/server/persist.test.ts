@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getPersistTrigger, persistContent } from "../../../server/persist.js";
-import { saveSnapshot } from "../../../server/snapshot.js";
+import { saveSnapshot } from "../../../server/snapshot-writer.js";
 
-vi.mock("../../../server/snapshot.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../server/snapshot.js")>();
+vi.mock("../../../server/snapshot-writer.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/snapshot-writer.js")>();
   return { ...actual, saveSnapshot: vi.fn() };
 });
 

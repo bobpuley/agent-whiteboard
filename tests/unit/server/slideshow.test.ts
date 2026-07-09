@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { broadcastReplace } from "../../../server/ws.js";
 import { cancelSlideshow, isSlideshowRunning, startSlideshow } from "../../../server/slideshow.js";
 import { resetCanvas } from "../../../server/session.js";
-import { saveSnapshot } from "../../../server/snapshot.js";
+import { saveSnapshot } from "../../../server/snapshot-writer.js";
 
 vi.mock("../../../server/ws.js", () => ({
   broadcast: vi.fn(),
@@ -10,8 +10,8 @@ vi.mock("../../../server/ws.js", () => ({
   broadcastStepFrames: vi.fn(),
 }));
 
-vi.mock("../../../server/snapshot.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../server/snapshot.js")>();
+vi.mock("../../../server/snapshot-writer.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/snapshot-writer.js")>();
   return { ...actual, saveSnapshot: vi.fn() };
 });
 
