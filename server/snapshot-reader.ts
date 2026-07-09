@@ -26,7 +26,8 @@ interface ParsedSnapshotFile {
   rawPayload?: unknown;
 }
 
-function isFrameArray(value: unknown): value is Frame[] {
+/** Shared "is this a valid Frame[]" predicate (F6/NF23) — the one implementation checking non-empty array + per-element shape. */
+export function isFrameArray(value: unknown): value is Frame[] {
   return (
     Array.isArray(value) &&
     value.length > 0 &&

@@ -13,9 +13,8 @@ import { generateSnapshotId } from "./snapshot.js";
 import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
-import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
+import { findSnapshotById, findSnapshotByIdInWorkspace, isFrameArray, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
 import { assembleStepFramesPayload } from "./persist.js";
-import type { Frame } from "./presentation.js";
 import {
   appendFrameAndBroadcast,
   commitRenderResult,
@@ -396,15 +395,10 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "snapshot file is malformed JSON" });
     }
 
-    if (!Array.isArray(snapshot.frames) || snapshot.frames.length === 0) {
+    if (!isFrameArray(snapshot.frames)) {
       return c.json({ ok: false, error: "snapshot file is missing required fields" });
     }
-    const isFrame = (f: unknown): f is Frame =>
-      f !== null && typeof f === "object" && typeof (f as Frame).type === "string" && typeof (f as Frame).payload === "string";
-    if (!snapshot.frames.every(isFrame)) {
-      return c.json({ ok: false, error: "snapshot file is missing required fields" });
-    }
-    const frames = snapshot.frames as Frame[];
+    const frames = snapshot.frames;
     const title = typeof snapshot.title === "string" ? snapshot.title : undefined;
     const nodeToFrame =
       snapshot.nodeToFrame !== null && typeof snapshot.nodeToFrame === "object"
