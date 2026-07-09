@@ -848,7 +848,7 @@ Everything renderable collapses to one atom and two orthogonal axes:
 | B15/C2d — slideshow no `id`, no auto-fit | Second broadcast builder in `slideshow.ts` | **U5 (v0.23, shipped):** one Projection builder (`broadcastReplace()`); slideshow calls it like every other producer instead of building its own message |
 | FR20/B15 — slideshow missing from history | `slideshow()` never called `saveSnapshot()` | D2/U4 (v0.25): persist trigger is required, not opt-in |
 | B5 — one-shot step-frames skipped validation | Two validation paths (one-shot vs. incremental) | U2 (v0.26): one `validateFrame()` over every frame, one content model |
-| B6 — `workspace:"."` wipe | `app.ts`/`mcp.ts` duplicated validation | U1/D5 (v0.26, full parity): one core, thin adapters — **caveat (2026-07-09):** a re-audit (`02` N6, `03` §8) found "full parity" was true only for the 5 commands already routed through `render-core.ts`; `step`/`seek` and `slideshow` validation were never migrated. See 9.6. |
+| B6 — `workspace:"."` wipe | `app.ts`/`mcp.ts` duplicated validation | U1/D5 (v0.26, full parity): one core, thin adapters. Fully closed as of `Milestone_v0.27.md` (2026-07-09) — see 9.6. |
 | B8 — stale async render | Per-renderer ad hoc ordering guard | U6 (v0.24 registry lands the shared surface; guard itself already shipped v0.18) |
 
 ### 9.5 Adoption sequencing (ROI ÷ blast-radius)
@@ -860,9 +860,9 @@ Everything renderable collapses to one atom and two orthogonal axes:
 | C — Persistence policy + finalize dedup | **v0.25** | U4 trigger vocabulary + shared finalize, after A | Low-med |
 | D — Full Presentation/Frame model + migration + contract break | **v0.26** | U0/U2/U3 rewrite, WS contract, snapshot schema, MCP payload, U7 return-channel generalization | High (C1–C4 in the retired `baseline-comparison.md`) — deliberately accepted per `02` N2, sequenced last, gated before any public release (`02` N4) |
 
-### 9.6 REST/MCP Parity Remediation (v0.27)
+### 9.6 REST/MCP Parity Remediation (v0.27) — ✅ RESOLVED (2026-07-09)
 
-> A+B+C+D (9.5) closed U1/D5 "thin adapter, full parity" for the commands already routed through `render-core.ts` at the time each slice shipped. A follow-up duplication audit (`docs/raw/design-problems.md`, F1–F7; `02` §N6; `03` §8) found this incomplete for commands added or left alone along the way. This slice finishes what D5 already claims as done:
+> A+B+C+D (9.5) closed U1/D5 "thin adapter, full parity" for the commands already routed through `render-core.ts` at the time each slice shipped. A follow-up duplication audit (`docs/raw/design-problems.md`, F1–F7; `02` §N6; `03` §8) found this incomplete for commands added or left alone along the way. This slice finished what D5 already claimed as done — all 7 findings shipped across `Milestone_v0.27.md` Sprints 51–57:
 
 | Finding | Gap vs. D5's "full parity" | Fix | Requirement |
 |---|---|---|---|

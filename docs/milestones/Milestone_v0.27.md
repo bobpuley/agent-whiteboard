@@ -1,6 +1,6 @@
 # Milestone v0.27 — REST/MCP Parity Remediation (Sprints 51–57)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-07-09 via `/doc-creator-driver:intake` (feature intake, promoted from the Design Debt Log in `01`). Follow-up to the v0.23–v0.26 architecture consolidation: a re-audit (`docs/raw/design-problems.md`, findings F1–F7) found NF14–NF17 closed REST/MCP drift only for the commands already migrated to `render-core.ts` at the time each slice shipped. `step`/`seek` business logic, `slideshow` validation, `list_snapshots` workspace resolution, `export-html` item addressing, and three lower-risk mechanical duplications were left out. See `02` §N6, `03` §8, `04` §9.6.
 > Sprint numbering: one task per sprint, one branch/tag per sprint, matching the convention used by every prior milestone (see e.g. `Milestone_v0.26.md`).

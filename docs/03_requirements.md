@@ -246,9 +246,9 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
 ---
 
-## 8. REST/MCP Parity Remediation (v0.27)
+## 8. REST/MCP Parity Remediation (v0.27) — ✅ RESOLVED (2026-07-09)
 
-> Promoted from the Design Debt Log (`01`) via a `/doc-creator-driver:intake` follow-up, 2026-07-09. Source: a REST↔MCP duplication re-audit, `docs/raw/design-problems.md` (findings F1–F7). See `02` §N6 for why this exists despite NF14–NF17 (v0.23–v0.26) already targeting this exact drift class. NF18/NF19 fix documented-invariant violations; NF20/NF21 are behavior-contract changes (workspace resolution, export item addressing); NF22–NF24 are mechanical dedup with no behavior change.
+> Promoted from the Design Debt Log (`01`) via a `/doc-creator-driver:intake` follow-up, 2026-07-09. Source: a REST↔MCP duplication re-audit, `docs/raw/design-problems.md` (findings F1–F7). See `02` §N6 for why this exists despite NF14–NF17 (v0.23–v0.26) already targeting this exact drift class. NF18/NF19 fix documented-invariant violations; NF20/NF21 are behavior-contract changes (workspace resolution, export item addressing); NF22–NF24 are mechanical dedup with no behavior change. All 7 requirements shipped across `Milestone_v0.27.md` Sprints 51–57.
 
 | ID | Requirement | Milestone |
 |----|-------------|-----------|
