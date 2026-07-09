@@ -1196,7 +1196,7 @@ describe("GET /snapshots", () => {
 
   it("returns { ok: true, snapshots: [] } when directory is empty", async () => {
     vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([]);
-    const res = await app.request("/snapshots");
+    const res = await app.request("/snapshots?workspace=agent-workspace");
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, snapshots: [] });
   });
@@ -1207,7 +1207,7 @@ describe("GET /snapshots", () => {
       { filename: "20260609_140000_screen.json", timestamp: "2026-06-09T14:00:00.000Z", type: "html" },
     ];
     vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue(entries);
-    const res = await app.request("/snapshots");
+    const res = await app.request("/snapshots?workspace=agent-workspace");
     expect(res.status).toBe(200);
     const body = await res.json<{ ok: boolean; snapshots: typeof entries }>();
     expect(body.ok).toBe(true);
@@ -1222,37 +1222,29 @@ describe("GET /snapshots", () => {
     vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([
       { filename: "20260609_143000_screen.json", timestamp: "2026-06-09T14:30:00.000Z", type: "svg" },
     ]);
-    const res = await app.request("/snapshots");
+    const res = await app.request("/snapshots?workspace=agent-workspace");
     expect(snapshotReaderModule.listSnapshots).toHaveBeenCalledOnce();
     expect(res.status).toBe(200);
   });
 });
 
 // ── Sprint 28 — GET /snapshots?workspace= explicit param (v0.15) ─────────────
+// ── Sprint 53 — workspace mandatory, no lastWorkspace fallback (v0.27, F3/NF20) ─
 
-describe("GET /snapshots — explicit ?workspace= param (v0.15)", () => {
+describe("GET /snapshots — explicit ?workspace= param, mandatory (v0.15/v0.27)", () => {
   beforeEach(() => {
     vi.mocked(snapshotReaderModule.listSnapshots).mockClear();
   });
 
-  it("uses the explicit ?workspace= param instead of lastWorkspace", async () => {
+  it("uses the explicit ?workspace= param", async () => {
     vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([]);
-
-    // Set lastWorkspace to something different via a real render() call.
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "browser-workspace" } }),
-    });
 
     const res = await app.request("/snapshots?workspace=agent-workspace");
     expect(res.status).toBe(200);
     expect(snapshotReaderModule.listSnapshots).toHaveBeenCalledWith("agent-workspace", expect.any(String));
   });
 
-  it("falls back to lastWorkspace when the param is absent (unchanged browser behavior)", async () => {
-    vi.mocked(snapshotReaderModule.listSnapshots).mockReturnValue([]);
-
+  it("returns 400 when ?workspace= is absent, matching list_snapshots' error (no lastWorkspace fallback, F3/NF20)", async () => {
     await app.request("/render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1260,20 +1252,21 @@ describe("GET /snapshots — explicit ?workspace= param (v0.15)", () => {
     });
 
     const res = await app.request("/snapshots");
-    expect(res.status).toBe(200);
-    expect(snapshotReaderModule.listSnapshots).toHaveBeenCalledWith("browser-workspace", expect.any(String));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: "workspace is required" });
+    expect(snapshotReaderModule.listSnapshots).not.toHaveBeenCalled();
   });
 
-  it("returns 400 for an empty ?workspace= value", async () => {
+  it("returns 400 for an empty ?workspace= value, same error as a missing one", async () => {
     const res = await app.request("/snapshots?workspace=");
     expect(res.status).toBe(400);
-    expect((await res.json<{ ok: boolean; error: string }>()).ok).toBe(false);
+    expect(await res.json()).toEqual({ ok: false, error: "workspace is required" });
   });
 
   it("returns 400 when ?workspace= contains path-traversal characters", async () => {
     const res = await app.request(`/snapshots?workspace=${encodeURIComponent("../evil")}`);
     expect(res.status).toBe(400);
-    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/path traversal/);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/invalid workspace/);
   });
 
   it("includes the id field in each returned entry (additive, from snapshot-reader)", async () => {
