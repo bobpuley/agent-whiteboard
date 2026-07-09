@@ -15,7 +15,7 @@
   - *Regression coverage:* existing delete-endpoint tests in `app.test.ts` pass unchanged (rename only touches import paths); rename `tests/unit/server/snapshot.test.ts` → `snapshot-writer.test.ts`.
 
 ### Sprint 60 — Consolidate remaining workspace-validation paths onto `validateWorkspaceInput()`
-- [ ] **NF27.** `/snapshots/load`'s inline optional-workspace check and `/export-html`'s silent-skip check both switch to `validateWorkspaceInput()`. (The delete-path consolidation already shipped as part of NF26.)
+- [x] **NF27.** `/snapshots/load`'s inline optional-workspace check and `/export-html`'s silent-skip check both switch to `validateWorkspaceInput()`. (The delete-path consolidation already shipped as part of NF26.)
   - *Acceptance:* same accept/reject/skip behavior per call site as today, just one shared implementation underneath — `/export-html` still silently skips an invalid-workspace item (list-filtering), `/snapshots/load` still rejects the whole request.
   - *Regression coverage:* existing tests for both endpoints pass unchanged.
 
