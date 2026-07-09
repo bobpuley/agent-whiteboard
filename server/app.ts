@@ -7,7 +7,7 @@ import type { ClickEvent } from "./interaction.js";
 import { clearCanvas, exportCanvas, getLastWorkspace, setLastWorkspace } from "./session.js";
 import type { CanvasType } from "./session.js";
 import { broadcast } from "./ws.js";
-import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
+import { FRAME_TYPES, hasMermaidKeyword, nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, isFrameArray, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
@@ -342,14 +342,11 @@ export function createApp(): Hono {
     // Optional workspace override (v0.5 cross-workspace load).
     let workspace: string;
     if (body.workspace !== undefined) {
-      if (typeof body.workspace !== "string" || body.workspace.length === 0) {
-        return c.json({ ok: false, error: "workspace must be a non-empty string" }, 400);
+      const validated = validateWorkspaceInput(body.workspace);
+      if (!validated.ok) {
+        return c.json({ ok: false, error: "invalid workspace: path traversal not allowed" }, 400);
       }
-      const ws = body.workspace;
-      if (!isValidWorkspaceName(ws)) {
-        return c.json({ ok: false, error: "invalid workspace: path traversal not allowed" });
-      }
-      workspace = ws;
+      workspace = validated.workspace;
     } else {
       workspace = currentWorkspace;
     }
@@ -481,13 +478,14 @@ export function createApp(): Hono {
       const { workspace, id } = item as Record<string, unknown>;
 
       if (typeof workspace !== "string") continue;
-      if (!isValidWorkspaceName(workspace)) continue;
+      const validated = validateWorkspaceInput(workspace);
+      if (!validated.ok) continue;
       if (typeof id !== "string") continue;
 
-      const record = findSnapshotByIdInWorkspace(workspace, id, root);
+      const record = findSnapshotByIdInWorkspace(validated.workspace, id, root);
       if (record === null) continue;
 
-      validItems.push({ workspace, id, record });
+      validItems.push({ workspace: validated.workspace, id, record });
     }
 
     if (validItems.length === 0) {
