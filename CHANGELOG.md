@@ -1,3 +1,12 @@
+## 0.26.2 — 2026-07-09
+
+**Milestone v0.26.1 — Node-to-Frame Broadcast Fix (patch), Sprint 50.** Reverses the pre-v0.26.1 behavior where a step-frames sequence computed its fit-to-view once at frame 0 and held it for the whole sequence — frames of very different intrinsic size (e.g. a tall sequence diagram followed by a wide flowchart) could overflow or under-fill (bug B19, the already-decided but unscheduled FR21).
+
+- `viewport-cache.ts`'s `getViewport`/`setViewport`/`deleteViewports` move from a bare snapshot `id` key to a composite `id:frameIndex` key, so each frame persists its own manual viewport independently
+- `broadcastStepFrames()` gains a `viewport` parameter; every frame-navigation path (`POST /step`, `POST /seek`, `step()`/`seek()` MCP tools) now looks up and forwards a per-frame viewport — previously only history-reload did this at all. `POST /viewport`'s body gains a required `frame` field
+- `Mermaid.svelte` gains a `currentFrame` prop (threaded through `App.svelte` → `registry.ts`); `isNewSnapshot()` now compares a composite `"<id>:<frame>"` key instead of `id` alone, so navigating to a different frame of an already-seen sequence triggers a fresh fit/restore instead of a no-op continuation
+- Rewrote the e2e test that asserted the old "preserves the live zoom/pan across frames" behavior into one asserting per-frame independence. Full suite: 459 unit tests passing (up from 444), e2e 37/38 (the one failure is the pre-existing dev-server-startup race documented in prior sprints), `tsc --noEmit` (server + client) and `npm run lint` clean. Verified live: zooming one frame, navigating to a differently-sized frame gets its own fresh fit, navigating back restores the original frame's manual viewport
+
 ## 0.26.1 — 2026-07-09
 
 **Milestone v0.26.1 — Node-to-Frame Broadcast Fix (patch), Sprint 49.** Bugfix-only patch release: `server/ws.ts`'s `broadcastStepFrames()` had no `nodeToFrame` parameter and never forwarded it into `broadcastReplace()`, so a live `commit_step_frames(id, node_to_frame={...})` call silently dropped the node-click map — clicking a mapped node in the browser did nothing, even though the map was correctly computed and persisted (bug B18).
