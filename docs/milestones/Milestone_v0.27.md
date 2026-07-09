@@ -41,9 +41,10 @@
   - *Acceptance:* no behavior change; existing tests covering `/snapshots/load` and `/export-html` pass unchanged.
   - **Shipped 2026-07-09:** by the time this sprint started, NF21 (Sprint 54) had already deleted one of the two duplicate sites (the `/export-html` filename-lookup branch, removed entirely). Only the `/snapshots/load` handler's inline `isFrame` predicate remained — replaced with `snapshot-reader.ts`'s `isFrameArray()`, now exported (it combines the array/non-empty/per-element checks `app.ts` previously did as two separate steps into one call, same error message either way). Removed the now-fully-unused `Frame` type import from `app.ts`. Full suite: 463 unit tests passing, `tsc --noEmit` and `npm run lint` clean.
 
-### Sprint 57 — Share `node_actions`/`node_to_frame` validation via MCP's zod schemas (F7)
-- [ ] **NF24.** Export MCP's existing zod schemas for these two shapes from a shared location; REST's `app.ts` replaces `isNodeActionsValid()`/`isNodeToFrameValid()` with `.safeParse()` calls against the same schemas.
+### Sprint 57 — Share `node_actions`/`node_to_frame` validation via MCP's zod schemas (F7) ✅
+- [x] **NF24.** Export MCP's existing zod schemas for these two shapes from a shared location; REST's `app.ts` replaces `isNodeActionsValid()`/`isNodeToFrameValid()` with `.safeParse()` calls against the same schemas.
   - *Acceptance:* no behavior change for currently-valid/invalid payloads on either transport; `app.ts`'s hand-written type guards are deleted, not just unused.
+  - **Shipped 2026-07-09 (final sprint of v0.27):** `nodeActionsSchema`/`nodeToFrameSchema` are now exported from `validate.ts` (the existing shared validation module); `mcp.ts`'s `wait_click`/`commit_step_frames` inputSchemas reference them instead of inlining the zod expressions, and `app.ts`'s `isNodeActionsValid()`/`isNodeToFrameValid()` hand-written type guards are deleted outright — `POST /wait-click`/`POST /step-frames/:id/commit` now call `.safeParse()` against the same schemas. Closes the last of the 7 findings from the original REST/MCP duplication audit. No behavior change — full suite: 463 unit tests passing unchanged, `tsc --noEmit` and `npm run lint` clean.
 
 > **Implementation note:** NF20/NF21 (Sprints 53-54) are the only two tasks in this milestone with browser-visible surface area — sequence them after NF18/NF19 land and are verified, and test the HistoryPanel manually (not just e2e) before closing each, consistent with this project's "verify UI changes in a real browser" convention.
 

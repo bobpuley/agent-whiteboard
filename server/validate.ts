@@ -1,7 +1,17 @@
 // Server-side payload validation helpers.
 
 import mermaid from "mermaid";
+import { z } from "zod";
 import type { Frame } from "./presentation.js";
+
+/**
+ * Shared shape schemas for `node_actions` (wait_click) and `node_to_frame`
+ * (commit_step_frames) — the single implementation both MCP's zod
+ * inputSchema and REST's request-body validation parse against (F7/NF24),
+ * replacing REST's previously hand-written type guards.
+ */
+export const nodeActionsSchema = z.record(z.string(), z.array(z.string()));
+export const nodeToFrameSchema = z.record(z.string(), z.number());
 
 // Initialise once — no DOM side effects in parse-only mode.
 mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
