@@ -5,10 +5,8 @@ import { homedir } from "os";
 import { join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { clearCanvas, exportCanvas, getCanvas, isStepSequence, seekStepFrame, stepCursor } from "./session.js";
-import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
-import { generateSnapshotId } from "./snapshot.js";
-import { getViewport } from "./viewport-cache.js";
+import { clearCanvas, exportCanvas } from "./session.js";
+import { broadcast } from "./ws.js";
 import { validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
@@ -20,6 +18,8 @@ import {
   commitRenderResult,
   commitStepFramesResult,
   initStepFramesResult,
+  seekAndBroadcast,
+  stepAndBroadcast,
   validateWorkspaceInput,
 } from "./render-core.js";
 
@@ -106,41 +106,8 @@ export function createMcpServer(): McpServer {
       }),
     },
     ({ direction }) => {
-      const result = stepCursor(direction);
-      if (!result) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                ok: false,
-                error: "no step-frames sequence is loaded",
-              }),
-            },
-          ],
-        };
-      }
-      const state = getCanvas();
-      if (isStepSequence(state)) {
-        const { frames, title, id } = state.presentation;
-        // Same id as when this sequence was created — tells the browser this is
-        // a continuation, not a new diagram (F19/C3). Each frame now re-fits or
-        // restores its own saved viewport independently (v0.26.1, bug B19/FR21).
-        const resolvedId = id ?? generateSnapshotId();
-        const viewport = getViewport(resolvedId, result.currentFrame);
-        broadcastStepFrames(frames, state.frameType, result.currentFrame, resolvedId, title, state.nodeToFrame, viewport);
-      }
       return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              ok: true,
-              current_frame: result.currentFrame,
-              total_frames: result.totalFrames,
-            }),
-          },
-        ],
+        content: [{ type: "text", text: JSON.stringify(stepAndBroadcast(direction)) }],
       };
     }
   );
@@ -159,36 +126,8 @@ export function createMcpServer(): McpServer {
       }),
     },
     ({ frame }) => {
-      const state = getCanvas();
-      if (!isStepSequence(state)) {
-        return {
-          content: [{ type: "text", text: JSON.stringify({ ok: false, error: "no step-frames sequence is loaded" }) }],
-        };
-      }
-      const { frames, title, id } = state.presentation;
-      const total = frames.length;
-      if (frame < 0 || frame >= total) {
-        return {
-          content: [{ type: "text", text: JSON.stringify({ ok: false, error: `frame out of range: must be 0–${total - 1}` }) }],
-        };
-      }
-      seekStepFrame(frame);
-      const f = frames[frame];
-      const resolvedId = id ?? generateSnapshotId();
-      broadcastReplace({
-        type: f.type,
-        payload: f.payload,
-        frameLabel: f.label,
-        cursor: frame,
-        total,
-        title,
-        nodeToFrame: state.nodeToFrame,
-        id: resolvedId,
-        // Per-frame restore (v0.26.1, bug B19/FR21).
-        viewport: getViewport(resolvedId, frame),
-      });
       return {
-        content: [{ type: "text", text: JSON.stringify({ ok: true, current_frame: frame, total_frames: total }) }],
+        content: [{ type: "text", text: JSON.stringify(seekAndBroadcast(frame)) }],
       };
     }
   );

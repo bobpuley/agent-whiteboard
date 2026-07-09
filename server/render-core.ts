@@ -6,11 +6,12 @@ import { broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
 import { assembleStepFramesPayload, persistContent } from "./persist.js";
 import { isValidWorkspaceName } from "./validate.js";
-import { setCanvas, setLastWorkspace, setStepFrames } from "./session.js";
+import { getCanvas, isStepSequence, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType } from "./session.js";
 import type { Frame } from "./presentation.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 import type { AppendResult, CommitResult } from "./step-frames-builder.js";
+import { getViewport } from "./viewport-cache.js";
 
 export type WorkspaceValidation =
   | { ok: true; workspace: string }
@@ -154,4 +155,66 @@ export function commitStepFramesResult(id: string, nodeToFrame?: Record<string, 
   // Final broadcast for consistency (handles clear() called between appends).
   broadcastStepFrames(frames, frame_type, 0, commitId, title, nodeToFrame);
   return { ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) };
+}
+
+export type StepSeekResult =
+  | { ok: true; current_frame: number; total_frames: number }
+  | { ok: false; error: string };
+
+/**
+ * Advances/rewinds the step cursor and broadcasts the resulting frame.
+ * Shared by POST /step and the MCP `step` tool (NF19 — previously duplicated
+ * verbatim between app.ts and mcp.ts, the one hot-path pair render-core.ts's
+ * own NF12 header comment didn't yet cover).
+ */
+export function stepAndBroadcast(direction: "next" | "prev"): StepSeekResult {
+  const result = stepCursor(direction);
+  if (!result) {
+    return { ok: false, error: "no step-frames sequence is loaded" };
+  }
+  const state = getCanvas();
+  if (isStepSequence(state)) {
+    const { frames, title, id } = state.presentation;
+    // Same id as when this sequence was created — tells the browser this is
+    // a continuation, not a new diagram (F19/C3). Each frame now re-fits or
+    // restores its own saved viewport independently (v0.26.1, bug B19/FR21) —
+    // no longer "must not re-fit" for the whole sequence.
+    const resolvedId = id ?? generateSnapshotId();
+    const viewport = getViewport(resolvedId, result.currentFrame);
+    broadcastStepFrames(frames, state.frameType, result.currentFrame, resolvedId, title, state.nodeToFrame, viewport);
+  }
+  return { ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames };
+}
+
+/**
+ * Jumps the step cursor to an arbitrary frame index and broadcasts it.
+ * Shared by POST /seek and the MCP `seek` tool (NF19, see `stepAndBroadcast`).
+ */
+export function seekAndBroadcast(frame: number): StepSeekResult {
+  const state = getCanvas();
+  if (!isStepSequence(state)) {
+    return { ok: false, error: "no step-frames sequence is loaded" };
+  }
+  const { frames, title, id } = state.presentation;
+  const total = frames.length;
+  if (frame < 0 || frame >= total) {
+    return { ok: false, error: `frame out of range: must be 0–${total - 1}` };
+  }
+  seekStepFrame(frame);
+  const f = frames[frame];
+  const resolvedId = id ?? generateSnapshotId();
+  broadcastReplace({
+    type: f.type,
+    payload: f.payload,
+    frameLabel: f.label,
+    cursor: frame,
+    total,
+    title,
+    nodeToFrame: state.nodeToFrame,
+    id: resolvedId,
+    // Per-frame restore (v0.26.1, bug B19/FR21) — each frame of a sequence
+    // re-fits or restores independently instead of sharing one viewport.
+    viewport: getViewport(resolvedId, frame),
+  });
+  return { ok: true, current_frame: frame, total_frames: total };
 }
