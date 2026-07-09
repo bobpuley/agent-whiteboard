@@ -30,6 +30,7 @@
 | v0.24      | Architecture Consolidation — Client Renderer Registry            | 37       | released     | [Milestone_v0.24.md](./milestones/Milestone_v0.24.md) |
 | v0.25      | Architecture Consolidation — Persistence Policy & Finalize Dedup | 38       | released     | [Milestone_v0.25.md](./milestones/Milestone_v0.25.md) |
 | v0.26      | Architecture Consolidation — Unified Presentation Model          | 39–48    | released     | [Milestone_v0.26.md](./milestones/Milestone_v0.26.md) |
+| v0.26.1    | Node-to-Frame Broadcast Fix (patch)                              | 49       | in progress  | [Milestone_v0.26.1.md](./milestones/Milestone_v0.26.1.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
 > v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`, `02` §N, `04` §9) — sequenced one slice per milestone; v0.26 must complete before any public release.

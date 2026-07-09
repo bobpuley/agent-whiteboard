@@ -91,13 +91,21 @@ export function broadcastReplace(msg: ReplaceBroadcast): void {
   });
 }
 
-/** Broadcast a step-frames event. Used by both append_frame (partial) and commit_step_frames (final). */
+/**
+ * Broadcast a step-frames event. Used by append_frame (partial), commit_step_frames
+ * (final), and /step's (REST + MCP) frame-advance broadcast.
+ * `nodeToFrame` (v0.26.1, bug B18 in docs/01): this wrapper previously had no slot
+ * for it at all, so every call site silently dropped the map even when the caller
+ * had one — the exact drift the v0.23 broadcastReplace() unification was meant to
+ * prevent, reintroduced one layer up. See docs/02 C2e.
+ */
 export function broadcastStepFrames(
   frames: Array<{ payload: string; label?: string; type?: string }>,
   frameType: string,
   cursor: number,
   id: string,
-  title?: string
+  title?: string,
+  nodeToFrame?: Record<string, number>
 ): void {
   broadcastReplace({
     type: frames[cursor].type ?? frameType,
@@ -107,5 +115,6 @@ export function broadcastStepFrames(
     total: frames.length,
     id,
     title,
+    nodeToFrame,
   });
 }
