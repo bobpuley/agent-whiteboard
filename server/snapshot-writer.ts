@@ -3,7 +3,7 @@ import { join, resolve, sep } from "path";
 import type { Frame } from "./presentation.js";
 import { getSnapshotsRoot } from "./paths.js";
 import { readSnapshotIdSafe } from "./snapshot-reader.js";
-import { validateWorkspaceInput } from "./validate.js";
+import { isValidSnapshotFilename, validateWorkspaceInput } from "./validate.js";
 import { deleteViewports } from "./viewport-cache.js";
 
 export interface RenderOptions {
@@ -131,7 +131,7 @@ export type DeleteFilesResult = { ok: true; deleted: number } | { ok: false; err
  */
 export function deleteSnapshotFiles(workspace: string, root: string, filenames: string[]): DeleteFilesResult {
   for (const f of filenames) {
-    if (!/^[^/]+_screen\.json$/.test(f) || f.includes("..")) {
+    if (!isValidSnapshotFilename(f)) {
       return { ok: false, error: `invalid filename: ${f}` };
     }
   }

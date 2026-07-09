@@ -67,6 +67,16 @@ export function isValidWorkspaceName(name: string): boolean {
   return /^[a-zA-Z0-9_\-. ]+$/.test(name);
 }
 
+/**
+ * Validates a snapshot filename for path safety (NF28, v0.28 Sprint 61):
+ * must end with `_screen.json` and contain no `/` or `..`. The one
+ * implementation shared by POST /snapshots/load and
+ * snapshot-writer.ts's delete-files logic — previously copy-pasted in both.
+ */
+export function isValidSnapshotFilename(filename: string): boolean {
+  return /^[^/]+_screen\.json$/.test(filename) && !filename.includes("..");
+}
+
 export type WorkspaceValidation =
   | { ok: true; workspace: string }
   | { ok: false; error: string };
