@@ -233,7 +233,7 @@ agent calls render(type="mermaid", payload="graph TD; A-->B", options={workspace
   → IF payload validation fails: returns { ok: false, error: "..." } — no snapshot written
 ```
 
-**Unified `frames[]` snapshot schema (v0.26 Sprint 43):** replaces the old top-level `type`/`payload`/`options` triple. See `SnapshotFile` in `server/snapshot.ts` and F10 in `03_requirements.md` for the full field list. Every reader (`snapshot-reader.ts`, `POST /snapshots/load`, `export-html.ts`) understands only this shape — a one-time migration script (`server/migrate-snapshots.ts`) upgrades pre-Sprint-43 files; there is no dual-read path for the old shape (OQ5a in `02`).
+**Unified `frames[]` snapshot schema (v0.26 Sprint 43):** replaces the old top-level `type`/`payload`/`options` triple. See `SnapshotFile` in `server/snapshot.ts` and F10 in `03_requirements.md` for the full field list. Every reader (`snapshot-reader.ts`, `POST /snapshots/load`, `export-html.ts`) understands only this shape — there is no dual-read path for the old shape (OQ5a in `02`). The one-time migration script that upgraded pre-Sprint-43 files (`server/migrate-snapshots.ts`) was removed 2026-07-09 after confirming (dry-run against the real `~/.agent-whiteboard/`) that all 194 snapshot files were already on the new schema — nothing left to migrate.
 
 Snapshot directory layout:
 ```
