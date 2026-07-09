@@ -9,7 +9,7 @@ import { clearCanvas, exportCanvas, getCanvas, isStepSequence, seekStepFrame, st
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
 import { getViewport } from "./viewport-cache.js";
-import { hasMermaidKeyword, parseMermaid, validateFrame } from "./validate.js";
+import { validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
@@ -253,48 +253,14 @@ export function createMcpServer(): McpServer {
       }
       const { workspace } = workspaceResult;
 
-      // Validate each slide payload.
+      // Validate each slide payload — same validator REST's /slideshow uses (NF18).
       for (let i = 0; i < slides.length; i++) {
         const s = slides[i];
-        if (s.type === "mermaid") {
-          if (!hasMermaidKeyword(s.payload)) {
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: `slide[${i}]: invalid payload: mermaid source must begin with a diagram keyword`,
-                }),
-              }],
-            };
-          }
-          try {
-            await parseMermaid(s.payload);
-          } catch (err) {
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: `slide[${i}]: invalid mermaid syntax: ${err instanceof Error ? err.message : String(err)}`,
-                }),
-              }],
-            };
-          }
-        } else if (s.type === "vega-lite") {
-          try {
-            JSON.parse(s.payload);
-          } catch {
-            return {
-              content: [{
-                type: "text",
-                text: JSON.stringify({
-                  ok: false,
-                  error: `slide[${i}]: invalid payload: vega-lite payload must be valid JSON`,
-                }),
-              }],
-            };
-          }
+        const err = await validateFrame({ type: s.type, payload: s.payload });
+        if (err) {
+          return {
+            content: [{ type: "text", text: JSON.stringify({ ok: false, error: `slide[${i}]: ${err}` }) }],
+          };
         }
       }
       startSlideshow(slides, delay_ms, workspace);

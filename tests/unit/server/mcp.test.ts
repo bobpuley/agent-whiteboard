@@ -440,6 +440,24 @@ describe("MCP tool: slideshow / slideshow_stop", () => {
     expect(result).toMatchObject({ ok: false });
   });
 
+  it("rejects a slideshow with an invalid vega-lite slide, routed through validateFrame() (F1/NF18 parity with POST /slideshow)", async () => {
+    const result = await callTool(server, "slideshow", {
+      slides: [{ type: "vega-lite", payload: "not json" }],
+      delay_ms: 1000,
+      workspace: "ws1",
+    });
+    expect(result).toEqual({ ok: false, error: "slide[0]: invalid payload: vega-lite payload must be valid JSON" });
+  });
+
+  it("rejects a slideshow whose second slide is invalid, referencing the correct slide index", async () => {
+    const result = await callTool(server, "slideshow", {
+      slides: [{ type: "svg", payload: "<svg/>" }, { type: "vega-lite", payload: "not json" }],
+      delay_ms: 1000,
+      workspace: "ws1",
+    });
+    expect(result).toEqual({ ok: false, error: "slide[1]: invalid payload: vega-lite payload must be valid JSON" });
+  });
+
   it("slideshow_stop is a no-op success even with nothing running", async () => {
     const result = await callTool(server, "slideshow_stop", {});
     expect(result).toEqual({ ok: true });
