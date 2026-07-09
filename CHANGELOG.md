@@ -1,3 +1,11 @@
+## 0.26.3 — 2026-07-09
+
+**Milestone v0.27 — REST/MCP Parity Remediation, Sprint 51.** A follow-up REST↔MCP duplication audit (`docs/raw/design-problems.md`, F1–F7) found the v0.23 unified projector (NF14) closed drift only for the commands already routed through `render-core.ts` at the time each slice shipped — `slideshow` validation was one of the gaps left over.
+
+- MCP's `slideshow` tool hand-rolled its own mermaid/vega-lite checks instead of calling `validate.ts`'s `validateFrame()`, violating that function's own documented "no second implementation" invariant and silently diverging from REST's `/slideshow` handler on any future validation change (F1)
+- The 44-line hand-rolled per-type validation loop in `mcp.ts`'s `slideshow` tool is replaced with a single `validateFrame()` call per slide, matching `app.ts`'s `/slideshow` handler's `slide[i]: <error>` format exactly; `hasMermaidKeyword`/`parseMermaid` imports removed from `mcp.ts` (no longer used directly)
+- New unit tests: an invalid vega-lite slide (exact error-message parity with REST) and a multi-slide case asserting the correct `slide[i]` index on a non-zero failing slide. Full suite: 461 unit tests passing (up from 459), `tsc --noEmit` and `npm run lint` clean
+
 ## 0.26.2 — 2026-07-09
 
 **Milestone v0.26.1 — Node-to-Frame Broadcast Fix (patch), Sprint 50.** Reverses the pre-v0.26.1 behavior where a step-frames sequence computed its fit-to-view once at frame 0 and held it for the whole sequence — frames of very different intrinsic size (e.g. a tall sequence diagram followed by a wide flowchart) could overflow or under-fill (bug B19, the already-decided but unscheduled FR21).
