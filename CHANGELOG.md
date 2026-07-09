@@ -1,3 +1,16 @@
+## 0.27.0 — 2026-07-09
+
+**Milestone v0.27 — REST/MCP Parity Remediation (Sprints 51–57) complete.** A follow-up REST↔MCP duplication audit (`docs/raw/design-problems.md`, findings F1–F7) found that the v0.23 unified projector (NF14) and the rest of the v0.23–v0.26 architecture consolidation closed transport drift only for the commands already migrated to `render-core.ts` at the time each slice shipped. This milestone finished the job.
+
+- **Sprint 51 (F1/NF18):** MCP's `slideshow` tool now routes every slide through `validate.ts`'s `validateFrame()` instead of hand-rolling its own checks
+- **Sprint 52 (F2/NF19):** `step`/`seek` business logic extracted into `render-core.ts` (`stepAndBroadcast`/`seekAndBroadcast`), joining `render`/step-frames as commands that structurally cannot drift between transports
+- **Sprint 53 (F3/NF20):** `GET /snapshots` requires `workspace` with no `lastWorkspace` fallback, matching MCP's `list_snapshots` exactly
+- **Sprint 54 (F4/NF21):** `export-html` unifies on `ids` on both transports; the browser's export flow resolves selections to snapshot ids instead of filenames
+- **Sprint 55 (F5/NF22):** new `server/paths.ts`'s `getSnapshotsRoot()` replaces 10 independent reimplementations of the snapshots-root expression (one more than originally audited — `migrate-snapshots.ts`'s CLI default was a bonus find)
+- **Sprint 56 (F6/NF23):** `app.ts` reuses `snapshot-reader.ts`'s `isFrameArray()` instead of a third inline re-definition
+- **Sprint 57 (F7/NF24):** `node_actions`/`node_to_frame` shape validation shared via zod schemas (`validate.ts`) on both transports, replacing REST's hand-written type guards
+- Full suite: 463 unit tests passing (up from 461 pre-milestone), `tsc --noEmit`, `svelte-check`, and `npm run lint` clean throughout. `02` §N6, `03` §8, `04` §9.6, and the `04` §9.4 B6 traceability caveat updated from scheduled/gap to resolved
+
 ## 0.26.8 — 2026-07-09
 
 **Milestone v0.27 — REST/MCP Parity Remediation, Sprint 56.** The "is this a valid Frame[]" predicate was reimplemented inline in `app.ts`'s `/snapshots/load` handler instead of reusing the existing `isFrameArray()` in `snapshot-reader.ts` (F6). The `export-html` copy of this same duplication was already removed incidentally by NF21 (Sprint 54).
