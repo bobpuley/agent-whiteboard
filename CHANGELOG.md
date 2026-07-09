@@ -1,3 +1,11 @@
+## 0.26.1 — 2026-07-09
+
+**Milestone v0.26.1 — Node-to-Frame Broadcast Fix (patch), Sprint 49.** Bugfix-only patch release: `server/ws.ts`'s `broadcastStepFrames()` had no `nodeToFrame` parameter and never forwarded it into `broadcastReplace()`, so a live `commit_step_frames(id, node_to_frame={...})` call silently dropped the node-click map — clicking a mapped node in the browser did nothing, even though the map was correctly computed and persisted (bug B18).
+
+- Tracing every call site of the wrapper found the same drop in `POST /step` and the `step()` MCP tool too — neither forwarded `state.nodeToFrame`, so a mapped-node click would stop working the moment the sequence advanced via Prev/Next even after fixing the commit path alone. `/seek` and `seek()` were already correct (they call `broadcastReplace()` directly)
+- `broadcastStepFrames()` gained an optional 6th `nodeToFrame` parameter, threaded through all three affected call sites (`commitStepFramesResult()`, `POST /step`, `step()`)
+- New unit tests: `tests/unit/server/ws.test.ts` (forwards/omits `nodeToFrame`), `tests/unit/server/app.test.ts` (commit broadcast + `/step` advance), `tests/unit/server/mcp.test.ts` (`step()` advance + commit broadcast). Full suite: 444 passing, `tsc --noEmit` (server + client) and `npm run lint` clean. Verified live: clicking each mapped node in `tests/human_driven/showcase.js`'s Section 14 (`runNodeToFrameDemo`) jumps to its frame
+
 ## 0.26.0 — 2026-07-09
 
 **Milestone v0.26 — Architecture Consolidation: Unified Presentation Model (Sprints 39–48) complete.** Everything renderable now collapses to one atom (`Frame`) and one container (`Presentation`) on both server and client; `type:"step-frames"` no longer exists as a top-level content type anywhere in the codebase. This was the highest-risk slice of the architecture consolidation (`04_architecture.md` §9) and is gated as a prerequisite for any public release (`02` N4).
