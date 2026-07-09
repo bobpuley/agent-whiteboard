@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
+import { broadcastReplace } from "../../../server/ws.js";
 import { cancelSlideshow, isSlideshowRunning, startSlideshow } from "../../../server/slideshow.js";
-import { getCanvas, isStepSequence, resetCanvas } from "../../../server/session.js";
+import { resetCanvas } from "../../../server/session.js";
 import { saveSnapshot } from "../../../server/snapshot.js";
 
 vi.mock("../../../server/ws.js", () => ({
@@ -21,7 +21,6 @@ describe("slideshow", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.mocked(broadcastReplace).mockClear();
-    vi.mocked(broadcastStepFrames).mockClear();
     vi.mocked(saveSnapshot).mockClear();
   });
 
@@ -78,33 +77,6 @@ describe("slideshow", () => {
     // No further ticks after the last slide.
     vi.advanceTimersByTime(5000);
     expect(broadcastReplace).toHaveBeenCalledTimes(3);
-  });
-
-  it("expands a step-frames slide into one tick per frame, reusing the same id across frames", () => {
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [{ payload: "graph A" }, { payload: "graph B" }],
-    });
-    startSlideshow([{ type: "step-frames", payload, title: "Seq" }], 500, WORKSPACE);
-
-    expect(broadcastStepFrames).toHaveBeenCalledTimes(1);
-    const frame0Call = vi.mocked(broadcastStepFrames).mock.calls[0];
-    const [frames0, frameType0, cursor0, id0, title0] = frame0Call;
-    expect(frames0).toEqual([{ payload: "graph A" }, { payload: "graph B" }]);
-    expect(frameType0).toBe("mermaid");
-    expect(cursor0).toBe(0);
-    expect(title0).toBe("Seq");
-    expect(id0).toEqual(expect.any(String));
-    expect(isSlideshowRunning()).toBe(true);
-
-    vi.advanceTimersByTime(500);
-    // Same id as frame 0 — this is a continuation of the same sequence, not a
-    // new diagram, so the browser must not re-fit (F19/C3).
-    expect(broadcastStepFrames).toHaveBeenLastCalledWith(frames0, "mermaid", 1, id0, "Seq");
-    expect(isSlideshowRunning()).toBe(false);
-
-    const canvas = getCanvas();
-    expect(isStepSequence(canvas) && canvas.presentation.cursor).toBe(1);
   });
 
   it("cancelSlideshow stops the timer and leaves the last tick on screen", () => {
@@ -176,28 +148,6 @@ describe("slideshow", () => {
         [{ type: "svg", payload: "<svg>2</svg>" }],
         { title: undefined, workspace: WORKSPACE },
         undefined,
-        expect.any(String)
-      );
-    });
-
-    it("persists a step-frames slide as one assembled sequence, not per frame", () => {
-      const payload = JSON.stringify({
-        frame_type: "mermaid",
-        frames: [{ payload: "graph A" }, { payload: "graph B" }, { payload: "graph C" }],
-      });
-      startSlideshow([{ type: "step-frames", payload, title: "Seq" }], 500, WORKSPACE);
-      vi.advanceTimersByTime(500); // frame 1
-      expect(saveSnapshot).not.toHaveBeenCalled();
-      vi.advanceTimersByTime(500); // frame 2 (last) — natural completion
-      expect(saveSnapshot).toHaveBeenCalledTimes(1);
-      expect(saveSnapshot).toHaveBeenCalledWith(
-        [
-          { type: "mermaid", payload: "graph A" },
-          { type: "mermaid", payload: "graph B" },
-          { type: "mermaid", payload: "graph C" },
-        ],
-        { title: "Seq", workspace: WORKSPACE },
-        payload,
         expect.any(String)
       );
     });

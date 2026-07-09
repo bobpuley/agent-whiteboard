@@ -72,7 +72,7 @@
 - `options.title` overlay — Sprint 8 ✅
 
 **Shipped in Phase 2:**
-- Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9 ✅. Each slide broadcast using the same WebSocket event format as `POST /render`. `step-frames` slides expanded into individual timer ticks.
+- Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9 ✅. Each slide broadcast using the same WebSocket event format as `POST /render`. (Historical: `step-frames` slides expanded into individual timer ticks — removed v0.26 Sprint 45 along with `type: "step-frames"` as a top-level content type; a slide is always exactly one frame now.)
 - `wait_done()` tool + Done button — Sprint 10 ✅. `server/events.ts` EventEmitter bus; `signalDone()` called by `POST /user-done`; `waitForDone()` called by both `POST /wait-done` (REST) and `wait_done()` (MCP tool). See §3 and §4.
 - Channels API experiment (`server/channel.ts`) — Sprint 10 ✅. Stdio MCP channel server + HTTP relay on port 3001. Useful for async push events; not used as the primary "wait for user" primitive (see `02` E1).
 - `wait_click()` tool (plain click, no popup) + `POST /node-click` endpoint — Sprint 12 ✅. Browser arms click listeners on Mermaid SVG nodes/edges; `signalClick()`/`waitForClick()` EventEmitter bus in `server/events.ts`. See §3 and §4.
@@ -81,7 +81,7 @@
 - `wait_click()` — `node_actions` popup menu + edge support (Sprint 14) ✅
 - `POST /wait-click` REST fallback does not yet arm the browser (bug fix, Sprint 13) ✅
 - `seek(frame)` MCP tool + `POST /seek` REST endpoint — client-controlled frame navigation (Sprint 13) ✅
-- `options.node_to_frame` on `render()` — declarative node→frame map for autonomous browser navigation (Sprint 13) ✅
+- `node_to_frame` — declarative node→frame map for autonomous browser navigation (Sprint 13) ✅. Originally `options.node_to_frame` on `render()`; moved to a `commit_step_frames(id, node_to_frame?)` parameter in v0.26 Sprint 45 when the one-shot `render(type="step-frames")` path it depended on was removed.
 - **Render snapshot persistence** (`server/snapshot.ts`) — Sprint 16 (see F10 in `03`) ✅
 - **History navigator** (`GET /snapshots`, `POST /snapshots/load`, `client/src/HistoryPanel.svelte`) — Sprint 17 (see F11–F12, U7 in `03`)
 - Multi-panel / named tabs
@@ -98,7 +98,7 @@
 
 | Tool                              | Server-side action                                                                                                                                                                                                                  |
 |-----------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `render(type, payload[, options])`| Validates payload for the given type; pushes render command to browser via WebSocket; stores as current canvas state. `options.title` (optional string, MVP) displays a label above the canvas. `options.theme` and action variants are Phase 2. For `step-frames`: every frame is validated against its effective type (`frame.type ?? frame_type`, v0.17) before anything is accepted; loads all frames, displays frame 0 using its effective type, stores full payload. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call. `id` is omitted if the snapshot write fails (non-fatal). |
+| `render(type, payload[, options])`| Validates payload for the given type via `validateFrame()`; pushes render command to browser via WebSocket; stores as current canvas state. `options.title` (optional string, MVP) displays a label above the canvas. `options.theme` and action variants are Phase 2. **Single-frame only (v0.26 Sprint 45):** `type` is one of the five `FRAME_TYPES` — `type: "step-frames"` no longer exists; a multi-frame Presentation is created exclusively via `init_step_frames`/`append_frame`/`commit_step_frames` below. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call. `id` is omitted if the snapshot write fails (non-fatal). |
 | `clear()`                         | Resets in-memory canvas state and step cursor; sends clear command to browser                                                                                                                                                       |
 | `export([id])`                    | Without `id`: returns the last submitted source payload verbatim as a string (current behavior). With optional `id` (UUID, v0.11 ✅): scans all workspace snapshot files for a record whose `id` field matches and returns its payload. Empty string if canvas is empty or cleared (no-id case). Error `{ ok: false, error: "graph not found" }` if id provided but no matching snapshot found. Old snapshots without an `id` field are not addressable. See F16 (`03`). Implemented in `server/snapshot-reader.ts` (`findSnapshotById`). |
 | `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Broadcasts the target frame using its effective type (`frame.type ?? frameType`, v0.17). Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
@@ -107,12 +107,12 @@
 | `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label, action: null }` on click (`action` is always present; null in Sprint 12 because no popup menu exists yet); `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
 | `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action }` — `action` is **always present**: null when no popup was shown or when user clicked without selecting a menu item; string value when a menu item was selected. (Phase 2 — Sprint 14) |
 | `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
-| `append_frame(id, payload, label?, type?)` *(v0.8; live preview v0.9; per-frame `type` v0.17)* | Looks up the builder entry by ID. Validates `payload` against `type ?? frame_type` (same hard gate as `render()`). Appends `{ label?, payload, type? }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (same event format as `render(type="step-frames", ...)`, `cursor` set to N-1 so the browser shows the latest frame, using that frame's effective type). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
-| `commit_step_frames(id)` *(v0.8; finalization-only v0.9)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
+| `append_frame(id, payload, label?, type?)` *(v0.8; live preview v0.9; per-frame `type` v0.17)* | Looks up the builder entry by ID. Validates `payload` against `type ?? frame_type` (same `validateFrame()` hard gate as `render()`). Appends `{ label?, payload, type? }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (`cursor` set to N-1 so the browser shows the latest frame, using that frame's effective type). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
+| `commit_step_frames(id, node_to_frame?)` *(v0.8; finalization-only v0.9; `node_to_frame` param v0.26)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. `node_to_frame` (optional, v0.26 Sprint 45): node ID → frame index map, stored on the canvas state and included in every broadcast for this sequence — the sole entry point for U4e's autonomous click navigation now that `render()` no longer accepts `options.node_to_frame`. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
 | `list_snapshots(workspace)` *(v0.15)* | Validates `workspace` (same safety check as `render()`). Calls `listSnapshots(workspace, dir)` in `server/snapshot-reader.ts` (the same function `GET /snapshots` uses). Returns `{ ok: true, snapshots: [{ id, timestamp, type, title? }] }`, newest-first. Empty array if the workspace has no snapshots. |
 | `export_html(workspace, ids, output_path?)` *(v0.15)* | Validates `workspace` (same safety check as `render()`) and that `ids` is a non-empty array. Builds `items = ids.map(id => ({ workspace, id }))` and calls the same `generateExportHtml()` pipeline as `POST /export-html` (`server/export-html.ts`), extended to resolve `{ workspace, id }` items via a new `findSnapshotByIdInWorkspace(workspace, id, dir)` lookup (scoped variant of `findSnapshotById`, restricted to one workspace directory). Unresolvable ids are skipped; if none resolve, returns `{ ok: false, error: "no valid items to export" }`. On success, writes the assembled HTML to `output_path` (creating parent directories as needed) or, if omitted, to `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html` (reusing `buildDownloadFilename()`). Returns `{ ok: true, path: "<absolute path>" }`, or `{ ok: false, error: "..." }` on a write failure. |
 
-**Resolved (v0.17, was B5, found 2026-07-03):** `StepFrame` (`session.ts`) gained an optional `type?: string` field. Every frame is now validated against its effective type (`frame.type ?? frame_type`) — `validatePayload()`'s `step-frames` branch (`validate.ts`) loops over `spec.frames` and validates each one, so `render(type="step-frames")`, `append_frame()`, `POST /slideshow`, and `POST /snapshots/load` (all of which route step-frames validation through `validatePayload()`) reject a malformed frame anywhere in the sequence before anything is accepted (closes F3a-gap in `03`). Every broadcast site that pushes a step-frame to the browser — `ws.ts`'s `broadcastStepFrames()`, `app.ts`'s `POST /render`/`POST /step`/`POST /seek`/`POST /snapshots/load`, `mcp.ts`'s `render`/`step`/`seek` tool handlers, and `slideshow.ts`'s tick/slide expansion — sends `frame.type ?? frameType` instead of the sequence-level type. `ws.ts` already sent a `type` field per broadcast, so the browser client needed no changes — it already re-selects a renderer per WebSocket message with zero cross-frame assumptions. A step-frames sequence can now mix content types (e.g. a mermaid frame followed by a katex frame) across both creation paths, and the incremental builder (`append_frame(id, payload, label?, type?)`) is a strict superset of the one-shot path.
+**Resolved (v0.17, was B5, found 2026-07-03):** `StepFrame` (`session.ts`) gained an optional `type?: string` field. Every frame is now validated against its effective type (`frame.type ?? frame_type`) — `validatePayload()`'s `step-frames` branch (`validate.ts`) loops over `spec.frames` and validates each one, so `render(type="step-frames")`, `append_frame()`, `POST /slideshow`, and `POST /snapshots/load` (all of which route step-frames validation through `validatePayload()`) reject a malformed frame anywhere in the sequence before anything is accepted (closes F3a-gap in `03`). Every broadcast site that pushes a step-frame to the browser — `ws.ts`'s `broadcastStepFrames()`, `app.ts`'s `POST /render`/`POST /step`/`POST /seek`/`POST /snapshots/load`, `mcp.ts`'s `render`/`step`/`seek` tool handlers, and `slideshow.ts`'s tick/slide expansion — sends `frame.type ?? frameType` instead of the sequence-level type. `ws.ts` already sent a `type` field per broadcast, so the browser client needed no changes — it already re-selects a renderer per WebSocket message with zero cross-frame assumptions. A step-frames sequence can now mix content types (e.g. a mermaid frame followed by a katex frame) across both creation paths, and the incremental builder (`append_frame(id, payload, label?, type?)`) is a strict superset of the one-shot path. **Superseded (v0.26 Sprint 45):** the "both creation paths" comparison above is historical — the one-shot `render(type="step-frames", ...)` path this section compared against is removed; `validatePayload()` is removed too (it degenerated to a pure passthrough to `validateFrame()` once the step-frames envelope branch was the only thing distinguishing it), and every call site above now calls `validateFrame()` directly. `slideshow.ts`'s tick/slide expansion is also removed — see F7 in `03`.
 
 ### Validation — two layers
 
@@ -123,7 +123,7 @@ The tool's JSON Schema and description are read by the agent when it loads the M
 |-----------|------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `mermaid` | `string` — must begin with a valid diagram keyword (`graph`, `flowchart`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `gantt`, `pie`, `mindmap`) |
 
-Additional types exposed in v1 (Sprint 5 ✅): `vega-lite`, `katex`, `svg`, `html`. Step-frames exposed in v1 (Sprint 7 ✅): `step-frames`.
+Additional types exposed in v1 (Sprint 5 ✅): `vega-lite`, `katex`, `svg`, `html`. These five `FRAME_TYPES` are the complete set `render()` accepts — a step-through sequence is built via `init_step_frames`/`append_frame`/`commit_step_frames` (Sprint 7 ✅; sole creation path v0.26 Sprint 45), not a sixth `render()` type.
 Post-Phase-2 (deferred): `d2` — requires a server-side render process, not client-side.
 
 **Layer 2 — Server-side validation** (safety net, in `session.ts` or `mcp.ts`)
@@ -217,9 +217,12 @@ agent calls render(type="mermaid", payload="graph TD; A-->B", options={workspace
   → IF payload validation passes:
       → stores as current canvas state (in-memory)
       → pushes render command over WebSocket to browser
-      → persistContent() converts the type/payload shape into frames[]/rawPayload
-        (unwraps a step-frames envelope; a 1-frame sequence drops rawPayload —
-        see toFrames() in persist.ts, v0.26 Sprint 43)
+      → persistContent() takes the caller-supplied frames[] (and rawPayload for a
+        multi-frame sequence — collapsed to undefined when frames.length <= 1,
+        same policy as the WS contract) and calls saveSnapshot() — v0.26 Sprint 45
+        removed the type/payload-to-frames[] conversion step (toFrames()) that
+        used to live in persist.ts; callers (render-core.ts, slideshow.ts) already
+        hold resolved Frame[] internally and pass them straight through
       → calls saveSnapshot(frames, options, rawPayload?, id?)  [snapshot.ts]
           → workspace: options.workspace (always present; no env var fallback)
           → resolves dir: WHITEBOARD_SNAPSHOTS_DIR env || ~/.agent-whiteboard/
@@ -292,26 +295,24 @@ Timeout (10 minutes with no click):
   → server sets doneArmed = false and pushes armed: false to browser
 ```
 
-### Slideshow Command (Phase 2 — Sprint 9)
+### Slideshow Command (Phase 2 — Sprint 9; step-frames-slide expansion removed v0.26 Sprint 45)
 
 ```
 agent calls slideshow(slides=[...], delay_ms=1000, workspace="course_2")
   → MCP server validates workspace (v0.22, same rule as render()) and each slide (same rules as render)
   → startSlideshow() cancels any previous session (finalizing it — see below), begins server-side timer
-  → each tick broadcasts a slide to browser:
-      for non-step-frames slides:
+  → each tick broadcasts one slide to browser (a slide is always exactly one frame — v0.26):
         { action: "replace", type: slide_type, payload: slide_payload, id, cursor: 0, total: 1, title?: slide_title }
-      for step-frames slides (expanded into frame ticks):
-        frame N: { action: "replace", type: frames[N].type ?? frame_type, payload: frames[N].payload, id, cursor: N, total: M, title?: frames[N].label }
-        (each frame broadcast at delay_ms intervals, using its own effective type — v0.17; frame labels shown as titles, not original slide title; same id across all frames of one sequence — v0.22; `cursor`/`total` replace the old `stepFrames`/`currentFrame`/`totalFrames` fields — v0.26 Sprint 42)
   → browser renders each slide in sequence
   → after last slide, slideshow stops (no loop in v1) and finalizes (persists) the session — see below
   → MCP tool returns { ok: true }
 ```
 
-**`id` parity fixed v0.22 (bug B15, see `01`/`02` C2d):** every tick above now carries a freshly-generated `id` (a plain slide gets its own id; a step-frames sequence gets one id shared across its frame ticks, mirroring `/step`'s continuation rule) — `generateSnapshotId()` is called directly in `slideshow.ts`, not through `commitRenderResult()`, since slideshow ticks are still not persisted to disk per-tick (see finalize-on-end below).
+(Historical, through v0.25: a `type: "step-frames"` slide expanded into one timer tick per frame — `frame N: { action: "replace", type: frames[N].type ?? frame_type, payload: frames[N].payload, id, cursor: N, total: M, title?: frames[N].label }`, each frame broadcast at `delay_ms` intervals, same `id` shared across all frames of one sequence. Removed v0.26 Sprint 45 along with `type: "step-frames"` as a top-level content type — no back-compat shim, per `02` N4. A step-frames sequence built via `commit_step_frames()` can still be manually navigated with `step()`/`seek()` during or after a slideshow; it just can no longer be auto-advanced as a slideshow tick.)
 
-**Finalize-on-end persistence + required `workspace` (v0.22, FR20 in `01`):** `slideshow()`/`POST /slideshow` previously had no `workspace` parameter at all — it's now required, validated the same way as `render()` (F14). Individual ticks are never written to disk; `slideshow.ts` tracks the session's workspace in module state and, when the session ends — the timer runs out naturally, `slideshow_stop()`/`cancelSlideshow()` is called explicitly, or a new `render()`/`slideshow()` call supersedes it — a `finalizeSlideshow()` helper reads the current in-memory canvas state (`getCanvas()`) and calls `saveSnapshot()` exactly once, reusing the `id` already broadcast live (assembling the full `{ frame_type, frames }` JSON for a step-frames session, not just the last frame). `clear()` is the one call site that skips this: `cancelSlideshow({ persist: false })`, preserving F10's "clear() never produces a snapshot" guarantee. This mirrors `commit_step_frames()`'s "transient until finalized" pattern (F15) rather than persisting once per slide.
+**`id` parity fixed v0.22 (bug B15, see `01`/`02` C2d):** every tick above now carries a freshly-generated `id` — `generateSnapshotId()` is called directly in `slideshow.ts`, not through `commitRenderResult()`, since slideshow ticks are still not persisted to disk per-tick (see finalize-on-end below).
+
+**Finalize-on-end persistence + required `workspace` (v0.22, FR20 in `01`):** `slideshow()`/`POST /slideshow` previously had no `workspace` parameter at all — it's now required, validated the same way as `render()` (F14). Individual ticks are never written to disk; `slideshow.ts` tracks the session's workspace in module state and, when the session ends — the timer runs out naturally, `slideshow_stop()`/`cancelSlideshow()` is called explicitly, or a new `render()`/`slideshow()` call supersedes it — a `finalizeSlideshow()` helper reads the current in-memory canvas state (`getCanvas()`) and calls `saveSnapshot()` exactly once, reusing the `id` already broadcast live. `clear()` is the one call site that skips this: `cancelSlideshow({ persist: false })`, preserving F10's "clear() never produces a snapshot" guarantee. This mirrors `commit_step_frames()`'s "transient until finalized" pattern (F15) rather than persisting once per slide.
 
 ### History Load (v0.4 — Sprint 17; extended v0.5 — Sprint 18)
 
@@ -354,7 +355,7 @@ user clicks a snapshot entry (any workspace)
 
 **Slideshow cancellation:** `POST /render`, `POST /clear`, or a new `POST /slideshow` call cancels any running slideshow. `POST /slideshow/stop` also cancels. `POST /step` and `POST /seek` do not cancel.
 
-### Incremental Step-Frames Creation (v0.8)
+### Incremental Step-Frames Creation (v0.8; sole creation path v0.26 Sprint 45)
 
 ```
 agent calls init_step_frames(frame_type="mermaid", workspace="my-course", title="TCP Handshake")
@@ -382,12 +383,12 @@ agent calls append_frame(id="<uuid>", payload="graph TD; A-->B", label="Step 1")
 
 ... agent repeats for each frame; browser updates after every append ...
 
-agent calls commit_step_frames(id="<uuid>")
+agent calls commit_step_frames(id="<uuid>", node_to_frame={"A": 0}?)
   → server assembles full step-frames JSON:
       { frame_type: "mermaid", frames: [{ label, payload }, ...] }
   → cancels any running slideshow (same as render())
-  → updates in-memory canvas state (so export() returns the assembled JSON)
-  → persistContent() converts to frames[]/rawPayload, calls saveSnapshot(frames, {workspace, title}, rawPayload, id)
+  → updates in-memory canvas state, including node_to_frame if provided (so export() returns the assembled JSON)
+  → resolves each frame's effective type, calls saveSnapshot(frames, {workspace, title, node_to_frame}, rawPayload, id)
   → pushes final WebSocket broadcast (handles edge case where clear() was called between appends)
   → deletes builder entry for this id
   → returns { ok: true }
@@ -409,7 +410,7 @@ Interaction with clear():
 **REST fallback endpoints (v0.8; live preview v0.9):**
 - `POST /step-frames/init` — body: `{ frame_type, workspace, title? }` → `{ ok: true, id }`
 - `POST /step-frames/:id/frame` — body: `{ payload, label?, type? }` → `{ ok: true, frame_count: N }`. v0.9: also pushes partial step-frames to browser after each valid append (same as MCP `append_frame()`). v0.17: optional `type` overrides the sequence's `frame_type` for this one frame.
-- `POST /step-frames/:id/commit` — no body → `{ ok: true }`. v0.9: finalization only (snapshot, in-memory state, slideshow cancel, builder cleanup); final broadcast still sent for consistency.
+- `POST /step-frames/:id/commit` — body: `{ node_to_frame? }` (optional) → `{ ok: true }`. v0.9: finalization only (snapshot, in-memory state, slideshow cancel, builder cleanup); final broadcast still sent for consistency. v0.26 Sprint 45: `node_to_frame` param — see U4e in `03`.
 
 ### HTML Export (v0.13)
 
@@ -591,8 +592,8 @@ After `mermaid.render()` produces an SVG, the Svelte component intercepts `click
 
 This extraction logic is hardcoded for `graph`/`flowchart` diagram types; other Mermaid types may have different SVG structures (see U4b for diagram type support matrix).
 
-**`node_to_frame` autonomous navigation (Phase 2 — Sprint 13):**
-When `render(type="step-frames", options.node_to_frame={...})` is called, the browser attaches click listeners automatically (no `wait_click()` or agent involvement needed). On click, if the node ID is in the map, the browser calls `POST /seek` with the target frame index; otherwise the click is ignored. `wait_click()` and `node_to_frame` are mutually exclusive: `set_node_actions enabled:true` (from a `wait_click()` call) disarms `node_to_frame` for the duration of the call. After `wait_click()` resolves or times out and `set_node_actions enabled:false` is sent, the browser does *not* automatically restore `node_to_frame` — the agent must call `render()` again with the `node_to_frame` map if it wants to re-enable autonomous navigation.
+**`node_to_frame` autonomous navigation (Phase 2 — Sprint 13; entry point moved v0.26 Sprint 45):**
+When `commit_step_frames(id, node_to_frame={...})` is called, the browser attaches click listeners automatically (no `wait_click()` or agent involvement needed). On click, if the node ID is in the map, the browser calls `POST /seek` with the target frame index; otherwise the click is ignored. (Historical: originally set via `render(type="step-frames", options.node_to_frame={...})`; moved to `commit_step_frames()` when the one-shot `render(type="step-frames")` path was removed — see F15/U4e in `03`.) `wait_click()` and `node_to_frame` are mutually exclusive: `set_node_actions enabled:true` (from a `wait_click()` call) disarms `node_to_frame` for the duration of the call. After `wait_click()` resolves or times out and `set_node_actions enabled:false` is sent, the browser does *not* automatically restore `node_to_frame` — the agent must build and commit a new sequence with the `node_to_frame` map if it wants to re-enable autonomous navigation (Sprint 47 is planned to add auto-restore, see §9.3 D4/OQ12).
 
 ---
 
@@ -606,7 +607,7 @@ When `render(type="step-frames", options.node_to_frame={...})` is called, the br
 }
 ```
 
-`action` is always `"replace"` in v1 — hardcoded server-side, not part of the MCP tool signature. `append` and other action variants are Phase 2. `options.theme` is Phase 2; `options.title` is MVP (Sprint 8 ✅). Non-Mermaid types (`svg`, `html`, `katex`, `vega-lite`, `step-frames`) are all MVP (Sprints 5 & 7 ✅); `d2` is post-Phase-2.
+`action` is always `"replace"` in v1 — hardcoded server-side, not part of the MCP tool signature. `append` and other action variants are Phase 2. `options.theme` is Phase 2; `options.title` is MVP (Sprint 8 ✅). Non-Mermaid types (`svg`, `html`, `katex`, `vega-lite`) are all MVP (Sprint 5 ✅); `d2` is post-Phase-2. `render()` is single-frame only — `type: "step-frames"` was a fifth top-level type through v0.25 (MVP, Sprint 7 ✅) but no longer exists (removed v0.26 Sprint 45, see Step-frames protocol below).
 
 ### `options` parameter
 
@@ -623,19 +624,20 @@ When `render(type="step-frames", options.node_to_frame={...})` is called, the br
 | `workspace`      | `string`                          | **required (v0.7)** | — | Workspace name for snapshot routing. Must be provided on every `render()` call. No fallback: absent or invalid value returns `{ ok: false, error: "..." }` before snapshot or render. Same safety check as F12 (alphanumeric, dashes, underscores, dots, spaces; no path separators or `..`). `WHITEBOARD_WORKSPACE` env var is deprecated and removed (v0.7). |
 | `title`          | `string`                          | MVP     | `""`    | Displays a label above the canvas for this render call. Hidden if absent or empty. Cleared by `clear()`. Not included in `export()` output. |
 | `theme`          | `"dark" \| "light"`              | Phase 2 | `"dark"` | Sets the canvas theme for this render call. Persists until next `render()` or explicit change. |
-| `node_to_frame`  | `Record<string, number>`          | Phase 2 (Sprint 13) | — | Only valid when `type="step-frames"`. Declares a node ID → frame index map; the browser attaches click listeners automatically and navigates to the mapped frame on click — no `wait_click()` call needed. `wait_click()` overrides `node_to_frame` for the duration of its call (see §4 Node Click Flow). |
+
+**`node_to_frame` moved off `render()` in v0.26 Sprint 45** — it applied only to `type="step-frames"`, which no longer exists as a `render()` type. It is now a `commit_step_frames(id, node_to_frame?)` parameter instead (§3 MCP Tool Implementations); see §4 Node Click Flow below for the click-navigation behavior it drives, unchanged.
 
 **Action-variant options (deferred beyond Phase 2):** Agent-controlled customizations to rendering behavior — e.g., "highlight this path in the diagram," "collapse this section," "show only these relationships." Planned as a generic `actions: [{ action, params }]` structure; deferred pending experience with how agents actually use the whiteboard.
 
-### Step-frames protocol (MVP — Sprint 7 ✅)
+### Step-frames protocol (MVP — Sprint 7 ✅; sole creation path v0.26 Sprint 45)
 
-Step-through is a two-tool protocol:
+Step-through is a three-tool protocol — the only way to create a multi-frame sequence (`render()` is single-frame only):
 
-1. **Load:** `render(type="step-frames", payload=<JSON string>)` — validates, stores all frames, displays frame 0. Returns `{ ok: true }`.
-2. **Navigate:** `step(direction="next"|"prev")` — advances or rewinds the cursor. Returns `{ ok: true, current_frame: N, total_frames: M }`.
-3. **Export:** `export()` — returns the full original frames JSON string (not the current frame), so the agent can reconstruct or resume the sequence.
+1. **Build:** `init_step_frames(frame_type, workspace, title?)` → `append_frame(id, payload, label?, type?)` × N → `commit_step_frames(id, node_to_frame?)`. Validates each frame as it's appended, displays a live preview after each call, and stores the full sequence on commit.
+2. **Navigate:** `step(direction="next"|"prev")` — advances or rewinds the cursor. Returns `{ ok: true, current_frame: N, total_frames: M }`. `seek(frame)` jumps to an arbitrary index in one call.
+3. **Export:** `export()` — returns the full assembled frames JSON string (not the current frame), so the agent can reconstruct or resume the sequence.
 
-`clear()` resets the step cursor along with the canvas.
+`clear()` resets the step cursor along with the canvas. (Historical, through v0.25: a one-shot `render(type="step-frames", payload=<JSON string>)` path existed alongside this as a fewer-round-trips alternative for short, fully-known-upfront sequences. Removed v0.26 Sprint 45 — no back-compat shim, per `02` N4 — because it duplicated validation/broadcast logic this protocol already covers as a strict superset; see F15 in `03` and D1 in §9.3 below.)
 
 ### Step-frames payload shape (MVP — Sprint 7 ✅; per-frame `type` v0.17)
 

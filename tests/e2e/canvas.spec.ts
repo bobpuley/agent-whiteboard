@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 
 const SERVER = "http://localhost:3000";
 const WS = "e2e-test";
@@ -11,6 +12,30 @@ const THREE_FRAMES = JSON.stringify({
     { label: "Step 3 — A→B→C", payload: "graph TD; A --> B --> C" },
   ],
 });
+
+/** Builds a step-frames sequence via the incremental REST protocol — the only
+ * way to create a multi-frame sequence since v0.26 Sprint 45 (POST /render no
+ * longer accepts type: "step-frames"). `framesJson` is a { frame_type, frames }
+ * envelope string, same shape the old one-shot payload used. */
+async function buildStepFrames(
+  request: APIRequestContext,
+  framesJson: string,
+  workspace: string = WS
+): Promise<string> {
+  const spec = JSON.parse(framesJson) as {
+    frame_type: string;
+    frames: { payload: string; label?: string; type?: string }[];
+  };
+  const initRes = await request.post(`${SERVER}/step-frames/init`, {
+    data: { frame_type: spec.frame_type, workspace },
+  });
+  const { id } = (await initRes.json()) as { id: string };
+  for (const f of spec.frames) {
+    await request.post(`${SERVER}/step-frames/${id}/frame`, { data: f });
+  }
+  await request.post(`${SERVER}/step-frames/${id}/commit`);
+  return id;
+}
 
 // Reset server canvas state before every test.
 // The Playwright page fixture is per-test (fresh page each run),
@@ -136,9 +161,7 @@ test("clear: reverts canvas to placeholder", async ({ page, request }) => {
 
 test("step-frames: step-bar visible and Prev disabled on load", async ({ page, request }) => {
   await page.goto("/");
-  await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
-  });
+  await buildStepFrames(request, THREE_FRAMES);
   await expect(page.locator(".step-bar")).toBeVisible();
   await expect(page.getByRole("button", { name: "Previous frame" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Next frame" })).toBeEnabled();
@@ -146,18 +169,14 @@ test("step-frames: step-bar visible and Prev disabled on load", async ({ page, r
 
 test("step-frames: frame label shown in step-bar", async ({ page, request }) => {
   await page.goto("/");
-  await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
-  });
+  await buildStepFrames(request, THREE_FRAMES);
   await expect(page.locator(".step-label")).toBeVisible();
   await expect(page.locator(".step-label")).toHaveText("Step 1 — A");
 });
 
 test("step-frames: clicking Next advances to frame 2", async ({ page, request }) => {
   await page.goto("/");
-  await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
-  });
+  await buildStepFrames(request, THREE_FRAMES);
   await expect(page.locator(".step-bar")).toBeVisible();
 
   await page.getByRole("button", { name: "Next frame" }).click();
@@ -168,9 +187,7 @@ test("step-frames: clicking Next advances to frame 2", async ({ page, request })
 
 test("step-frames: clicking Prev rewinds to frame 1", async ({ page, request }) => {
   await page.goto("/");
-  await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
-  });
+  await buildStepFrames(request, THREE_FRAMES);
   await expect(page.locator(".step-bar")).toBeVisible();
 
   await page.getByRole("button", { name: "Next frame" }).click();
@@ -183,9 +200,7 @@ test("step-frames: clicking Prev rewinds to frame 1", async ({ page, request }) 
 
 test("step-frames: Next disabled on last frame", async ({ page, request }) => {
   await page.goto("/");
-  await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
-  });
+  await buildStepFrames(request, THREE_FRAMES);
   await expect(page.locator(".step-bar")).toBeVisible();
 
   await page.getByRole("button", { name: "Next frame" }).click();
@@ -205,9 +220,7 @@ test("step-frames: a mixed mermaid+katex sequence renders each frame with its ow
     ],
   });
   await page.goto("/");
-  await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: mixedFrames, options: { workspace: WS } },
-  });
+  await buildStepFrames(request, mixedFrames);
 
   await expect(page.locator(".mermaid-container svg")).toBeVisible();
 
@@ -250,9 +263,7 @@ test("mermaid: a new diagram auto-fits within the canvas viewport", async ({ pag
 
 test("mermaid: step()/seek() within a sequence preserves the live zoom/pan", async ({ page, request }) => {
   await page.goto("/");
-  await request.post(`${SERVER}/render`, {
-    data: { type: "step-frames", payload: THREE_FRAMES, options: { workspace: WS } },
-  });
+  await buildStepFrames(request, THREE_FRAMES);
   await expect(page.locator(".mermaid-container svg")).toBeVisible();
 
   // Manually zoom in on frame 0.

@@ -81,6 +81,19 @@ describe("POST /render", () => {
     expect(body.ok).toBe(false);
   });
 
+  it("rejects type: \"step-frames\" — render() is single-frame only since v0.26 Sprint 45", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/type must be one of/);
+  });
+
   it("accepts svg type and returns { ok: true }", async () => {
     const res = await app.request("/render", {
       method: "POST",
@@ -319,106 +332,39 @@ const THREE_FRAME_SEQUENCE = JSON.stringify({
   ],
 });
 
-describe("POST /render (step-frames)", () => {
-  it("accepts a valid step-frames payload and returns { ok: true }", async () => {
-    const res = await app.request("/render", {
+/** Builds a step-frames sequence via the incremental REST protocol — the only
+ * way to create a multi-frame sequence since v0.26 Sprint 45 (POST /render no
+ * longer accepts type: "step-frames"). Returns the builder id. */
+async function buildStepFrames(
+  frames: { payload: string; label?: string; type?: string }[],
+  opts: { workspace?: string; title?: string; frame_type?: string; node_to_frame?: Record<string, number> } = {}
+): Promise<string> {
+  const initRes = await app.request("/step-frames/init", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      frame_type: opts.frame_type ?? "mermaid",
+      workspace: opts.workspace ?? WORKSPACE,
+      ...(opts.title !== undefined ? { title: opts.title } : {}),
+    }),
+  });
+  const { id } = await initRes.json<{ ok: boolean; id: string }>();
+  for (const f of frames) {
+    await app.request(`/step-frames/${id}/frame`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
+      body: JSON.stringify(f),
     });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+  }
+  await app.request(`/step-frames/${id}/commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts.node_to_frame !== undefined ? { node_to_frame: opts.node_to_frame } : {}),
   });
+  return id;
+}
 
-  it("rejects step-frames with invalid JSON", async () => {
-    const res = await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: "not json {", options: { workspace: WORKSPACE } }),
-    });
-    const body = await res.json<{ ok: boolean; error: string }>();
-    expect(body.ok).toBe(false);
-    expect(body.error).toMatch(/JSON/);
-  });
-
-  it("rejects step-frames with missing frames array", async () => {
-    const res = await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: JSON.stringify({ frame_type: "mermaid" }), options: { workspace: WORKSPACE } }),
-    });
-    const body = await res.json<{ ok: boolean; error: string }>();
-    expect(body.ok).toBe(false);
-  });
-
-  it("rejects a frame whose payload fails validation for its effective type (B5 regression)", async () => {
-    const { broadcast } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcast);
-    spy.mockClear();
-
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        { label: "Step 1", payload: "graph TD; A" },
-        { label: "Step 2", payload: "not a valid diagram" },
-      ],
-    });
-    const res = await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
-    });
-    const body = await res.json<{ ok: boolean; error: string }>();
-    expect(body.ok).toBe(false);
-    expect(body.error).toMatch(/mermaid/);
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("accepts a mixed-type sequence when each frame's own type is valid", async () => {
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        { label: "Step 1", payload: "graph TD; A" },
-        { label: "Step 2", type: "katex", payload: "E = mc^2" },
-      ],
-    });
-    const res = await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
-    });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-  });
-
-  it("rejects a mixed-type sequence when a per-frame type override fails validation", async () => {
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        { label: "Step 1", payload: "graph TD; A" },
-        { label: "Step 2", type: "vega-lite", payload: "not json" },
-      ],
-    });
-    const res = await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
-    });
-    const body = await res.json<{ ok: boolean; error: string }>();
-    expect(body.ok).toBe(false);
-    expect(body.error).toMatch(/vega-lite/);
-  });
-
-  it("export returns the original frames JSON after loading", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
-    const res = await app.request("/export");
-    expect(await res.json()).toEqual({ ok: true, data: THREE_FRAME_SEQUENCE });
-  });
-});
+const THREE_FRAME_SEQUENCE_FRAMES = (JSON.parse(THREE_FRAME_SEQUENCE) as { frames: { payload: string; label?: string }[] }).frames;
 
 describe("POST /step", () => {
   it("returns error if no step-frames sequence is loaded", async () => {
@@ -433,11 +379,7 @@ describe("POST /step", () => {
   });
 
   it("advances cursor and returns current_frame / total_frames", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
     const res = await app.request("/step", {
       method: "POST",
@@ -449,11 +391,7 @@ describe("POST /step", () => {
   });
 
   it("steps next twice and reaches frame 2", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
     await app.request("/step", {
       method: "POST",
@@ -469,11 +407,7 @@ describe("POST /step", () => {
   });
 
   it("does not go past the last frame", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
     // Step to the end.
     for (let i = 0; i < 5; i++) {
@@ -503,11 +437,7 @@ describe("POST /step", () => {
   });
 
   it("clear resets step-frames so /step returns error", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
     await app.request("/clear", { method: "POST" });
 
@@ -524,18 +454,10 @@ describe("POST /step", () => {
     const { broadcastStepFrames } = await import("../../../server/ws.js");
     const spy = vi.mocked(broadcastStepFrames);
 
-    const mixedSequence = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        { label: "Step 1", payload: "graph TD; A" },
-        { label: "Step 2", type: "katex", payload: "E = mc^2" },
-      ],
-    });
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: mixedSequence, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames([
+      { label: "Step 1", payload: "graph TD; A" },
+      { label: "Step 2", type: "katex", payload: "E = mc^2" },
+    ]);
 
     spy.mockClear();
     await app.request("/step", {
@@ -591,6 +513,22 @@ describe("POST /slideshow", () => {
     expect(res.status).toBe(400);
     const body = await res.json<{ ok: boolean }>();
     expect(body.ok).toBe(false);
+  });
+
+  it("rejects a slide with type: \"step-frames\" — not a top-level content type anymore (v0.26 Sprint 45)", async () => {
+    const res = await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slides: [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }],
+        delay_ms: 1000,
+        workspace: WORKSPACE,
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/slide\[0\]: type must be one of/);
   });
 
   it("rejects a slide with invalid mermaid keyword", async () => {
@@ -703,115 +641,6 @@ describe("POST /slideshow", () => {
     vi.advanceTimersByTime(1000);
     const exportRes = await app.request("/export");
     expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe("");
-    vi.useRealTimers();
-  });
-});
-
-describe("POST /slideshow — step-frames slide", () => {
-  it("leaves session in step-frames state so /step works afterward", async () => {
-    vi.useFakeTimers();
-    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
-    await app.request("/slideshow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
-    });
-    // export() returns the raw frames JSON (not a single frame payload).
-    const exportRes = await app.request("/export");
-    expect(await exportRes.json()).toEqual({ ok: true, data: THREE_FRAME_SEQUENCE });
-    vi.useRealTimers();
-  });
-
-  it("allows /step navigation after a step-frames slideshow slide", async () => {
-    vi.useFakeTimers();
-    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
-    await app.request("/slideshow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
-    });
-    // Should be at frame 0; step next moves to frame 1.
-    const stepRes = await app.request("/step", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ direction: "next" }),
-    });
-    expect(await stepRes.json()).toEqual({ ok: true, current_frame: 1, total_frames: 3 });
-    vi.useRealTimers();
-  });
-});
-
-// ── Sprint 9 B2 — step-frames auto-advance ────────────────────────────────────
-
-describe("POST /slideshow — step-frames auto-advance (B2)", () => {
-  it("auto-advances through all frames at delay_ms intervals", async () => {
-    vi.useFakeTimers();
-    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
-    await app.request("/slideshow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
-    });
-
-    // t=0: frame 0. Two ticks advance to frame 2 (last).
-    vi.advanceTimersByTime(1000); // frame 1
-    vi.advanceTimersByTime(1000); // frame 2
-
-    // Session is at frame 2 — step next is capped at last frame.
-    const res = await app.request("/step", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ direction: "next" }),
-    });
-    expect(await res.json()).toEqual({ ok: true, current_frame: 2, total_frames: 3 });
-    vi.useRealTimers();
-  });
-
-  it("session stays in step-frames state after full auto-advance", async () => {
-    vi.useFakeTimers();
-    const slides = [{ type: "step-frames", payload: THREE_FRAME_SEQUENCE }];
-    await app.request("/slideshow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
-    });
-
-    vi.advanceTimersByTime(2000); // advance past all 3 frames
-
-    // export() returns the full frames JSON (not a single frame payload).
-    const exportRes = await app.request("/export");
-    expect(await exportRes.json()).toEqual({ ok: true, data: THREE_FRAME_SEQUENCE });
-
-    // /step is functional — session is in step-frames state.
-    const stepRes = await app.request("/step", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ direction: "prev" }),
-    });
-    expect((await stepRes.json<{ ok: boolean }>()).ok).toBe(true);
-    vi.useRealTimers();
-  });
-
-  it("mixed playlist: step-frames expands so next plain slide follows after all frames", async () => {
-    vi.useFakeTimers();
-    const slides = [
-      { type: "step-frames", payload: THREE_FRAME_SEQUENCE },
-      { type: "svg", payload: "<svg><circle r='5'/></svg>" },
-    ];
-    await app.request("/slideshow", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides, delay_ms: 1000, workspace: WORKSPACE }),
-    });
-
-    // 3 frames (ticks 0-2) + 1 svg slide (tick 3) = 4 ticks total.
-    // After 3 intervals the svg slide is shown.
-    vi.advanceTimersByTime(3000);
-
-    const exportRes = await app.request("/export");
-    expect((await exportRes.json<{ ok: boolean; data: string }>()).data).toBe(
-      "<svg><circle r='5'/></svg>"
-    );
     vi.useRealTimers();
   });
 });
@@ -978,11 +807,7 @@ describe("POST /seek", () => {
   });
 
   it("returns error when frame index is out of range", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
     const res = await app.request("/seek", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -994,11 +819,7 @@ describe("POST /seek", () => {
   });
 
   it("returns error for negative frame index", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
     const res = await app.request("/seek", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1009,11 +830,7 @@ describe("POST /seek", () => {
   });
 
   it("jumps to the target frame and returns current_frame / total_frames", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
     const res = await app.request("/seek", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1024,11 +841,7 @@ describe("POST /seek", () => {
   });
 
   it("seek to frame 0 works from any position", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
     // Advance to frame 2.
     await app.request("/step", {
       method: "POST",
@@ -1203,24 +1016,19 @@ describe("POST /render — snapshot persistence (Sprint 16)", () => {
     expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
   });
 
-  it("calls saveSnapshot with type=step-frames for a valid step-frames render", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+  it("calls saveSnapshot with resolved frames[] + rawPayload for a committed step-frames sequence", async () => {
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
     expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
-      [
-        { type: "mermaid", label: "Step 1", payload: "graph TD; A" },
-        { type: "mermaid", label: "Step 2", payload: "graph TD; A --> B" },
-        { type: "mermaid", label: "Step 3", payload: "graph TD; A --> B --> C" },
-      ],
-      { title: undefined, node_to_frame: undefined, workspace: WORKSPACE },
-      THREE_FRAME_SEQUENCE,
-      "test-uuid-generated"
-    );
+    const [frames, meta, rawPayload, id] = vi.mocked(snapshotModule.saveSnapshot).mock.calls[0];
+    expect(frames).toEqual([
+      { type: "mermaid", label: "Step 1", payload: "graph TD; A" },
+      { type: "mermaid", label: "Step 2", payload: "graph TD; A --> B" },
+      { type: "mermaid", label: "Step 3", payload: "graph TD; A --> B --> C" },
+    ]);
+    expect(meta).toEqual({ title: undefined, node_to_frame: undefined, workspace: WORKSPACE });
+    expect(JSON.parse(rawPayload as string)).toEqual(JSON.parse(THREE_FRAME_SEQUENCE));
+    expect(id).toBe("test-uuid-generated");
   });
 
   it("render still returns { ok: true } when saveSnapshot throws", async () => {
@@ -1848,27 +1656,20 @@ describe("POST /render — per-call workspace routing (Sprint 19 / F14)", () => 
     expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
   });
 
-  it("passes workspace to saveSnapshot for step-frames renders", async () => {
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [{ label: "A", payload: "graph TD; A" }, { label: "B", payload: "graph TD; B" }],
-    });
-    const res = await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: "course_3" } }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
-      [
-        { type: "mermaid", label: "A", payload: "graph TD; A" },
-        { type: "mermaid", label: "B", payload: "graph TD; B" },
-      ],
-      { title: undefined, node_to_frame: undefined, workspace: "course_3" },
-      payload,
-      "test-uuid-generated"
+  it("passes workspace to saveSnapshot for a committed step-frames sequence", async () => {
+    await buildStepFrames(
+      [{ label: "A", payload: "graph TD; A" }, { label: "B", payload: "graph TD; B" }],
+      { workspace: "course_3" }
     );
+
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledOnce();
+    const [frames, meta, , id] = vi.mocked(snapshotModule.saveSnapshot).mock.calls[0];
+    expect(frames).toEqual([
+      { type: "mermaid", label: "A", payload: "graph TD; A" },
+      { type: "mermaid", label: "B", payload: "graph TD; B" },
+    ]);
+    expect(meta).toEqual({ title: undefined, node_to_frame: undefined, workspace: "course_3" });
+    expect(id).toBe("test-uuid-generated");
   });
 });
 
@@ -2055,6 +1856,34 @@ describe("POST /step-frames/:id/commit", () => {
     const res = await app.request(`/step-frames/${id}/commit`, { method: "POST" });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("accepts an optional node_to_frame map (v0.26 Sprint 45 — moved off POST /render)", async () => {
+    const id = await initAndAppend(2);
+    const res = await app.request(`/step-frames/${id}/commit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ node_to_frame: { A: 0, B: 1 } }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const { getCanvas, isStepSequence } = await import("../../../server/session.js");
+    const canvas = getCanvas();
+    expect(isStepSequence(canvas) && canvas.nodeToFrame).toEqual({ A: 0, B: 1 });
+  });
+
+  it("rejects a node_to_frame that is not a map of string → number", async () => {
+    const id = await initAndAppend(1);
+    const res = await app.request(`/step-frames/${id}/commit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ node_to_frame: { A: "not a number" } }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/node_to_frame/);
   });
 
   it("after commit, export returns the assembled step-frames JSON", async () => {
@@ -2335,23 +2164,6 @@ describe("POST /render — returns id in response (v0.11)", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it("includes id in response for step-frames render", async () => {
-    const snapshotModule = await import("../../../server/snapshot.js");
-    vi.mocked(snapshotModule.saveSnapshot).mockReturnValueOnce("test-uuid-sf-001");
-
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [{ payload: "graph TD; A --> B" }],
-    });
-    const res = await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload, options: { workspace: WORKSPACE } }),
-    });
-
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, id: "test-uuid-sf-001" });
-  });
 });
 
 describe("POST /step-frames/:id/commit — returns id in response (v0.11)", () => {
@@ -2751,25 +2563,8 @@ describe("POST /render — id in broadcast (v0.19)", () => {
     expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated" });
   });
 
-  it("includes id in the broadcast for a step-frames render", async () => {
-    const { broadcastReplace } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcastReplace);
-
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
-
-    expect(spy.mock.calls[0][0]).toMatchObject({ id: "test-uuid-generated" });
-  });
-
   it("step() re-broadcasts the same id the sequence was created with", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
     const { broadcastStepFrames } = await import("../../../server/ws.js");
     const spy = vi.mocked(broadcastStepFrames);
@@ -2786,11 +2581,7 @@ describe("POST /render — id in broadcast (v0.19)", () => {
   });
 
   it("seek() re-broadcasts the same id the sequence was created with", async () => {
-    await app.request("/render", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "step-frames", payload: THREE_FRAME_SEQUENCE, options: { workspace: WORKSPACE } }),
-    });
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
     const { broadcastReplace } = await import("../../../server/ws.js");
     const spy = vi.mocked(broadcastReplace);

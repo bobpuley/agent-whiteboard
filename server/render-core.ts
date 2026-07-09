@@ -7,7 +7,8 @@ import { generateSnapshotId } from "./snapshot.js";
 import { assembleStepFramesPayload, persistContent } from "./persist.js";
 import { isValidWorkspaceName } from "./validate.js";
 import { setCanvas, setLastWorkspace, setStepFrames } from "./session.js";
-import type { CanvasType, StepFrame } from "./session.js";
+import type { CanvasType } from "./session.js";
+import type { Frame } from "./presentation.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 import type { AppendResult, CommitResult } from "./step-frames-builder.js";
 
@@ -41,57 +42,28 @@ export interface RenderResult {
 
 /**
  * Commits an already-validated render() payload: cancels any running
- * slideshow, stores the canvas state (step-frames or single-type), broadcasts
- * to the browser, updates lastWorkspace, and writes the snapshot (F10 — a
- * write failure must never block rendering). Shared by POST /render and the
- * MCP `render` tool.
+ * slideshow, stores the canvas state, broadcasts to the browser, updates
+ * lastWorkspace, and writes the snapshot (F10 — a write failure must never
+ * block rendering). Shared by POST /render and the MCP `render` tool.
+ * render() is single-frame only (v0.26 Sprint 45) — multi-frame sequences are
+ * built exclusively via init_step_frames()/append_frame()/commit_step_frames().
  */
 export function commitRenderResult(
-  type: CanvasType | "step-frames",
+  type: CanvasType,
   payload: string,
   workspace: string,
   title: string | undefined,
-  nodeToFrame: Record<string, number> | undefined,
 ): RenderResult {
   cancelSlideshow();
 
-  if (type === "step-frames") {
-    const spec = JSON.parse(payload) as { frame_type: string; frames: StepFrame[] };
-    const frames = spec.frames;
-    // Generate the id before broadcasting so the browser can key its viewport
-    // report on it — a brand-new render() always mints a fresh id (F19/C3).
-    const newId = generateSnapshotId();
-    setStepFrames(frames, spec.frame_type, payload, title, nodeToFrame, newId);
-    broadcastReplace({
-      type: frames[0].type ?? spec.frame_type,
-      payload: frames[0].payload,
-      frameLabel: frames[0].label,
-      cursor: 0,
-      total: frames.length,
-      title,
-      nodeToFrame,
-      id: newId,
-    });
-    setLastWorkspace(workspace);
-    const { id: snapshotId } = persistContent("render", {
-      type: "step-frames",
-      payload,
-      title,
-      nodeToFrame,
-      workspace,
-      id: newId,
-    });
-    return { ok: true, ...(snapshotId !== undefined ? { id: snapshotId } : {}) };
-  }
-
-  // svg, html, katex, mermaid, vega-lite
+  // Generate the id before broadcasting so the browser can key its viewport
+  // report on it — a brand-new render() always mints a fresh id (F19/C3).
   const newId = generateSnapshotId();
-  setCanvas(type as CanvasType, payload, title, newId);
+  setCanvas(type, payload, title, newId);
   broadcastReplace({ type, payload, title, id: newId, cursor: 0, total: 1 });
   setLastWorkspace(workspace);
   const { id: snapshotId } = persistContent("render", {
-    type: type as CanvasType,
-    payload,
+    frames: [{ type, payload }],
     title,
     workspace,
     id: newId,
@@ -150,23 +122,32 @@ export type CommitStepFramesResult =
  * writes the snapshot (F10 backstop), and sends a final broadcast (handles
  * clear() called between appends). Shared by POST /step-frames/:id/commit
  * and the MCP `commit_step_frames` tool.
+ * `nodeToFrame` (v0.26 Sprint 45): optional node ID → frame index map for
+ * autonomous browser navigation (U4e) — this is its only entry point now that
+ * one-shot render(type="step-frames", options.node_to_frame) no longer exists.
  */
-export function commitStepFramesResult(id: string): CommitStepFramesResult {
+export function commitStepFramesResult(id: string, nodeToFrame?: Record<string, number>): CommitStepFramesResult {
   const result: CommitResult = commitBuilder(id);
   if (!result.ok) return result;
 
   const { entry } = result;
   const { frame_type, workspace, title, frames } = entry;
   const assembledPayload = assembleStepFramesPayload(frame_type, frames);
+  const resolvedFrames: Frame[] = frames.map((f) => ({
+    type: f.type ?? frame_type,
+    payload: f.payload,
+    ...(f.label !== undefined ? { label: f.label } : {}),
+  }));
 
   cancelSlideshow();
   const commitId = generateSnapshotId();
-  setStepFrames(frames, frame_type, assembledPayload, title, undefined, commitId);
+  setStepFrames(frames, frame_type, assembledPayload, title, nodeToFrame, commitId);
   setLastWorkspace(workspace);
   const { id: commitSnapshotId } = persistContent("commit_step_frames", {
-    type: "step-frames",
-    payload: assembledPayload,
+    frames: resolvedFrames,
+    rawPayload: assembledPayload,
     title,
+    nodeToFrame,
     workspace,
     id: commitId,
   });

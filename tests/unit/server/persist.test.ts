@@ -33,7 +33,7 @@ describe("persist — trigger registry (v0.25, D2 in docs/04_architecture.md §9
 
   it("persistContent throws for an undeclared command before touching disk", () => {
     expect(() =>
-      persistContent("some-new-feature", { type: "svg", payload: "<svg/>", workspace: "ws" })
+      persistContent("some-new-feature", { frames: [{ type: "svg", payload: "<svg/>" }], workspace: "ws" })
     ).toThrow(/no trigger declared/);
     expect(saveSnapshot).not.toHaveBeenCalled();
   });
@@ -47,8 +47,7 @@ describe("persist — persistContent write behavior per trigger", () => {
 
   it("immediate: writes now and returns the snapshot id", () => {
     const result = persistContent("render", {
-      type: "mermaid",
-      payload: "graph TD; A",
+      frames: [{ type: "mermaid", payload: "graph TD; A" }],
       title: "T",
       workspace: "ws",
       id: "pregenerated-id",
@@ -65,20 +64,26 @@ describe("persist — persistContent write behavior per trigger", () => {
 
   it("on-finalize: writes now, same as immediate", () => {
     const result = persistContent("commit_step_frames", {
-      type: "step-frames",
-      payload: '{"frame_type":"mermaid","frames":[]}',
+      frames: [],
       workspace: "ws",
     });
     expect(saveSnapshot).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ id: "generated-id" });
   });
 
-  it("converts a multi-frame step-frames payload into frames[] + rawPayload for saveSnapshot (v0.26 Sprint 43)", () => {
-    const payload = JSON.stringify({
+  it("passes a multi-frame sequence's frames[] + rawPayload straight through to saveSnapshot (v0.26 Sprint 43/45)", () => {
+    const rawPayload = JSON.stringify({
       frame_type: "mermaid",
       frames: [{ payload: "graph A" }, { payload: "graph B", label: "Step 2" }],
     });
-    persistContent("commit_step_frames", { type: "step-frames", payload, workspace: "ws" });
+    persistContent("commit_step_frames", {
+      frames: [
+        { type: "mermaid", payload: "graph A" },
+        { type: "mermaid", payload: "graph B", label: "Step 2" },
+      ],
+      rawPayload,
+      workspace: "ws",
+    });
 
     expect(saveSnapshot).toHaveBeenCalledWith(
       [
@@ -86,14 +91,17 @@ describe("persist — persistContent write behavior per trigger", () => {
         { type: "mermaid", payload: "graph B", label: "Step 2" },
       ],
       { title: undefined, node_to_frame: undefined, workspace: "ws" },
-      payload,
+      rawPayload,
       undefined
     );
   });
 
-  it("collapses a 1-frame step-frames payload into a plain record with no rawPayload", () => {
-    const payload = JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph A" }] });
-    persistContent("commit_step_frames", { type: "step-frames", payload, workspace: "ws" });
+  it("collapses rawPayload to undefined when only 1 frame is passed, even if the caller supplied one", () => {
+    persistContent("commit_step_frames", {
+      frames: [{ type: "mermaid", payload: "graph A" }],
+      rawPayload: JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph A" }] }),
+      workspace: "ws",
+    });
 
     expect(saveSnapshot).toHaveBeenCalledWith(
       [{ type: "mermaid", payload: "graph A" }],
@@ -105,8 +113,7 @@ describe("persist — persistContent write behavior per trigger", () => {
 
   it("transient: never touches disk", () => {
     const result = persistContent("append_frame", {
-      type: "step-frames",
-      payload: "graph TD; A",
+      frames: [{ type: "mermaid", payload: "graph TD; A" }],
       workspace: "ws",
     });
     expect(saveSnapshot).not.toHaveBeenCalled();
@@ -114,7 +121,7 @@ describe("persist — persistContent write behavior per trigger", () => {
   });
 
   it("never: never touches disk", () => {
-    const result = persistContent("clear", { type: "svg", payload: "<svg/>", workspace: "ws" });
+    const result = persistContent("clear", { frames: [{ type: "svg", payload: "<svg/>" }], workspace: "ws" });
     expect(saveSnapshot).not.toHaveBeenCalled();
     expect(result).toEqual({});
   });
@@ -123,7 +130,7 @@ describe("persist — persistContent write behavior per trigger", () => {
     vi.mocked(saveSnapshot).mockImplementation(() => {
       throw new Error("disk full");
     });
-    const result = persistContent("render", { type: "svg", payload: "<svg/>", workspace: "ws" });
+    const result = persistContent("render", { frames: [{ type: "svg", payload: "<svg/>" }], workspace: "ws" });
     expect(result).toEqual({});
   });
 });

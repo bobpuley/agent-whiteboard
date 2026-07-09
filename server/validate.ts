@@ -1,7 +1,6 @@
 // Server-side payload validation helpers.
 
 import mermaid from "mermaid";
-import type { StepFrame } from "./session.js";
 import type { Frame } from "./presentation.js";
 
 // Initialise once — no DOM side effects in parse-only mode.
@@ -71,22 +70,16 @@ function isNodeEnvLimitation(msg: string): boolean {
   );
 }
 
-export const KNOWN_TYPES = [
-  "mermaid", "svg", "html", "katex", "vega-lite", "step-frames",
-] as const;
-
-export type KnownType = typeof KNOWN_TYPES[number];
-
-/** Atomic frame types — a Frame's `type` is never itself "step-frames" (frames don't nest). */
+/** Content types a single Frame can carry — the only content types anywhere in the MCP payload contract (v0.26 Sprint 45; "step-frames" no longer exists as a top-level type). */
 export const FRAME_TYPES = ["mermaid", "svg", "html", "katex", "vega-lite"] as const;
 
 export type FrameType = typeof FRAME_TYPES[number];
 
 /**
  * Validate one Frame — the single atomic-content validator (U2, v0.26).
- * Every command path that accepts frame content (one-shot render(), the
- * incremental append_frame() builder, slideshow slide expansion) funnels
- * each frame through this same function; there is no second implementation.
+ * Every command path that accepts frame content (render(), each slide of
+ * slideshow(), the incremental append_frame() builder) funnels each frame
+ * through this same function; there is no second implementation.
  * Returns null on success; an error string on failure. Async because Mermaid
  * parse is async.
  */
@@ -115,47 +108,4 @@ export async function validateFrame(frame: Pick<Frame, "type" | "payload">): Pro
     }
   }
   return null;
-}
-
-/**
- * Validate a top-level render() payload: either a single Frame (type is one
- * of FRAME_TYPES) or a step-frames envelope (JSON-encoded frame_type + frames
- * array). Envelope validation parses the JSON and loops validateFrame() over
- * every frame — the only place envelope structure is checked; per-frame
- * content validation always delegates to validateFrame().
- * Returns null on success; returns an error string on failure.
- */
-export async function validatePayload(type: string, payload: string): Promise<string | null> {
-  if (!(KNOWN_TYPES as readonly string[]).includes(type)) {
-    return `type must be one of: ${KNOWN_TYPES.join(", ")}`;
-  }
-  if (type === "step-frames") {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(payload);
-    } catch {
-      return "invalid payload: step-frames payload must be valid JSON";
-    }
-    const spec = parsed as { frame_type?: string; frames?: unknown[] };
-    if (
-      typeof spec.frame_type !== "string" ||
-      !Array.isArray(spec.frames) ||
-      spec.frames.length === 0
-    ) {
-      return 'invalid payload: step-frames must have "frame_type" (string) and "frames" (non-empty array)';
-    }
-    const frames = spec.frames as StepFrame[];
-    if (frames.some((f) => typeof f.payload !== "string")) {
-      return 'invalid payload: each frame must have a "payload" string';
-    }
-    for (let i = 0; i < frames.length; i++) {
-      const frame = frames[i];
-      const frameError = await validateFrame({ type: frame.type ?? spec.frame_type, payload: frame.payload });
-      if (frameError) {
-        return `frame[${i}]: ${frameError}`;
-      }
-    }
-    return null;
-  }
-  return validateFrame({ type, payload });
 }
