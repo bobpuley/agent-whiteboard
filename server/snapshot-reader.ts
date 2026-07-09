@@ -144,6 +144,17 @@ export function loadSnapshotContent(workspace: string, dir: string, filename: st
   }
 }
 
+/** Best-effort read of a snapshot file's `id` field, for viewport-cache cleanup on delete. */
+export function readSnapshotIdSafe(fullPath: string): string | undefined {
+  try {
+    const raw = readFileSync(fullPath, "utf-8");
+    const parsed = JSON.parse(raw) as { id?: unknown };
+    return typeof parsed.id === "string" ? parsed.id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Scan all workspace subdirectories under `dir` for a snapshot whose `id` field matches.
  * Returns the snapshot's original re-renderable payload string if found, or null if no

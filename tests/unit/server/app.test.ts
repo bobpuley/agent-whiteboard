@@ -7,10 +7,14 @@ import { resetBuilders } from "../../../server/step-frames-builder.js";
 
 const WORKSPACE = "test-workspace";
 
-vi.mock("../../../server/snapshot.js", () => ({
-  saveSnapshot: vi.fn(),
-  generateSnapshotId: vi.fn(() => "test-uuid-generated"),
-}));
+vi.mock("../../../server/snapshot-writer.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/snapshot-writer.js")>();
+  return {
+    ...actual,
+    saveSnapshot: vi.fn(),
+    generateSnapshotId: vi.fn(() => "test-uuid-generated"),
+  };
+});
 
 vi.mock("../../../server/snapshot-reader.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../server/snapshot-reader.js")>();
@@ -1093,7 +1097,7 @@ describe("POST /node-click — Sprint 14: action field", () => {
 
 // ── Sprint 16 — render snapshot persistence ───────────────────────────────────
 
-import * as snapshotModule from "../../../server/snapshot.js";
+import * as snapshotModule from "../../../server/snapshot-writer.js";
 import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
 import { isValidWorkspaceName } from "../../../server/validate.js";
 
@@ -2126,7 +2130,7 @@ describe("POST /step-frames/:id/commit", () => {
   });
 
   it("calls saveSnapshot with the assembled payload after commit", async () => {
-    const { saveSnapshot } = await import("../../../server/snapshot.js");
+    const { saveSnapshot } = await import("../../../server/snapshot-writer.js");
     const snapshotSpy = vi.mocked(saveSnapshot);
     snapshotSpy.mockClear();
 
@@ -2287,7 +2291,7 @@ describe("POST /step-frames/:id/commit — final broadcast (v0.9)", () => {
 
 describe("POST /render — returns id in response (v0.11)", () => {
   it("includes id in response when saveSnapshot returns a UUID", async () => {
-    const snapshotModule = await import("../../../server/snapshot.js");
+    const snapshotModule = await import("../../../server/snapshot-writer.js");
     vi.mocked(snapshotModule.saveSnapshot).mockReturnValueOnce("test-uuid-render-001");
 
     const res = await app.request("/render", {
@@ -2301,7 +2305,7 @@ describe("POST /render — returns id in response (v0.11)", () => {
   });
 
   it("omits id from response when saveSnapshot returns undefined (write failure)", async () => {
-    const snapshotModule = await import("../../../server/snapshot.js");
+    const snapshotModule = await import("../../../server/snapshot-writer.js");
     vi.mocked(snapshotModule.saveSnapshot).mockReturnValueOnce(undefined);
 
     const res = await app.request("/render", {
@@ -2318,7 +2322,7 @@ describe("POST /render — returns id in response (v0.11)", () => {
 
 describe("POST /step-frames/:id/commit — returns id in response (v0.11)", () => {
   it("includes id in response when saveSnapshot returns a UUID", async () => {
-    const snapshotModule = await import("../../../server/snapshot.js");
+    const snapshotModule = await import("../../../server/snapshot-writer.js");
 
     const initRes = await app.request("/step-frames/init", {
       method: "POST",

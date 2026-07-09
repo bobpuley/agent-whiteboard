@@ -67,6 +67,32 @@ export function isValidWorkspaceName(name: string): boolean {
   return /^[a-zA-Z0-9_\-. ]+$/.test(name);
 }
 
+export type WorkspaceValidation =
+  | { ok: true; workspace: string }
+  | { ok: false; error: string };
+
+/**
+ * Validates the `workspace` field required by render(), init_step_frames(),
+ * list_snapshots(), and export_html() — same rule and error text everywhere
+ * (F14/F15/F18 in docs/03). Lives here (not render-core.ts) so both
+ * render-core.ts and snapshot-writer.ts can depend on it without a cycle
+ * (NF26, v0.28 Sprint 59) — render-core.ts re-exports it for its existing
+ * callers (app.ts, mcp.ts).
+ */
+export function validateWorkspaceInput(workspace: unknown): WorkspaceValidation {
+  if (!workspace) {
+    return { ok: false, error: "workspace is required" };
+  }
+  const ws = workspace as string;
+  if (!isValidWorkspaceName(ws)) {
+    return {
+      ok: false,
+      error: "invalid workspace: must be alphanumeric with dashes, underscores, dots, or spaces — no path separators or '..'",
+    };
+  }
+  return { ok: true, workspace: ws };
+}
+
 /**
  * Returns true if the error originates from a missing DOM API in Node.js,
  * not from invalid Mermaid syntax.

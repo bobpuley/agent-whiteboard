@@ -5,7 +5,7 @@
 // docs/04_architecture.md §9.3 D2 and §9.4 (FR20/B15 — slideshow silently
 // never persisted because persistence was opt-in, not a required decision).
 
-import { saveSnapshot } from "./snapshot.js";
+import { saveSnapshot } from "./snapshot-writer.js";
 import type { StepFrame } from "./session.js";
 import type { Frame } from "./presentation.js";
 
