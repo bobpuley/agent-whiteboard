@@ -1,3 +1,10 @@
+## 0.25.9 — 2026-07-09
+
+- **Sprint 47 — Return channel: supersession & auto-restore (U7, OQ11/OQ12):** `wait_click()` gains `type: "superseded"`, distinct from a genuine `type: "timeout"`, when a new `wait_click()` or an arming `wait_done()` cancels a pending one — `server/interaction.ts`'s `createSingleFlightInteraction()` now takes separate `timeoutEvent`/`supersededEvent` values plus a `supersede()` method; `waitForDone()` calls `clickInteraction.supersede()` on arm, so arming Done now takes over the return channel from a pending click instead of leaving it to time out
+- **`node_to_frame` now auto-restores after `wait_click()` resolves** (previously required the agent to build and commit a fresh sequence): a pure client-side reducer change — `canvasStore.ts`'s `set_node_actions` handler sets `nodeToFrameEnabled: state.nodeToFrame !== undefined` on `enabled:false` instead of hardcoding `false`, since the map itself was never actually cleared by arming/disarming a click listener
+- New behavior, not a refactor — `docs/03_requirements.md` (wait_click response shape, U4e) and `docs/04_architecture.md` (§9.2 U7, wait_click data flow) updated to describe the shipped contract
+- Verified by the full unit suite (439 tests, up from 431 — new coverage in `interaction.test.ts`, `app.test.ts`, `mcp.test.ts`, `canvasStore.test.ts` for both supersession and auto-restore) and typecheck (`tsc` + lint, 0 errors); e2e: 37/38, the one failure is the same pre-existing dev-server-startup race documented in prior sprints, confirmed passing in isolation
+
 ## 0.25.8 — 2026-07-09
 
 - **Sprint 46 — Return channel: Interaction primitive unification (U7, D4):** `server/events.ts`'s bespoke EventEmitter bus is replaced by `server/interaction.ts`, which exposes two generic arm/await/resolve factories — `createBroadcastInteraction<E>()` (every pending `await()` resolves independently, one `resolve()` wakes all — the shape `wait_done()` needs) and `createSingleFlightInteraction<E>(cancelEvent)` (a new `await()` cancels the pending one with `cancelEvent` — the shape `wait_click()` needs)
