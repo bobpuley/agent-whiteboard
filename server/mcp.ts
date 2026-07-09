@@ -8,6 +8,7 @@ import { z } from "zod";
 import { clearCanvas, exportCanvas, getCanvas, isStepSequence, seekStepFrame, stepCursor } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
+import { getViewport } from "./viewport-cache.js";
 import { hasMermaidKeyword, parseMermaid, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
@@ -123,8 +124,11 @@ export function createMcpServer(): McpServer {
       if (isStepSequence(state)) {
         const { frames, title, id } = state.presentation;
         // Same id as when this sequence was created — tells the browser this is
-        // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-        broadcastStepFrames(frames, state.frameType, result.currentFrame, id ?? generateSnapshotId(), title, state.nodeToFrame);
+        // a continuation, not a new diagram (F19/C3). Each frame now re-fits or
+        // restores its own saved viewport independently (v0.26.1, bug B19/FR21).
+        const resolvedId = id ?? generateSnapshotId();
+        const viewport = getViewport(resolvedId, result.currentFrame);
+        broadcastStepFrames(frames, state.frameType, result.currentFrame, resolvedId, title, state.nodeToFrame, viewport);
       }
       return {
         content: [
@@ -170,6 +174,7 @@ export function createMcpServer(): McpServer {
       }
       seekStepFrame(frame);
       const f = frames[frame];
+      const resolvedId = id ?? generateSnapshotId();
       broadcastReplace({
         type: f.type,
         payload: f.payload,
@@ -178,7 +183,9 @@ export function createMcpServer(): McpServer {
         total,
         title,
         nodeToFrame: state.nodeToFrame,
-        id: id ?? generateSnapshotId(),
+        id: resolvedId,
+        // Per-frame restore (v0.26.1, bug B19/FR21).
+        viewport: getViewport(resolvedId, frame),
       });
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, current_frame: frame, total_frames: total }) }],

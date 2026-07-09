@@ -315,6 +315,55 @@ describe("MCP tool: step / seek", () => {
     expect(nodeToFrame).toEqual({ A: 0, B: 1 });
   });
 
+  describe("per-frame viewport lookup (bug B19/FR21 — per-frame re-fit/restore)", () => {
+    let tmpRoot: string;
+
+    beforeEach(() => {
+      tmpRoot = mkdtempSync(join(tmpdir(), "agent-whiteboard-mcp-viewport-"));
+      process.env.WHITEBOARD_SNAPSHOTS_DIR = tmpRoot;
+    });
+
+    afterEach(() => {
+      delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+      rmSync(tmpRoot, { recursive: true, force: true });
+    });
+
+    it("step() looks up and forwards a per-frame cached viewport", async () => {
+      const { setViewport } = await import("../../../server/viewport-cache.js");
+      // commit_step_frames() in this suite always resolves to the mocked
+      // generateSnapshotId() constant — see the vi.mock at the top of this file.
+      setViewport("test-uuid-generated", 1, { scale: 1.6, positionX: 0.05, positionY: -0.1 });
+
+      await buildStepFrames(server, [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }]);
+      vi.mocked(broadcastStepFrames).mockClear();
+
+      await callTool(server, "step", { direction: "next" });
+
+      expect(broadcastStepFrames).toHaveBeenCalledOnce();
+      const [, , , , , , viewport] = vi.mocked(broadcastStepFrames).mock.calls[0];
+      expect(viewport).toEqual({ scale: 1.6, positionX: 0.05, positionY: -0.1 });
+    });
+
+    it("seek() looks up and forwards a per-frame cached viewport", async () => {
+      const { setViewport } = await import("../../../server/viewport-cache.js");
+      setViewport("test-uuid-generated", 2, { scale: 0.8, positionX: 0.2, positionY: 0.1 });
+
+      await buildStepFrames(server, [
+        { payload: "graph TD; A-->B" },
+        { payload: "graph TD; C-->D" },
+        { payload: "graph TD; E-->F" },
+      ]);
+      vi.mocked(broadcastReplace).mockClear();
+
+      await callTool(server, "seek", { frame: 2 });
+
+      expect(broadcastReplace).toHaveBeenCalledOnce();
+      expect(vi.mocked(broadcastReplace).mock.calls[0][0]).toMatchObject({
+        viewport: { scale: 0.8, positionX: 0.2, positionY: 0.1 },
+      });
+    });
+  });
+
   it("seek jumps directly to a frame index", async () => {
     await buildStepFrames(server, [
       { payload: "graph TD; A-->B" },

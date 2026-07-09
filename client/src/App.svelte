@@ -55,7 +55,7 @@
   // crashing on registry.ts's non-null assertions before the template ever
   // gets a chance to fall back to the "Waiting for content…" branch.
   $: rendererProps = currentComponentType && currentComponentType === rendererKey
-    ? rendererRegistry[currentComponentType].props({ presentation, placeholder, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport })
+    ? rendererRegistry[currentComponentType].props({ presentation, placeholder, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport, currentFrame: currentFrame ?? 0 })
     : {};
 
   let cleanup: (() => void) | null = null;
