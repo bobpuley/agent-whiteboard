@@ -1,11 +1,11 @@
 # Milestone v0.28 — `app.ts` Responsibility Cleanup (Sprints 58–61)
 
-**Status:** planned
+**Status:** in progress
 
 > Opened 2026-07-10 via `/doc-creator-driver:intake` (feature intake, `01` FR23). Follow-up to the v0.27 REST/MCP parity work: that audit was scoped to REST↔MCP drift and couldn't see responsibilities misplaced *within* `app.ts` itself (duplication inside one transport's file, not between transports). See `02` §N7, `03` §9, `04` §9.7. Item 5 from FR23 (the `{ok,error,category?}` error shape) is explicitly deferred, out of scope for this milestone. One task per sprint, one branch/tag per sprint, matching the convention established in `Milestone_v0.27.md`.
 
 ### Sprint 58 — Extract `/snapshots/load`'s commit logic into `render-core.ts`
-- [ ] **NF25.** Move the validate-frames → decide single-frame-vs-step-frames → `setCanvas`/`setStepFrames` → `broadcastReplace` → `setLastWorkspace` sequence out of `app.ts`'s `/snapshots/load` handler into a new `render-core.ts` function (e.g. `applyLoadedSnapshotResult`), joining `commitRenderResult`/`commitStepFramesResult`/etc. with persist-trigger `never`.
+- [x] **NF25.** Move the validate-frames → decide single-frame-vs-step-frames → `setCanvas`/`setStepFrames` → `broadcastReplace` → `setLastWorkspace` sequence out of `app.ts`'s `/snapshots/load` handler into a new `render-core.ts` function (e.g. `applyLoadedSnapshotResult`), joining `commitRenderResult`/`commitStepFramesResult`/etc. with persist-trigger `never`.
   - *Acceptance:* `/snapshots/load` behaves identically (existing test suite passes unchanged); the handler body is reduced to request-shape parsing + file loading + calling the new function.
   - *Regression coverage:* existing `/snapshots/load` tests in `app.test.ts` pass unchanged; no new MCP surface implied — this stays REST-only.
 

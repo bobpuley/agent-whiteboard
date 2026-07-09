@@ -5,9 +5,9 @@ import { cancelSlideshow } from "./slideshow.js";
 import { broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
 import { assembleStepFramesPayload, persistContent } from "./persist.js";
-import { isValidWorkspaceName } from "./validate.js";
+import { isValidWorkspaceName, validateFrame } from "./validate.js";
 import { getCanvas, isStepSequence, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
-import type { CanvasType } from "./session.js";
+import type { CanvasType, StepFrame } from "./session.js";
 import type { Frame } from "./presentation.js";
 import { appendFrame, commitBuilder, createBuilder } from "./step-frames-builder.js";
 import type { AppendResult, CommitResult } from "./step-frames-builder.js";
@@ -155,6 +155,70 @@ export function commitStepFramesResult(id: string, nodeToFrame?: Record<string, 
   // Final broadcast for consistency (handles clear() called between appends).
   broadcastStepFrames(frames, frame_type, 0, commitId, title, nodeToFrame);
   return { ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) };
+}
+
+export type ApplyLoadedSnapshotResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Commits an already-parsed history-load snapshot (NF25, v0.28 Sprint 58):
+ * validates every frame, decides single-frame vs step-frames, updates
+ * in-memory canvas state, broadcasts to the browser, and updates
+ * lastWorkspace. Write-silent — persist trigger "never" (server/persist.ts),
+ * same as step()/seek()/clear(). Shared entry point for POST /snapshots/load;
+ * the handler is reduced to request-shape parsing + file loading.
+ */
+export async function applyLoadedSnapshotResult(
+  frames: Frame[],
+  workspace: string,
+  title: string | undefined,
+  nodeToFrame: Record<string, number> | undefined,
+  snapshotId: string | undefined,
+  rawPayload: string | undefined
+): Promise<ApplyLoadedSnapshotResult> {
+  for (const frame of frames) {
+    const validationError = await validateFrame(frame);
+    if (validationError) {
+      return { ok: false, error: validationError };
+    }
+  }
+
+  // History-load always redisplays from frame 0 (F10 — cursor is always 0 at
+  // write time), so the viewport lookup is always for frame 0 (v0.26.1,
+  // B19/FR21 — composite id:frameIndex key). Looked up under the snapshot's
+  // own id, not a synthesized one — a synthesized id can never have a cache
+  // entry anyway.
+  const viewport = snapshotId !== undefined ? getViewport(snapshotId, 0) : undefined;
+  // A concrete id is required on every broadcast (v0.26 Sprint 42) — pre-v0.11
+  // snapshots may lack one (J1, `02`), so synthesize a fresh one here.
+  const resolvedId = snapshotId ?? generateSnapshotId();
+
+  if (frames.length > 1) {
+    const stepFrames: StepFrame[] = frames.map((f) => ({ payload: f.payload, type: f.type, ...(f.label !== undefined ? { label: f.label } : {}) }));
+    // rawPayload (v0.26 Sprint 43) carries the verbatim original step-frames
+    // envelope — reconstruct only if a hand-edited/pre-migration file lacks it.
+    const assembledRawPayload = rawPayload ?? assembleStepFramesPayload(frames[0].type, stepFrames);
+    setStepFrames(stepFrames, frames[0].type, assembledRawPayload, title, nodeToFrame, resolvedId);
+    broadcastReplace({
+      type: frames[0].type,
+      payload: frames[0].payload,
+      frameLabel: frames[0].label,
+      cursor: 0,
+      total: frames.length,
+      title,
+      nodeToFrame,
+      id: resolvedId,
+      viewport,
+    });
+  } else {
+    setCanvas(frames[0].type as CanvasType, frames[0].payload, title, resolvedId);
+    broadcastReplace({ type: frames[0].type, payload: frames[0].payload, title, id: resolvedId, cursor: 0, total: 1, viewport });
+  }
+
+  setLastWorkspace(workspace);
+  persistContent("history-load", { frames, title, nodeToFrame, workspace, id: resolvedId });
+  return { ok: true };
 }
 
 export type StepSeekResult =
