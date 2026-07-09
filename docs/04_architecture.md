@@ -60,10 +60,10 @@
     │  • Done button conditional visibility (v0.12): button hidden by default; shown only when server emits { action: "set_done_armed", armed: true }; hidden again on armed: false; server pushes current state to every new WebSocket connection
     │  • History panel delete/export — REPLACED in v0.16 (see below). Superseded design (v0.12–v0.13, kept here for change history): recycle bin + export icons in the panel header toggled inline selection mode with checkboxes on every row across all workspace accordions at once, a per-workspace "Delete folder"/"Export workspace" action bar, and an always-visible per-row hover-delete button. All of this UI is removed in v0.16.
     │  • Delete/export modal (v0.16, shipped — see FR16 in `01`, K3 in `02`): clicking the delete or export icon in the right-side controls panel opens a 2-step modal instead of toggling inline selection mode. Step 1: pick a workspace from a list (skipped, opening directly to step 2, when only one workspace has snapshots). Step 2: zoomed into that workspace — a single "Delete/Export entire workspace" action, or check a subset of its snapshots and act on just those via a footer "N selected" bar. Whole-workspace delete requires a second confirming interaction (replaces the old `window.confirm()`); whole-workspace export does not. Calls the same server endpoints as before (`POST /snapshots/delete-files`, `POST /snapshots/delete-workspace`, `POST /export-html`) — pure client-side UI change, no new endpoints. Prototyped in `mockup/whiteboard-view-v2.html`.
-    │  • Mermaid zoom/pan fit + persistence (v0.19, shipped — see FR18 in `01`, C3 in `02`): every new `render()`/`commit_step_frames()` result auto-fits (scale-to-contain, centered) on first display; `step()`/`seek()` within a sequence does not re-fit. Zoom/pan changes are debounced (~800ms) and POSTed to `/viewport`, keyed by snapshot `id`, and stored server-side in a viewport-cache file separate from the snapshot JSON files. The server includes the cached viewport in the WebSocket broadcast whenever that `id` is (re)displayed; the browser applies it instead of auto-fitting. Mermaid-only; no MCP tool.
+    │  • Mermaid zoom/pan fit + persistence (v0.19, shipped — see FR18 in `01`, C3 in `02`; **per-frame re-fit, v0.26.1, bug B19 in `01`**): every new `render()`/`commit_step_frames()` result auto-fits (scale-to-contain, centered) on first display; `step()`/`seek()` within a sequence **now also re-fits each frame independently** (reversing the original "whole sequence shares one viewport" behavior — FR21 in `01`, scheduled as part of B19's fix). Zoom/pan changes are debounced (~800ms) and POSTed to `/viewport`, keyed by **`id:frameIndex`** (composite key, was snapshot `id` alone), and stored server-side in a viewport-cache file separate from the snapshot JSON files. The server includes the cached viewport in the WebSocket broadcast whenever that `id`+frame combination is (re)displayed; the browser applies it instead of auto-fitting. Mermaid-only; no MCP tool.
 ```
 
-**Unified broadcast projector (v0.23, shipped — U5 in §9.2):** every server→browser `{ action: "replace", ... }` message — from `render()`, `step()`, `seek()`, history-load (`POST /snapshots/load`), and slideshow ticks/finalization — is built by one function, `broadcastReplace()` in `server/ws.ts` (with `broadcastStepFrames()` as a thin convenience wrapper over it for the frames-array + index call shape). Previously each of `app.ts` (×4), `mcp.ts` (×2), `render-core.ts` (×3), `slideshow.ts` (×3), and `ws.ts` (×1) hand-assembled this object inline — 13 independent construction sites that could (and did — see B15) drift out of sync on which fields (`id`, `viewport`, `nodeToFrame`, the step-frames cursor) they remembered to include. All 13 now call `broadcastReplace()` (or `broadcastStepFrames()`, itself built on top of it), so a field one call path carries can no longer silently be missing from another. Pure internal refactor: the WebSocket message shape and every existing API contract are unchanged (verified by the full unit + e2e suites passing with unmodified behavior — see `05`, `Milestone_v0.23.md`).
+**Unified broadcast projector (v0.23, shipped — U5 in §9.2):** every server→browser `{ action: "replace", ... }` message — from `render()`, `step()`, `seek()`, history-load (`POST /snapshots/load`), and slideshow ticks/finalization — is built by one function, `broadcastReplace()` in `server/ws.ts` (with `broadcastStepFrames()` as a thin convenience wrapper over it for the frames-array + index call shape). Previously each of `app.ts` (×4), `mcp.ts` (×2), `render-core.ts` (×3), `slideshow.ts` (×3), and `ws.ts` (×1) hand-assembled this object inline — 13 independent construction sites that could (and did — see B15) drift out of sync on which fields (`id`, `viewport`, `nodeToFrame`, the step-frames cursor) they remembered to include. All 13 now call `broadcastReplace()` (or `broadcastStepFrames()`, itself built on top of it), so a field one call path carries can no longer silently be missing from another *when that field is part of `broadcastReplace()`'s own parameter list*. Pure internal refactor: the WebSocket message shape and every existing API contract are unchanged (verified by the full unit + e2e suites passing with unmodified behavior — see `05`, `Milestone_v0.23.md`). **Caveat exposed by bug B18 (`01`, found 2026-07-09):** the guarantee only holds for `broadcastReplace()` callers directly — `broadcastStepFrames()`'s own signature can still omit a field (it has no `nodeToFrame` parameter), reintroducing exactly the drift-between-call-paths class this refactor was meant to eliminate, one layer up. See `02` C2e.
 
 **Shipped in MVP (not Phase 2):**
 - Full server-side Mermaid parse validation — Sprint 6 ✅
@@ -108,7 +108,7 @@
 | `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action }` — `action` is **always present**: null when no popup was shown or when user clicked without selecting a menu item; string value when a menu item was selected. (Phase 2 — Sprint 14) |
 | `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
 | `append_frame(id, payload, label?, type?)` *(v0.8; live preview v0.9; per-frame `type` v0.17)* | Looks up the builder entry by ID. Validates `payload` against `type ?? frame_type` (same `validateFrame()` hard gate as `render()`). Appends `{ label?, payload, type? }` to the frame list. Resets the TTL timer. **Pushes the full accumulated partial step-frames sequence to the browser via WebSocket** (`cursor` set to N-1 so the browser shows the latest frame, using that frame's effective type). In-memory canvas state is NOT updated — only `commit_step_frames()` does that. Returns `{ ok: true, frame_count: N }`. Invalid payloads are rejected before any broadcast; prior frames and browser state are preserved. |
-| `commit_step_frames(id, node_to_frame?)` *(v0.8; finalization-only v0.9; `node_to_frame` param v0.26)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. `node_to_frame` (optional, v0.26 Sprint 45): node ID → frame index map, stored on the canvas state and included in every broadcast for this sequence — the sole entry point for U4e's autonomous click navigation now that `render()` no longer accepts `options.node_to_frame`. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
+| `commit_step_frames(id, node_to_frame?)` *(v0.8; finalization-only v0.9; `node_to_frame` param v0.26)* | Assembles the full step-frames JSON from the builder entry. Cancels any running slideshow (same as `render()`). Updates in-memory canvas state and calls `saveSnapshot()`. Pushes a final WebSocket broadcast (for consistency and to handle edge cases such as `clear()` between appends). Deletes the builder entry. `node_to_frame` (optional, v0.26 Sprint 45): node ID → frame index map, stored on the canvas state and *intended* to be included in every broadcast for this sequence — the sole entry point for U4e's autonomous click navigation now that `render()` no longer accepts `options.node_to_frame`. **Known gap, unfixed (bug B18 in `01`, found 2026-07-09):** the final live broadcast this call pushes goes through `broadcastStepFrames()` (`server/ws.ts`), whose signature has no `nodeToFrame` parameter — the map computed and persisted earlier in `commitStepFramesResult()` (`server/render-core.ts`) never reaches `broadcastReplace()` for this call path, so the browser never enables click listeners on a live commit. History-reload (`POST /snapshots/load`) calls `broadcastReplace()` directly with the map and is unaffected — see `02` C2e for why this is a recurrence of the same drift class as C2d/B15, not a new architectural question. **v0.11 ✅:** returns `{ ok: true, id: "<uuid>" }` — the UUID of the snapshot written for this call (omitted if write fails). After commit, `export()` returns the assembled full step-frames JSON. `clear()` during an active session does NOT cancel the builder entry — TTL handles cleanup. |
 | `list_snapshots(workspace)` *(v0.15)* | Validates `workspace` (same safety check as `render()`). Calls `listSnapshots(workspace, dir)` in `server/snapshot-reader.ts` (the same function `GET /snapshots` uses). Returns `{ ok: true, snapshots: [{ id, timestamp, type, title? }] }`, newest-first. Empty array if the workspace has no snapshots. |
 | `export_html(workspace, ids, output_path?)` *(v0.15)* | Validates `workspace` (same safety check as `render()`) and that `ids` is a non-empty array. Builds `items = ids.map(id => ({ workspace, id }))` and calls the same `generateExportHtml()` pipeline as `POST /export-html` (`server/export-html.ts`), extended to resolve `{ workspace, id }` items via a new `findSnapshotByIdInWorkspace(workspace, id, dir)` lookup (scoped variant of `findSnapshotById`, restricted to one workspace directory). Unresolvable ids are skipped; if none resolve, returns `{ ok: false, error: "no valid items to export" }`. On success, writes the assembled HTML to `output_path` (creating parent directories as needed) or, if omitted, to `<WHITEBOARD_SNAPSHOTS_DIR>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html` (reusing `buildDownloadFilename()`). Returns `{ ok: true, path: "<absolute path>" }`, or `{ ok: false, error: "..." }` on a write failure. |
 
@@ -500,19 +500,21 @@ agent calls export_html(workspace="my-course", ids=["<uuid-1>", "<uuid-2>"], out
 
 **Relationship to the v0.13 browser flow:** both `list_snapshots`/`export_html` and the HistoryPanel's export mode ultimately call the same `generateExportHtml()` — the only difference is how items are addressed (`id` vs `filename`) and how the result is delivered (written to disk vs returned as an HTTP response body for browser download). See L5 (`02`) for why the two addressing schemes coexist rather than being unified in this milestone.
 
-### Mermaid Viewport Persistence (v0.19)
+### Mermaid Viewport Persistence (v0.19; per-frame re-fit v0.26.1, bug B19/FR21 in `01`)
 
 ```
 [Display — auto-fit or restore]
-server broadcasts a snapshot (fresh render()/commit_step_frames(), or POST /snapshots/load reload)
-  → server looks up snapshot.id in viewport-cache.json
+server broadcasts a snapshot/frame (fresh render()/commit_step_frames(), a step()/seek() tick
+within a sequence, or POST /snapshots/load reload)
+  → server looks up "<id>:<frameIndex>" in viewport-cache.json
   → IF entry found: include it in the WebSocket payload:
-      { action: "replace", type: "mermaid", payload: "...", viewport: { scale, positionX, positionY } }
+      { action: "replace", type: "mermaid", payload: "...", cursor: N, viewport: { scale, positionX, positionY } }
       → browser applies the stored viewport (no auto-fit)
-  → IF no entry (new diagram never seen before): omit the field
+  → IF no entry (this id+frame combination never seen before): omit the field
       → browser computes scale-to-contain + centers the diagram (auto-fit)
-  (step()/seek() broadcasts for the same step-frames sequence do NOT re-trigger auto-fit —
-   the browser keeps whatever viewport is currently active, live or restored)
+  (v0.26.1: step()/seek() broadcasts now ALWAYS look up their own cache entry and re-fit or
+   restore per frame — reversing the pre-v0.26.1 behavior where the whole sequence shared one
+   viewport computed at frame 0 only)
 
 [User adjusts zoom/pan]
 user scrolls/drags on the Mermaid canvas
@@ -520,23 +522,27 @@ user scrolls/drags on the Mermaid canvas
   → browser starts/resets an 800ms debounce timer
   → after 800ms of no further zoom/pan input:
       → browser computes positionX/positionY as fractions of the container's width/height
-      → browser POSTs /viewport: { id: "<current snapshot id>", scale, positionX, positionY }
-      → server writes/overwrites the entry for id in viewport-cache.json
+      → browser POSTs /viewport: { id: "<current snapshot id>", frame: <current cursor>, scale, positionX, positionY }
+      → server writes/overwrites the entry for "<id>:<frame>" in viewport-cache.json
       → returns { ok: true }
 
 [Cleanup]
 POST /snapshots/delete-files or POST /snapshots/delete-workspace succeeds
-  → server also removes the corresponding entry/entries (by id) from viewport-cache.json
+  → server removes every cache entry whose key starts with "<id>:" for each deleted id
+    (was an exact-key removal pre-v0.26.1; now a prefix match since one id can own multiple
+    per-frame entries)
 ```
 
-Viewport-cache file layout:
+Viewport-cache file layout (v0.26.1 — composite `id:frameIndex` key, replacing the bare `id` key):
 ```
 <WHITEBOARD_SNAPSHOTS_DIR>/viewport-cache.json
 {
-  "<snapshot-id-1>": { "scale": 1.4, "positionX": 0.12, "positionY": -0.05 },
-  "<snapshot-id-2>": { "scale": 0.8, "positionX": 0.0,  "positionY": 0.0 }
+  "<snapshot-id-1>:0": { "scale": 1.4, "positionX": 0.12, "positionY": -0.05 },
+  "<snapshot-id-1>:1": { "scale": 1.1, "positionX": 0.0,  "positionY": 0.02  },
+  "<snapshot-id-2>:0": { "scale": 0.8, "positionX": 0.0,  "positionY": 0.0  }
 }
 ```
+A one-shot render is always frame `0`. No migration needed for existing cache entries — the file is a cache, not a source of truth (F19); stale bare-`id` keys are simply never matched again and become inert (cleaned up naturally the next time their snapshot is deleted, same as any other orphaned entry per `02` C3's residual-risk note).
 One global file (not per-workspace) — snapshot `id`s are already globally unique UUIDs (J1, `02`), so no workspace-scoping is needed to avoid collisions. Read/written directly (no debounce needed server-side; the browser already debounces before sending).
 
 **Not addressed via MCP:** the agent has no tool for this — it's a pure browser⇄server UI concern (D2 in `02`: "the agent is stateless with respect to the whiteboard").
@@ -693,7 +699,7 @@ agent-whiteboard/
 │   ├── snapshot-reader.ts # snapshot list reader: listSnapshots() for GET /snapshots (v0.4 — Sprint 17; id field + explicit workspace param v0.15); listAllSnapshots() for GET /snapshots/all (v0.5 — Sprint 18); findSnapshotById() for export(id) (v0.11); findSnapshotByIdInWorkspace() for agent-facing POST /export-html { workspace, id } items (v0.15)
 │   ├── step-frames-builder.ts  # in-memory map of id → partial step-frames state; TTL cleanup (v0.8)
 │   ├── export-html.ts    # HTML assembly for POST /export-html (v0.13). Server-side rendering for katex/vega-lite/svg/html; Mermaid embedded + rendered client-side (v0.14, see bug B4 in `01`). Items addressable by filename (v0.13) or id (v0.15) — also used by the export_html MCP tool, which writes the result to disk instead of returning it in the HTTP response. generateExportHtml() serializes calls via a promise queue around generateExportHtmlInner() (v0.18, see bug B14 in `01`).
-│   ├── viewport-cache.ts # (v0.19) reads/writes viewport-cache.json (id → { scale, positionX, positionY }); used by POST /viewport (write) and by the render/snapshots-load broadcast paths (read) and the two delete endpoints (cleanup on delete). See F19 in `03`, C3 in `02`.
+│   ├── viewport-cache.ts # (v0.19; composite key v0.26.1, bug B19 in `01`) reads/writes viewport-cache.json (`id:frameIndex` → { scale, positionX, positionY }, was bare `id` pre-v0.26.1); used by POST /viewport (write, now includes frame) and by the render/step/seek/snapshots-load broadcast paths (read, per frame) and the two delete endpoints (cleanup on delete, now a prefix match on `id:`). See F19 in `03`, C3 in `02`.
 │   └── channel.ts        # stdio channel server (Channels API experiment)
 ├── client/               # Svelte SPA
 │   ├── src/
@@ -702,7 +708,7 @@ agent-whiteboard/
 │   │   ├── HistoryPanel.svelte  # collapsible snapshot history navigator (v0.4 — Sprint 17). v0.16: inline selection-mode UI (header icons, per-row checkboxes, select-bar, ws-actions-bar) removed — becomes pure browse/load.
 │   │   ├── DeleteExportModal.svelte  # 2-step delete/export modal (v0.16, shipped) — workspace picker → zoomed-in whole-workspace / subset action. Triggered from App.svelte's controls panel.
 │   │   └── renderers/    # one file per content type. Mermaid/KaTeX/Vega-Embed are currently all eagerly bundled — planned dynamic `import()` per type, v0.21, after the App.svelte decomposition above (see M6 in `02`, NF13 in `03`).
-│   │       ├── Mermaid.svelte  # (v0.19) auto-fit on new snapshot id; debounced POST /viewport on zoom/pan change; applies server-supplied viewport when present instead of auto-fitting. Pins the inserted SVG's width/height attributes to its viewBox right after insertion (v0.22, bug B17 in `01`) — Mermaid's own width="100%" SVG has no definite size to resolve against in this deliberately-unsized container, so some browsers silently substituted the CSS default replaced-element size (300x150) instead, breaking the fit-scale's assumed base size. Re-fit-per-frame for step-frames sequences of varying size is planned but not implemented (FR20 in `01`).
+│   │       ├── Mermaid.svelte  # (v0.19) auto-fit on new snapshot id+frame; debounced POST /viewport on zoom/pan change; applies server-supplied viewport when present instead of auto-fitting. Pins the inserted SVG's width/height attributes to its viewBox right after insertion (v0.22, bug B17 in `01`) — Mermaid's own width="100%" SVG has no definite size to resolve against in this deliberately-unsized container, so some browsers silently substituted the CSS default replaced-element size (300x150) instead, breaking the fit-scale's assumed base size. Re-fit-per-frame for step-frames sequences of varying size: scheduled v0.26.1 (bug B19/FR21 in `01`, was previously mis-cited here as FR20 — the correct reference is FR21).
 │   │       ├── Html.svelte
 │   │       ├── Katex.svelte
 │   │       └── VegaLite.svelte
