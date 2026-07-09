@@ -5,10 +5,11 @@
 > Opened 2026-07-09 via `/doc-creator-driver:intake` (feature intake, promoted from the Design Debt Log in `01`). Follow-up to the v0.23–v0.26 architecture consolidation: a re-audit (`docs/raw/design-problems.md`, findings F1–F7) found NF14–NF17 closed REST/MCP drift only for the commands already migrated to `render-core.ts` at the time each slice shipped. `step`/`seek` business logic, `slideshow` validation, `list_snapshots` workspace resolution, `export-html` item addressing, and three lower-risk mechanical duplications were left out. See `02` §N6, `03` §8, `04` §9.6.
 > Sprint numbering: one task per sprint, one branch/tag per sprint, matching the convention used by every prior milestone (see e.g. `Milestone_v0.26.md`).
 
-### Sprint 51 — `slideshow` MCP tool routes through `validateFrame()` (F1)
-- [ ] **NF18.** Remove the hand-rolled mermaid/vega-lite checks in `mcp.ts`'s `slideshow` tool (`mcp.ts:256-299`) and call `validate.ts`'s `validateFrame()` for every slide, matching REST's `/slideshow` handler (`app.ts:219`).
+### Sprint 51 — `slideshow` MCP tool routes through `validateFrame()` (F1) ✅
+- [x] **NF18.** Remove the hand-rolled mermaid/vega-lite checks in `mcp.ts`'s `slideshow` tool (`mcp.ts:256-299`) and call `validate.ts`'s `validateFrame()` for every slide, matching REST's `/slideshow` handler (`app.ts:219`).
   - *Acceptance:* a slide payload REST's `/slideshow` would reject is also rejected via the MCP `slideshow` tool, with the same error shape. Existing valid-payload behavior unchanged.
   - *Regression coverage:* unit test on the MCP `slideshow` tool asserting a `validateFrame()`-rejected slide returns `{ok:false,error:...}` without broadcasting.
+  - **Shipped 2026-07-09:** the 44-line hand-rolled per-type validation loop in `mcp.ts`'s `slideshow` tool is replaced with a single `await validateFrame({ type: s.type, payload: s.payload })` call per slide, matching `app.ts`'s `/slideshow` handler exactly (`slide[${i}]: ${err}` error format). `hasMermaidKeyword`/`parseMermaid` imports removed from `mcp.ts` (no longer used directly — `validateFrame()` wraps them). New unit tests: an invalid vega-lite slide (exact error-message parity with REST) and a multi-slide case asserting the correct `slide[i]` index on a non-zero failing slide. Full suite: 461 unit tests passing (up 2 from 459), `tsc --noEmit` and `npm run lint` clean.
 
 ### Sprint 52 — Extract `step`/`seek` into `render-core.ts` (F2)
 - [ ] **NF19.** Move the viewport-lookup + `resolvedId` + broadcast logic currently duplicated between `app.ts:114-175` and `mcp.ts:95-194` into shared functions in `render-core.ts`, and have both `POST /step`/`POST /seek` and the `step()`/`seek()` MCP tools call them.
