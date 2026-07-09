@@ -1,13 +1,12 @@
 // MCP tool definitions and handlers.
 // Tools: render, clear, export, step.
 
-import { homedir } from "os";
-import { join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clearCanvas, exportCanvas } from "./session.js";
 import { broadcast } from "./ws.js";
 import { validateFrame } from "./validate.js";
+import { getSnapshotsRoot } from "./paths.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
@@ -420,7 +419,7 @@ export function createMcpServer(): McpServer {
     },
     ({ id }) => {
       if (id !== undefined && id !== "") {
-        const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+        const root = getSnapshotsRoot();
         const payload = findSnapshotById(id, root);
         if (payload === null) {
           return {
@@ -465,7 +464,7 @@ export function createMcpServer(): McpServer {
           content: [{ type: "text", text: JSON.stringify({ ok: false, error: workspaceResult.error }) }],
         };
       }
-      const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+      const root = getSnapshotsRoot();
       const snapshots = listSnapshots(workspaceResult.workspace, root);
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, snapshots }) }],
@@ -522,7 +521,7 @@ export function createMcpServer(): McpServer {
       }
 
       const validatedWorkspace = workspaceResult.workspace;
-      const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+      const root = getSnapshotsRoot();
       const validItems: ValidatedExportItem[] = [];
       for (const id of ids) {
         const record = findSnapshotByIdInWorkspace(validatedWorkspace, id, root);

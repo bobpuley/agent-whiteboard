@@ -1,7 +1,6 @@
 // Pure Hono application — no startup side effects.
 // Exported so tests can import it without spinning up a real server.
 
-import { homedir } from "os";
 import { join, resolve, sep } from "path";
 import { existsSync, readFileSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
@@ -30,6 +29,7 @@ import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
 import { deleteViewports, getViewport, setViewport } from "./viewport-cache.js";
 import type { Viewport } from "./viewport-cache.js";
+import { getSnapshotsRoot } from "./paths.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -312,7 +312,7 @@ export function createApp(): Hono {
   app.get("/export", (c) => {
     const id = c.req.query("id");
     if (id !== undefined && id !== "") {
-      const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+      const root = getSnapshotsRoot();
       const payload = findSnapshotById(id, root);
       if (payload === null) {
         return c.json({ ok: false, error: "graph not found" }, 404);
@@ -333,7 +333,7 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: workspaceResult.error }, 400);
     }
     const { workspace } = workspaceResult;
-    const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+    const root = getSnapshotsRoot();
     const snapshots = listSnapshots(workspace, root);
     return c.json({ ok: true, snapshots });
   });
@@ -342,7 +342,7 @@ export function createApp(): Hono {
 
   app.get("/snapshots/all", (c) => {
     const workspace = getLastWorkspace();
-    const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+    const root = getSnapshotsRoot();
     const workspaces = listAllSnapshots(root, workspace);
     return c.json({ ok: true, workspaces });
   });
@@ -361,7 +361,7 @@ export function createApp(): Hono {
     }
 
     const currentWorkspace = getLastWorkspace();
-    const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+    const root = getSnapshotsRoot();
 
     // Optional workspace override (v0.5 cross-workspace load).
     let workspace: string;
@@ -489,10 +489,6 @@ export function createApp(): Hono {
 
   // ── Snapshot delete endpoints (v0.12) ─────────────────────────────────────
 
-  function resolveSnapshotRoot(): string {
-    return process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
-  }
-
   function validateWorkspaceForDelete(workspace: unknown, root: string): { workspace: string } | { error: string; status: number } {
     if (typeof workspace !== "string" || workspace.length === 0) {
       return { error: "workspace must be a non-empty string", status: 400 };
@@ -514,7 +510,7 @@ export function createApp(): Hono {
 
   app.post("/snapshots/delete-files", async (c) => {
     const body = await c.req.json<{ workspace?: unknown; filenames?: unknown }>();
-    const root = resolveSnapshotRoot();
+    const root = getSnapshotsRoot();
     const validated = validateWorkspaceForDelete(body.workspace, root);
     if ("error" in validated) {
       return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
@@ -556,7 +552,7 @@ export function createApp(): Hono {
 
   app.post("/snapshots/delete-workspace", async (c) => {
     const body = await c.req.json<{ workspace?: unknown }>();
-    const root = resolveSnapshotRoot();
+    const root = getSnapshotsRoot();
     const validated = validateWorkspaceForDelete(body.workspace, root);
     if ("error" in validated) {
       return c.json({ ok: false, error: validated.error }, validated.status as 400 | 404);
@@ -592,7 +588,7 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "items must be a non-empty array" }, 400);
     }
 
-    const root = resolveSnapshotRoot();
+    const root = getSnapshotsRoot();
     const validItems: ValidatedExportItem[] = [];
 
     for (const item of body.items as unknown[]) {

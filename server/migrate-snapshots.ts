@@ -13,10 +13,10 @@
 // one pass. Once migrated, every subsequent run is a no-op for that file.
 
 import { readdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
 import { join } from "path";
 import type { Frame } from "./presentation.js";
 import type { SnapshotFile } from "./snapshot.js";
+import { getSnapshotsRoot } from "./paths.js";
 
 export type MigrateFileResult =
   | { kind: "migrated"; content: SnapshotFile }
@@ -168,7 +168,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const dir =
     dirFlagIndex !== -1 && args[dirFlagIndex + 1] !== undefined
       ? args[dirFlagIndex + 1]
-      : (process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard"));
+      : getSnapshotsRoot();
 
   console.log(`[migrate-snapshots] scanning ${dir}${dryRun ? " (dry run)" : ""}`);
   const summary = migrateDirectory(dir, { dryRun });

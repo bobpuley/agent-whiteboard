@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "fs";
-import { homedir } from "os";
 import { join } from "path";
 import type { Frame } from "./presentation.js";
+import { getSnapshotsRoot } from "./paths.js";
 
 export interface RenderOptions {
   title?: string;
@@ -53,7 +53,7 @@ export function saveSnapshot(
 ): string | undefined {
   try {
     const { workspace } = options;
-    const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
+    const root = getSnapshotsRoot();
     const dir = join(root, workspace);
     mkdirSync(dir, { recursive: true });
 

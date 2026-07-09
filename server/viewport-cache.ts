@@ -6,8 +6,8 @@
 // shared across a whole sequence, pre-v0.26.1).
 
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
 import { join } from "path";
+import { getSnapshotsRoot } from "./paths.js";
 
 export interface Viewport {
   scale: number;
@@ -17,12 +17,8 @@ export interface Viewport {
   positionY: number;
 }
 
-function snapshotsRoot(): string {
-  return process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
-}
-
 function cachePath(): string {
-  return join(snapshotsRoot(), "viewport-cache.json");
+  return join(getSnapshotsRoot(), "viewport-cache.json");
 }
 
 function readCache(): Record<string, Viewport> {
@@ -47,7 +43,7 @@ function readCache(): Record<string, Viewport> {
 
 function writeCache(cache: Record<string, Viewport>): void {
   try {
-    mkdirSync(snapshotsRoot(), { recursive: true });
+    mkdirSync(getSnapshotsRoot(), { recursive: true });
     writeFileSync(cachePath(), JSON.stringify(cache, null, 2), "utf-8");
   } catch (err) {
     console.error(
