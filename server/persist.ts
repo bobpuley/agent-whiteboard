@@ -6,7 +6,7 @@
 // never persisted because persistence was opt-in, not a required decision).
 
 import { saveSnapshot } from "./snapshot.js";
-import type { CanvasType, StepFrame } from "./session.js";
+import type { StepFrame } from "./session.js";
 import type { Frame } from "./presentation.js";
 
 /**
@@ -49,8 +49,10 @@ export function getPersistTrigger(command: string): PersistTrigger {
 }
 
 export interface PersistableContent {
-  type: CanvasType | "step-frames";
-  payload: string;
+  /** Already-resolved frames (every frame's effective type baked in — no envelope string to unpack). */
+  frames: Frame[];
+  /** Verbatim step-frames envelope JSON, for export()'s byte-identical round-trip (F16/V2). Only meaningful when frames.length > 1 — collapsed to undefined otherwise, same policy as the WS contract (Sprint 42). */
+  rawPayload?: string;
   title?: string;
   nodeToFrame?: Record<string, number>;
   workspace: string;
@@ -60,30 +62,6 @@ export interface PersistableContent {
 
 export interface PersistResult {
   id?: string;
-}
-
-/**
- * Converts the caller-facing `type`/`payload` shape (still a `step-frames`
- * envelope string for a sequence, per `render-core.ts`/`slideshow.ts`'s
- * construction) into the unified `frames[]`/`rawPayload` shape `saveSnapshot()`
- * writes to disk (v0.26 Sprint 43). `rawPayload` is kept only when there's
- * more than one frame — a 1-frame step-frames sequence collapses into a plain
- * single-frame record, same policy as the WS contract (Sprint 42).
- */
-function toFrames(content: PersistableContent): { frames: Frame[]; rawPayload?: string } {
-  if (content.type !== "step-frames") {
-    return { frames: [{ type: content.type, payload: content.payload }] };
-  }
-  const spec = JSON.parse(content.payload) as {
-    frame_type: string;
-    frames: Array<{ payload: string; label?: string; type?: string }>;
-  };
-  const frames: Frame[] = spec.frames.map((f) => ({
-    type: f.type ?? spec.frame_type,
-    payload: f.payload,
-    ...(f.label !== undefined ? { label: f.label } : {}),
-  }));
-  return frames.length > 1 ? { frames, rawPayload: content.payload } : { frames };
 }
 
 /**
@@ -98,9 +76,9 @@ export function persistContent(command: string, content: PersistableContent): Pe
   if (trigger === "transient" || trigger === "never") return {};
 
   try {
-    const { frames, rawPayload } = toFrames(content);
+    const rawPayload = content.frames.length > 1 ? content.rawPayload : undefined;
     const id = saveSnapshot(
-      frames,
+      content.frames,
       { title: content.title, node_to_frame: content.nodeToFrame, workspace: content.workspace },
       rawPayload,
       content.id

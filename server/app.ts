@@ -11,7 +11,7 @@ import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, isStepSequence,
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
-import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, KNOWN_TYPES, validateFrame, validatePayload } from "./validate.js";
+import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
@@ -41,6 +41,11 @@ function isNodeActionsValid(v: unknown): v is Record<string, string[]> {
   return Object.values(v as object).every(
     (arr) => Array.isArray(arr) && (arr as unknown[]).every((s) => typeof s === "string")
   );
+}
+
+function isNodeToFrameValid(v: unknown): v is Record<string, number> {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+  return Object.values(v as object).every((n) => typeof n === "number");
 }
 
 /** Best-effort read of a snapshot file's `id` field, for viewport-cache cleanup on delete. */
@@ -74,7 +79,7 @@ export function createApp(): Hono {
   });
 
   app.post("/render", async (c) => {
-    const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; node_to_frame?: Record<string, number>; workspace?: string } }>();
+    const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; workspace?: string } }>();
 
     const workspaceResult = validateWorkspaceInput(body.options?.workspace);
     if (!workspaceResult.ok) {
@@ -86,24 +91,23 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
     }
 
-    if (!KNOWN_TYPES.includes(body.type as CanvasType)) {
+    if (!(FRAME_TYPES as readonly string[]).includes(body.type as string)) {
       return c.json(
-        { ok: false, error: `type must be one of: ${KNOWN_TYPES.join(", ")}` },
+        { ok: false, error: `type must be one of: ${FRAME_TYPES.join(", ")}` },
         400
       );
     }
 
-    const type = body.type as CanvasType | "step-frames";
+    const type = body.type as CanvasType;
     const { payload } = body;
     const title = body.options?.title;
-    const nodeToFrame = body.options?.node_to_frame;
 
-    const validationError = await validatePayload(type, payload);
+    const validationError = await validateFrame({ type, payload });
     if (validationError) {
       return c.json({ ok: false, error: validationError });
     }
 
-    const result = commitRenderResult(type, payload, workspace, title, nodeToFrame);
+    const result = commitRenderResult(type, payload, workspace, title);
     return c.json(result);
   });
 
@@ -198,15 +202,18 @@ export function createApp(): Hono {
           error: `slide[${i}]: "type" and "payload" must be strings`,
         }, 400);
       }
+      if (!(FRAME_TYPES as readonly string[]).includes(s.type)) {
+        return c.json({ ok: false, error: `slide[${i}]: type must be one of: ${FRAME_TYPES.join(", ")}` }, 400);
+      }
       if (s.title !== undefined && typeof s.title !== "string") {
         return c.json({ ok: false, error: `slide[${i}]: "title" must be a string` }, 400);
       }
-      const err = await validatePayload(s.type, s.payload);
+      const err = await validateFrame({ type: s.type, payload: s.payload });
       if (err) {
         return c.json({ ok: false, error: `slide[${i}]: ${err}` });
       }
       validatedSlides.push({
-        type: s.type,
+        type: s.type as CanvasType,
         payload: s.payload,
         ...(s.title !== undefined ? { title: s.title as string } : {}),
       });
@@ -258,9 +265,21 @@ export function createApp(): Hono {
     return c.json({ ok: true, frame_count: result.frame_count });
   });
 
-  app.post("/step-frames/:id/commit", (c) => {
+  app.post("/step-frames/:id/commit", async (c) => {
     const id = c.req.param("id");
-    const result = commitStepFramesResult(id);
+    let nodeToFrame: Record<string, number> | undefined;
+    try {
+      const body = await c.req.json<{ node_to_frame?: unknown }>();
+      if (body.node_to_frame !== undefined) {
+        if (!isNodeToFrameValid(body.node_to_frame)) {
+          return c.json({ ok: false, error: "node_to_frame must be a map of node ID → frame index" }, 400);
+        }
+        nodeToFrame = body.node_to_frame;
+      }
+    } catch {
+      // No body or non-JSON body — commit with no node_to_frame.
+    }
+    const result = commitStepFramesResult(id, nodeToFrame);
     if (!result.ok) {
       return c.json(result, result.error.includes("not found or expired") ? 404 : 400);
     }

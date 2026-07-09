@@ -66,18 +66,18 @@ Push content to the whiteboard canvas. Replaces whatever is currently on screen.
 | `"html"` | HTML/CSS fragment. Sanitized via DOMPurify — inline styles only; `<script>` and `<style>` tags are stripped. |
 | `"katex"` | LaTeX string, rendered in display mode. |
 | `"vega-lite"` | Vega-Lite JSON spec (must be valid JSON string). |
-| `"step-frames"` | Ordered sequence of frames for step-through (see below). Displays frame 0; use `step()` to navigate. All frames share one `frame_type` — best for short, fully-known-upfront sequences. **Known gap:** individual frame payloads aren't validated here (only shape is checked) — a malformed frame is accepted and only fails when navigated to. For longer/complex sequences, or per-frame validation, or a paced user-acknowledged reveal, use [`init_step_frames`/`append_frame`/`commit_step_frames`](#init_step_framesframe_type-workspace-title) instead. |
+
+`render()` is single-frame only. For a step-through sequence (multiple frames navigable via `step()`/`seek()`), use [`init_step_frames`/`append_frame`/`commit_step_frames`](#init_step_framesframe_type-workspace-title) instead — see [Step-frames sequences](#step-frames-sequences).
 
 `options`:
 - `workspace` — **required.** Workspace name for snapshot routing (alphanumeric, dashes, underscores, dots, spaces — no path separators). Snapshots are written to `~/.agent-whiteboard/<workspace>/`. Missing or invalid workspace returns `{ "ok": false, "error": "..." }` without rendering.
 - `title` — string label displayed above the canvas for this render call.
-- `node_to_frame` — (`step-frames` only) map of node ID → frame index. When set, clicking a mapped node in the browser jumps directly to its frame via `POST /seek` — no `wait_click()` call needed. Overridden for the duration of any `wait_click()` call; agent must re-render with the map to re-enable it.
 
 **Returns:** `{ "ok": true, "id": "<uuid>" }` — the UUID of the snapshot written for this call (`id` is omitted if the snapshot write fails, which is non-fatal). Error: `{ "ok": false, "error": "..." }`
 
 ### `step(direction)`
 
-Advance (`"next"`) or rewind (`"prev"`) the step cursor for a loaded `step-frames` sequence.
+Advance (`"next"`) or rewind (`"prev"`) the step cursor for a loaded step-frames sequence.
 
 **Returns:** `{ "ok": true, "current_frame": N, "total_frames": M }` or `{ "ok": false, "error": "..." }`
 
@@ -143,21 +143,23 @@ Only one `wait_click()` may be pending at a time — a second call cancels the f
 
 ### `init_step_frames(frame_type, workspace, title?)`
 
-Begin an incremental step-frames sequence — an alternative to building the whole `step-frames` JSON up front and passing it to `render()`. Creates an empty builder in server memory, pushes a 0-frame placeholder to the browser, and returns a builder ID. Protocol: `init_step_frames()` → `append_frame()` × N → `commit_step_frames()`. The builder expires after 30 minutes of inactivity.
+Begin a step-frames sequence — this is the only way to create a multi-frame, step-through sequence (`render()` is single-frame only). Creates an empty builder in server memory, pushes a 0-frame placeholder to the browser, and returns a builder ID. Protocol: `init_step_frames()` → `append_frame()` × N → `commit_step_frames()`. The builder expires after 30 minutes of inactivity.
 
-Prefer this over one-shot `render(type="step-frames", ...)` when the sequence is long/complex (`append_frame()` validates each frame individually — the one-shot path doesn't), or when you want a paced, user-acknowledged reveal (interleave `wait_done()` after each `append_frame()` — see [Example agent flow](#example-agent-flow)). For a short, fully-known-upfront sequence, one-shot `render()` is fewer round-trips.
+Each `append_frame()` call is validated and broadcast individually — interleave `wait_done()` after each one for a paced, user-acknowledged reveal (see [Example agent flow](#example-agent-flow)).
 
 **Returns:** `{ "ok": true, "id": "<uuid>" }` or `{ "ok": false, "error": "..." }`
 
-### `append_frame(id, payload, label?)`
+### `append_frame(id, payload, label?, type?)`
 
-Append one frame to an in-progress builder. `payload` is validated against the sequence's `frame_type` (same rules as `render()`). Each valid append immediately broadcasts the accumulated sequence to the browser, positioned at the latest frame — the user watches the step-through grow one frame at a time. Invalid payloads are rejected without touching prior frames or browser state.
+Append one frame to an in-progress builder. `payload` is validated against `type ?? frame_type` (same rules as `render()`). `type` (optional) overrides the sequence's `frame_type` for this one frame — lets a sequence mix content types (e.g. a mermaid frame followed by a katex frame). Each valid append immediately broadcasts the accumulated sequence to the browser, positioned at the latest frame — the user watches the step-through grow one frame at a time. Invalid payloads are rejected without touching prior frames or browser state.
 
 **Returns:** `{ "ok": true, "frame_count": N }` or `{ "ok": false, "error": "..." }`
 
-### `commit_step_frames(id)`
+### `commit_step_frames(id, node_to_frame?)`
 
 Finalize an in-progress builder: assembles the full step-frames JSON, writes a snapshot, updates canvas state (so `export()` and `step()`/`seek()` work on it), and deletes the builder entry. The browser already shows the sequence from `append_frame()` live previews.
+
+`node_to_frame` (optional) — map of node ID → frame index. When set, clicking a mapped node in the browser jumps directly to its frame via `POST /seek` — no `wait_click()` call needed. Overridden for the duration of any `wait_click()` call; the agent must build and commit a new sequence with the map to re-enable it.
 
 **Returns:** `{ "ok": true, "id": "<uuid>" }` or `{ "ok": false, "error": "..." }`
 
@@ -173,7 +175,9 @@ Export one or more snapshots (by UUID, discovered via `list_snapshots()`) to a s
 
 **Returns:** `{ "ok": true, "path": "<absolute path>" }` or `{ "ok": false, "error": "..." }`
 
-## Step-frames payload shape
+## Step-frames sequences
+
+There is no one-shot way to render a multi-frame sequence — `render()` is single-frame only. Build one via `init_step_frames()` → `append_frame()` × N → `commit_step_frames()` (see above). Once committed, `export()` returns the assembled sequence in this shape:
 
 ```json
 {
@@ -185,8 +189,6 @@ Export one or more snapshots (by UUID, discovered via `list_snapshots()`) to a s
   ]
 }
 ```
-
-Pass this JSON stringified as the `payload` argument to `render(type="step-frames", ...)`.
 
 ## Example agent flow
 
@@ -229,8 +231,8 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `POST /node-click` | `{ "type": "node"\|"edge", "id": "...", "label": "..." }` (sent by browser) |
 | `POST /wait-click` | `{ "node_actions": { "<id>": ["action1", ...] } }` (optional; long-polls until a node/edge click is signalled) |
 | `POST /step-frames/init` | `{ "frame_type": "...", "workspace": "...", "title": "..." }` — starts an incremental builder, returns `{ "ok": true, "id": "<uuid>" }` |
-| `POST /step-frames/:id/frame` | `{ "payload": "...", "label": "..." }` — appends a frame, returns `{ "ok": true, "frame_count": N }` |
-| `POST /step-frames/:id/commit` | — finalizes the builder, returns `{ "ok": true, "id": "<uuid>" }` |
+| `POST /step-frames/:id/frame` | `{ "payload": "...", "label": "...", "type": "..." }` (`type` optional, overrides the sequence's `frame_type`) — appends a frame, returns `{ "ok": true, "frame_count": N }` |
+| `POST /step-frames/:id/commit` | `{ "node_to_frame": { "<id>": N, ... } }` (optional body) — finalizes the builder, returns `{ "ok": true, "id": "<uuid>" }` |
 | `GET /snapshots` | `?workspace=` optional (defaults to the last-used workspace) — lists that workspace's snapshots, used by the browser History panel |
 | `GET /snapshots/all` | Lists every workspace and its snapshot count, current workspace flagged with `isCurrent: true` |
 | `POST /snapshots/load` | `{ "filename": "..._screen.json", "workspace": "..." (optional) }` — loads a past snapshot onto the canvas (write-silent, no new snapshot is created) |

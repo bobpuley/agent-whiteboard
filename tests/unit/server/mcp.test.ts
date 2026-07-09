@@ -49,6 +49,22 @@ async function callTool(server: McpServer, name: string, args: unknown): Promise
   return JSON.parse(result.content[0].text);
 }
 
+/** Builds a step-frames sequence via the incremental protocol (the only way
+ * to create a multi-frame sequence since v0.26 Sprint 45 — render() is
+ * single-frame only). Returns the commit_step_frames() result. */
+async function buildStepFrames(
+  server: McpServer,
+  frames: { payload: string; label?: string; type?: string }[],
+  workspace = "ws1",
+  nodeToFrame?: Record<string, number>
+): Promise<unknown> {
+  const init = (await callTool(server, "init_step_frames", { frame_type: "mermaid", workspace })) as { id: string };
+  for (const f of frames) {
+    await callTool(server, "append_frame", { id: init.id, ...f });
+  }
+  return callTool(server, "commit_step_frames", { id: init.id, ...(nodeToFrame !== undefined ? { node_to_frame: nodeToFrame } : {}) });
+}
+
 describe("MCP tool: list_snapshots (v0.15)", () => {
   const server = createMcpServer();
 
@@ -85,41 +101,6 @@ describe("MCP tool: list_snapshots (v0.15)", () => {
   });
 });
 
-describe("MCP tool: render — step-frames per-frame validation (v0.17, B5 regression)", () => {
-  const server = createMcpServer();
-
-  it("rejects a frame whose payload fails validation for its effective type", async () => {
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        { label: "Step 1", payload: "graph TD; A" },
-        { label: "Step 2", payload: "not a valid diagram" },
-      ],
-    });
-    const result = await callTool(server, "render", { type: "step-frames", payload, options: { workspace: "my-course" } });
-    expect(result).toMatchObject({ ok: false });
-    expect((result as { error: string }).error).toMatch(/mermaid/);
-  });
-
-  it("accepts and broadcasts a mixed-type sequence using each frame's own type", async () => {
-    const { broadcastReplace } = await import("../../../server/ws.js");
-    const spy = vi.mocked(broadcastReplace);
-    spy.mockClear();
-
-    const payload = JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        { label: "Step 1", type: "katex", payload: "E = mc^2" },
-        { label: "Step 2", payload: "graph TD; A" },
-      ],
-    });
-    const result = await callTool(server, "render", { type: "step-frames", payload, options: { workspace: "my-course" } });
-    expect(result).toMatchObject({ ok: true });
-    expect(spy).toHaveBeenCalledOnce();
-    expect(spy.mock.calls[0][0]).toMatchObject({ type: "katex", payload: "E = mc^2" });
-  });
-});
-
 describe("MCP tool: append_frame — per-frame type (v0.17)", () => {
   const server = createMcpServer();
 
@@ -134,6 +115,23 @@ describe("MCP tool: append_frame — per-frame type (v0.17)", () => {
     const result = await callTool(server, "append_frame", { id: init.id, payload: "not json", type: "vega-lite" });
     expect(result).toMatchObject({ ok: false });
     expect((result as { error: string }).error).toMatch(/vega-lite/);
+  });
+
+  it("commits a mixed-type sequence, preserving each frame's own effective type (v0.17, B5 regression)", async () => {
+    const result = await buildStepFrames(server, [
+      { label: "Step 1", type: "katex", payload: "E = mc^2" },
+      { label: "Step 2", payload: "graph TD; A" },
+    ], "my-course");
+    expect(result).toMatchObject({ ok: true });
+    expect(getCanvas()).toMatchObject({
+      presentation: {
+        frames: [
+          { type: "katex", payload: "E = mc^2", label: "Step 1" },
+          { type: "mermaid", payload: "graph TD; A", label: "Step 2" },
+        ],
+      },
+    });
+    resetCanvas();
   });
 });
 
@@ -291,11 +289,7 @@ describe("MCP tool: step / seek", () => {
   });
 
   it("step advances the cursor and broadcasts the new frame", async () => {
-    await callTool(server, "render", {
-      type: "step-frames",
-      payload: JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }] }),
-      options: { workspace: "ws1" },
-    });
+    await buildStepFrames(server, [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }]);
     vi.mocked(broadcastStepFrames).mockClear();
 
     const result = await callTool(server, "step", { direction: "next" });
@@ -306,25 +300,18 @@ describe("MCP tool: step / seek", () => {
   });
 
   it("seek jumps directly to a frame index", async () => {
-    await callTool(server, "render", {
-      type: "step-frames",
-      payload: JSON.stringify({
-        frame_type: "mermaid",
-        frames: [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }, { payload: "graph TD; E-->F" }],
-      }),
-      options: { workspace: "ws1" },
-    });
+    await buildStepFrames(server, [
+      { payload: "graph TD; A-->B" },
+      { payload: "graph TD; C-->D" },
+      { payload: "graph TD; E-->F" },
+    ]);
 
     const result = await callTool(server, "seek", { frame: 2 });
     expect(result).toEqual({ ok: true, current_frame: 2, total_frames: 3 });
   });
 
   it("seek returns an error when frame is out of range", async () => {
-    await callTool(server, "render", {
-      type: "step-frames",
-      payload: JSON.stringify({ frame_type: "mermaid", frames: [{ payload: "graph TD; A-->B" }] }),
-      options: { workspace: "ws1" },
-    });
+    await buildStepFrames(server, [{ payload: "graph TD; A-->B" }]);
 
     const result = await callTool(server, "seek", { frame: 5 });
     expect(result).toEqual({ ok: false, error: "frame out of range: must be 0–0" });
@@ -465,6 +452,24 @@ describe("MCP tool: init_step_frames / append_frame / commit_step_frames", () =>
   it("commit_step_frames returns an error for an unknown id", async () => {
     const result = await callTool(server, "commit_step_frames", { id: "nonexistent" });
     expect(result).toEqual({ ok: false, error: "step-frames session not found or expired" });
+  });
+
+  it("commit_step_frames accepts an optional node_to_frame map (v0.26 Sprint 45 — moved off render())", async () => {
+    const initResult = (await callTool(server, "init_step_frames", {
+      frame_type: "mermaid",
+      workspace: "ws1",
+    })) as { id: string };
+    await callTool(server, "append_frame", { id: initResult.id, payload: "graph TD; A" });
+    await callTool(server, "append_frame", { id: initResult.id, payload: "graph TD; B" });
+
+    const commitResult = await callTool(server, "commit_step_frames", {
+      id: initResult.id,
+      node_to_frame: { A: 0, B: 1 },
+    });
+    expect(commitResult).toMatchObject({ ok: true });
+
+    const canvas = getCanvas();
+    expect(isStepSequence(canvas) && canvas.nodeToFrame).toEqual({ A: 0, B: 1 });
   });
 });
 

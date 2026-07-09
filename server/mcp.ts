@@ -8,7 +8,7 @@ import { z } from "zod";
 import { clearCanvas, exportCanvas, getCanvas, isStepSequence, seekStepFrame, stepCursor } from "./session.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
-import { hasMermaidKeyword, parseMermaid, validatePayload } from "./validate.js";
+import { hasMermaidKeyword, parseMermaid, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./events.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
@@ -40,22 +40,19 @@ export function createMcpServer(): McpServer {
         '  • "html"        — HTML/CSS fragment. Example: render({ type: "html", payload: "<h1>Hello</h1>" })\n' +
         '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
         '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{"$schema":"...","mark":"bar",...}" })\n' +
-        '  • "step-frames" — Ordered sequence of frames for step-through. payload is a JSON string: { "frame_type": "mermaid", "frames": [{ "label": "Step 1", "payload": "graph TD; A", "type": "mermaid" }, ...] }. Displays frame 0; use step() to navigate. ' +
-        'Every frame is validated against its effective type (frame.type ?? frame_type) before anything is accepted — an invalid frame anywhere in the sequence rejects the whole call with { ok: false, error } and nothing is rendered. ' +
-        'frame.type is optional per frame — omit it to use frame_type; set it to mix content types within one sequence (e.g. a mermaid frame followed by a katex frame). ' +
-        'Best for small, fully-known-upfront sequences (one call). For long or complex sequences, or when you want the user to review and acknowledge each frame before the next appears, use init_step_frames()/append_frame()/commit_step_frames() instead (see below) — same per-frame validation, plus incremental live preview and composes with wait_done() for paced, user-acknowledged reveal.\n' +
+        "render() is single-frame only. For a step-through sequence (multiple frames navigable via step()/seek()), use init_step_frames()/append_frame()/commit_step_frames() instead (see below).\n" +
         'options: { "workspace": "my-course", "title": "My diagram" }. workspace is REQUIRED — snapshot routing fails without it. title is optional.\n' +
         'options.workspace: workspace name for snapshot routing. Must be alphanumeric with dashes, underscores, dots, or spaces — no path separators. No env var fallback: always pass explicitly.\n' +
         'Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "course_2", title: "System flow" } })',
       inputSchema: z.object({
         type: z
-          .enum(["mermaid", "svg", "html", "katex", "vega-lite", "step-frames"])
+          .enum(["mermaid", "svg", "html", "katex", "vega-lite"])
           .describe("Content type."),
         payload: z
           .string()
           .describe(
             "The content source. For mermaid: must begin with a valid diagram keyword. " +
-              "For vega-lite and step-frames: must be valid JSON. For svg/html/katex: any string."
+              "For vega-lite: must be valid JSON. For svg/html/katex: any string."
           ),
         options: z
           .object({
@@ -65,14 +62,12 @@ export function createMcpServer(): McpServer {
               "Always pass explicitly — no env var fallback."
             ),
             title: z.string().optional(),
-            node_to_frame: z.record(z.string(), z.number()).optional(),
           })
-          .describe('Required options object. workspace: snapshot destination (required). title: label above canvas (optional). node_to_frame: node→frame map for autonomous navigation on step-frames (optional).'),
+          .describe('Required options object. workspace: snapshot destination (required). title: label above canvas (optional).'),
       }),
     },
     async ({ type, payload, options }) => {
       const title = options?.title;
-      const nodeToFrame = options?.node_to_frame;
       const workspaceResult = validateWorkspaceInput(options?.workspace);
       if (!workspaceResult.ok) {
         return {
@@ -81,14 +76,14 @@ export function createMcpServer(): McpServer {
       }
       const { workspace } = workspaceResult;
 
-      const validationError = await validatePayload(type, payload);
+      const validationError = await validateFrame({ type, payload });
       if (validationError) {
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: false, error: validationError }) }],
         };
       }
 
-      const result = commitRenderResult(type, payload, workspace, title, nodeToFrame);
+      const result = commitRenderResult(type, payload, workspace, title);
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
       };
@@ -396,13 +391,13 @@ export function createMcpServer(): McpServer {
     "init_step_frames",
     {
       description:
-        "Begin an incremental step-frames sequence. Use this when you want to build a step-through diagram one frame at a time.\n" +
+        "Begin a step-frames sequence — a step-through diagram built one frame at a time and navigable afterwards via step()/seek(). This is the only way to create a multi-frame sequence (render() is single-frame only).\n" +
         "Creates an empty skeleton in server memory, pushes a 0-frame placeholder to the browser, and returns a unique ID.\n" +
         "Protocol: init_step_frames() → append_frame() × N (browser updates after each append) → commit_step_frames() (finalizes snapshot + state).\n" +
         "frame_type: content type shared by all frames (e.g. 'mermaid') — every frame in the sequence must currently be this same type.\n" +
         "workspace: same rules as render() — required.\n" +
         "The ID expires after 30 minutes of inactivity (no append_frame or commit_step_frames call).\n" +
-        "Both this and the one-shot render(type=\"step-frames\", ...) path validate every frame the same way. Prefer this over a single render() call whenever: the sequence is long or complex and you want each frame validated as you build it, one round-trip at a time, instead of assembling the whole payload upfront; or you want the user to review and acknowledge each frame before the next appears — interleave wait_done() after each append_frame() call for paced, user-acknowledged reveal. For a short, fully-known-upfront sequence, render(type=\"step-frames\", ...) in one call is fewer round-trips.\n" +
+        "Each append_frame() call is validated and pushed to the browser individually — the user watches the sequence grow one frame at a time; interleave wait_done() after each append_frame() call for a paced, user-acknowledged reveal.\n" +
         'Returns { "ok": true, "id": "<uuid>" }. Error if workspace is missing/invalid or frame_type is unsupported.\n' +
         'Example: init_step_frames({ frame_type: "mermaid", workspace: "my-course", title: "TCP Handshake" })',
       inputSchema: z.object({
@@ -472,14 +467,20 @@ export function createMcpServer(): McpServer {
         "Still sends a final WebSocket broadcast for consistency (handles clear() called between appends).\n" +
         "After commit, export() returns the assembled full step-frames JSON. step() and seek() work on the committed sequence.\n" +
         "The builder entry is deleted after commit — the ID cannot be reused.\n" +
+        "Optional node_to_frame: node ID → frame index map. When set, the browser attaches click listeners automatically — clicking a mapped node jumps directly to its frame (no wait_click() call needed). wait_click() overrides node_to_frame for the duration of its call.\n" +
         'Returns { "ok": true }. Error if id is unknown/expired or the sequence has zero frames.\n' +
-        'Example: commit_step_frames({ id: "<uuid>" })',
+        'Example: commit_step_frames({ id: "<uuid>" })\n' +
+        'Example with node_to_frame: commit_step_frames({ id: "<uuid>", node_to_frame: { "A": 0, "B": 1, "C": 2 } })',
       inputSchema: z.object({
         id: z.string().describe("Builder ID returned by init_step_frames()."),
+        node_to_frame: z
+          .record(z.string(), z.number())
+          .optional()
+          .describe("Optional node ID → frame index map for autonomous browser navigation on click."),
       }),
     },
-    ({ id }) => {
-      const result = commitStepFramesResult(id);
+    ({ id, node_to_frame }) => {
+      const result = commitStepFramesResult(id, node_to_frame);
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
       };

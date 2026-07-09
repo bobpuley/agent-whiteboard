@@ -41,8 +41,8 @@ Section flags (combinable, e.g. -ie runs Sections 9+11 only):
 Other options:
   -p, --port <port>     Server port (default: 3000)
   -d, --delay <ms>      Delay between slides in ms (default: 5000)
-  -t, --type <types>    Comma-separated renderer types to include in Section 1–6 slideshow
-                        (mermaid, svg, html, katex, vega-lite, step-frames). Omit for all.
+  -t, --type <types>    Comma-separated renderer types to include in Section 1–5 slideshow
+                        (mermaid, svg, html, katex, vega-lite). Omit for all.
   -h, --help            Show this help
 `);
   process.exit(0);
@@ -86,7 +86,7 @@ const slides = [
   // 1. Mermaid — load-balanced architecture
   {
     type: "mermaid",
-    title: "1 / 6 — Mermaid",
+    title: "1 / 5 — Mermaid",
     payload: `graph TD
   Client -->|HTTP| LB[Load Balancer]
   LB --> A[App Server A]
@@ -101,7 +101,7 @@ const slides = [
   // 2. SVG — concentric circles geometry
   {
     type: "svg",
-    title: "2 / 6 — SVG",
+    title: "2 / 5 — SVG",
     payload: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
   <defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="50%">
@@ -132,7 +132,7 @@ const slides = [
   // 3. HTML — capability card (inline styles; DOMPurify strips <style> blocks)
   {
     type: "html",
-    title: "3 / 6 — HTML",
+    title: "3 / 5 — HTML",
     payload: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
   <h1 style="margin:0 0 4px;font-size:28px;color:#1a1a2e">HTML Renderer</h1>
   <p style="margin:0 0 24px;color:#666;font-size:14px">Sanitized via DOMPurify — inline styles only</p>
@@ -160,7 +160,7 @@ const slides = [
   // 4. KaTeX — Bayes + Maxwell + Euler
   {
     type: "katex",
-    title: "4 / 6 — KaTeX",
+    title: "4 / 5 — KaTeX",
     payload: String.raw`P(A \mid B) = \frac{P(B \mid A)\, P(A)}{P(B)} \qquad \text{(Bayes' Theorem)}\\[18pt]
 \nabla \cdot \mathbf{E} = \frac{\rho}{\varepsilon_0} \qquad
 \nabla \times \mathbf{B} = \mu_0 \mathbf{J} + \mu_0\varepsilon_0\frac{\partial \mathbf{E}}{\partial t} \\[18pt]
@@ -170,7 +170,7 @@ e^{i\pi} + 1 = 0`,
   // 5. Vega-Lite — request latency by percentile
   {
     type: "vega-lite",
-    title: "5 / 6 — Vega-Lite",
+    title: "5 / 5 — Vega-Lite",
     payload: JSON.stringify({
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
       width: 420,
@@ -196,72 +196,9 @@ e^{i\pi} + 1 = 0`,
     }),
   },
 
-  // 6. Step-frames — cache miss / DB fetch / cache store sequence (frame 1 of 3)
-  // Note: the slideshow shows frame 0 of the step-frames sequence;
-  // use step() / Prev+Next buttons in the browser to navigate within the sequence.
-  {
-    type: "step-frames",
-    title: "6 / 6 — Step-Frames (use Prev/Next)",
-    payload: JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        {
-          label: "Step 1 — Cache Miss",
-          payload: `sequenceDiagram
-  participant C as Client
-  participant S as Server
-  participant Cache as Redis
-  participant DB as Database
-  C->>S: GET /user/42
-  S->>Cache: GET user:42
-  Cache-->>S: (nil)`,
-        },
-        {
-          label: "Step 2 — DB Fetch",
-          payload: `sequenceDiagram
-  participant C as Client
-  participant S as Server
-  participant Cache as Redis
-  participant DB as Database
-  C->>S: GET /user/42
-  S->>Cache: GET user:42
-  Cache-->>S: (nil)
-  S->>DB: SELECT * FROM users WHERE id=42
-  DB-->>S: {id:42, name:...}`,
-        },
-        {
-          label: "Step 3 — Cache Store & Response",
-          payload: `sequenceDiagram
-  participant C as Client
-  participant S as Server
-  participant Cache as Redis
-  participant DB as Database
-  C->>S: GET /user/42
-  S->>Cache: GET user:42
-  Cache-->>S: (nil)
-  S->>DB: SELECT * FROM users WHERE id=42
-  DB-->>S: {id:42, name:...}
-  S->>Cache: SET user:42 EX 300
-  S-->>C: 200 OK {id:42,...}`,
-        },
-      ],
-    }),
-  },
 ];
 
 // ── Sections 1–8 (standard) ───────────────────────────────────────────────────
-
-// Count the actual number of timer ticks the server will fire.
-// step-frames slides expand into one tick per frame (server-side B2 behaviour);
-// plain slides are one tick each.
-function countTicks(slideList) {
-  return slideList.reduce((acc, s) => {
-    if (s.type === "step-frames") {
-      return acc + JSON.parse(s.payload).frames.length;
-    }
-    return acc + 1;
-  }, 0);
-}
 
 if (RUN_STANDARD) {
   const activeSlides = TYPE_FILTER ? slides.filter((s) => TYPE_FILTER.has(s.type)) : slides;
@@ -272,14 +209,13 @@ if (RUN_STANDARD) {
     process.exit(1);
   }
 
-  const totalTicks = countTicks(activeSlides);
-  const totalMs = totalTicks * DELAY_MS;
+  // One tick per slide — a slide is always exactly one frame (v0.26 Sprint 45).
+  const totalMs = activeSlides.length * DELAY_MS;
 
   if (TYPE_FILTER) {
     console.log(`   Filter: ${[...TYPE_FILTER].join(", ")} (${activeSlides.length} of ${slides.length} slides)`);
   }
-  const tickNote = totalTicks !== activeSlides.length ? ` (${totalTicks} ticks after step-frames expansion)` : "";
-  console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total${tickNote})…`);
+  console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total)…`);
 
   const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS, workspace: WORKSPACE });
   if (!result.ok) {
@@ -352,27 +288,29 @@ const clientSlides = [
     }),
   },
 
-  // 7c — step-frames: client calls POST /step for each frame (3 s between frames)
-  // The server just stores the sequence; the agent decides when to advance.
+  // 7c — step-frames: built via init_step_frames/append_frame/commit_step_frames
+  // (the only way to create a multi-frame sequence — render() is single-frame
+  // only, v0.26 Sprint 45), then the client calls POST /step for each frame
+  // (3 s between frames). The server just stores the sequence; the agent
+  // decides when to advance.
   {
-    type: "step-frames",
+    kind: "step-frames",
     title: "7c — Step-Frames, client-driven (3 s/frame)",
     frame_delay_ms: 3000,
-    payload: JSON.stringify({
-      frame_type: "mermaid",
-      frames: [
-        {
-          label: "Phase 1 — Install & Typecheck",
-          payload: `graph LR
+    frame_type: "mermaid",
+    frames: [
+      {
+        label: "Phase 1 — Install & Typecheck",
+        payload: `graph LR
   A([Push]) --> B[Install deps]
   B --> C[Typecheck]
   style A fill:#4caf50,color:#fff
   style B fill:#2196f3,color:#fff
   style C fill:#2196f3,color:#fff`,
-        },
-        {
-          label: "Phase 2 — Test & Build",
-          payload: `graph LR
+      },
+      {
+        label: "Phase 2 — Test & Build",
+        payload: `graph LR
   A([Push]) --> B[Install deps]
   B --> C[Typecheck]
   C --> D[Run tests]
@@ -382,10 +320,10 @@ const clientSlides = [
   style C fill:#9e9e9e,color:#fff
   style D fill:#2196f3,color:#fff
   style E fill:#2196f3,color:#fff`,
-        },
-        {
-          label: "Phase 3 — Publish",
-          payload: `graph LR
+      },
+      {
+        label: "Phase 3 — Publish",
+        payload: `graph LR
   A([Push]) --> B[Install deps]
   B --> C[Typecheck]
   C --> D[Run tests]
@@ -397,51 +335,68 @@ const clientSlides = [
   style D fill:#9e9e9e,color:#fff
   style E fill:#9e9e9e,color:#fff
   style F fill:#4caf50,color:#fff`,
-        },
-      ],
-    }),
+      },
+    ],
   },
 ];
 
 async function runClientSlideshow(slideList) {
   for (const slide of slideList) {
-    const { type, payload, title, delay_ms = DELAY_MS, frame_delay_ms } = slide;
-    process.stdout.write(`\n▶  ${title}\n`);
+    process.stdout.write(`\n▶  ${slide.title}\n`);
 
-    const renderRes = await post("/render", { type, payload, options: { workspace: WORKSPACE, title } });
-    if (!renderRes.ok) {
-      console.error(`   ✗ render failed: ${renderRes.error}`);
-      process.exit(1);
-    }
-    console.log("   ✓ rendered");
+    if (slide.kind === "step-frames") {
+      const { title, frame_type, frames, frame_delay_ms } = slide;
+      const initRes = await post("/step-frames/init", { frame_type, workspace: WORKSPACE, title });
+      if (!initRes.ok) {
+        console.error(`   ✗ init_step_frames failed: ${initRes.error}`);
+        process.exit(1);
+      }
+      const { id } = initRes;
+      for (const f of frames) {
+        const appendRes = await post(`/step-frames/${id}/frame`, { payload: f.payload, label: f.label });
+        if (!appendRes.ok) {
+          console.error(`   ✗ append_frame failed: ${appendRes.error}`);
+          process.exit(1);
+        }
+      }
+      const commitRes = await post(`/step-frames/${id}/commit`, {});
+      if (!commitRes.ok) {
+        console.error(`   ✗ commit_step_frames failed: ${commitRes.error}`);
+        process.exit(1);
+      }
+      console.log("   ✓ built via init_step_frames/append_frame/commit_step_frames — frame 1 on screen");
 
-    if (type === "step-frames") {
       // Frame 0 is already on screen; advance the remaining frames via POST /step.
-      const spec = JSON.parse(payload);
-      const frameCount = spec.frames.length;
-      const pause = frame_delay_ms ?? delay_ms;
-      for (let i = 1; i < frameCount; i++) {
+      const pause = frame_delay_ms ?? DELAY_MS;
+      for (let i = 1; i < frames.length; i++) {
         await new Promise((r) => setTimeout(r, pause));
         const stepRes = await post("/step", { direction: "next" });
         if (!stepRes.ok) {
           console.error(`   ✗ step failed: ${stepRes.error}`);
           process.exit(1);
         }
-        const label = spec.frames[i].label ? ` — ${spec.frames[i].label}` : "";
-        console.log(`   → frame ${i + 1}/${frameCount}${label}`);
+        const label = frames[i].label ? ` — ${frames[i].label}` : "";
+        console.log(`   → frame ${i + 1}/${frames.length}${label}`);
       }
       // Linger on the last frame.
       await new Promise((r) => setTimeout(r, pause));
-    } else {
-      await new Promise((r) => setTimeout(r, delay_ms));
+      continue;
     }
+
+    const { type, payload, title, delay_ms = DELAY_MS } = slide;
+    const renderRes = await post("/render", { type, payload, options: { workspace: WORKSPACE, title } });
+    if (!renderRes.ok) {
+      console.error(`   ✗ render failed: ${renderRes.error}`);
+      process.exit(1);
+    }
+    console.log("   ✓ rendered");
+    await new Promise((r) => setTimeout(r, delay_ms));
   }
 }
 
   const totalClientMs = clientSlides.reduce((acc, s) => {
-    if (s.type === "step-frames") {
-      const frames = JSON.parse(s.payload).frames.length;
-      return acc + frames * (s.frame_delay_ms ?? DELAY_MS);
+    if (s.kind === "step-frames") {
+      return acc + s.frames.length * (s.frame_delay_ms ?? DELAY_MS);
     }
     return acc + (s.delay_ms ?? DELAY_MS);
   }, 0);
@@ -451,31 +406,31 @@ async function runClientSlideshow(slideList) {
 
 // ── Section 8 — seek() random-access navigation ───────────────────────────────
 //
-// Loads a 4-frame step sequence, then jumps to arbitrary frames via POST /seek.
+// Builds a 4-frame sequence via init_step_frames/append_frame/commit_step_frames
+// (the only way to create a multi-frame sequence — render() is single-frame
+// only, v0.26 Sprint 45), then jumps to arbitrary frames via POST /seek.
 // Demonstrates that seek() reaches any frame in one call — no repeated step().
 
-const seekFrames = JSON.stringify({
-  frame_type: "mermaid",
-  frames: [
-    {
-      label: "Frame 0 — Request arrives",
-      payload: `graph LR
+const seekFrames = [
+  {
+    label: "Frame 0 — Request arrives",
+    payload: `graph LR
   C([Client]) -->|Request| G[API Gateway]
   style C fill:#4caf50,color:#fff
   style G fill:#2196f3,color:#fff`,
-    },
-    {
-      label: "Frame 1 — Auth check",
-      payload: `graph LR
+  },
+  {
+    label: "Frame 1 — Auth check",
+    payload: `graph LR
   C([Client]) -->|Request| G[API Gateway]
   G -->|Token| A[Auth Service]
   style C fill:#9e9e9e,color:#fff
   style G fill:#9e9e9e,color:#fff
   style A fill:#2196f3,color:#fff`,
-    },
-    {
-      label: "Frame 2 — Business logic",
-      payload: `graph LR
+  },
+  {
+    label: "Frame 2 — Business logic",
+    payload: `graph LR
   C([Client]) -->|Request| G[API Gateway]
   G -->|Token| A[Auth Service]
   A -->|OK| S[Order Service]
@@ -485,10 +440,10 @@ const seekFrames = JSON.stringify({
   style A fill:#9e9e9e,color:#fff
   style S fill:#2196f3,color:#fff
   style DB fill:#2196f3,color:#fff`,
-    },
-    {
-      label: "Frame 3 — Response",
-      payload: `graph LR
+  },
+  {
+    label: "Frame 3 — Response",
+    payload: `graph LR
   C([Client]) -->|Request| G[API Gateway]
   G -->|Token| A[Auth Service]
   A -->|OK| S[Order Service]
@@ -500,39 +455,51 @@ const seekFrames = JSON.stringify({
   style A fill:#9e9e9e,color:#fff
   style S fill:#9e9e9e,color:#fff
   style DB fill:#9e9e9e,color:#fff`,
-    },
-  ],
-});
+  },
+];
 
 async function runSeekDemo() {
   const PAUSE = Math.min(DELAY_MS, 2000);
 
-  // Load the sequence (frame 0 is shown).
-  const renderRes = await post("/render", {
-    type: "step-frames",
-    payload: seekFrames,
-    options: { workspace: WORKSPACE, title: "8 — seek() demo: frame 0 → 3 → 1 → 2" },
+  // Build the sequence (init → append × 4 → commit); frame 0 is shown on commit.
+  const initRes = await post("/step-frames/init", {
+    frame_type: "mermaid",
+    workspace: WORKSPACE,
+    title: "8 — seek() demo: frame 0 → 3 → 1 → 2",
   });
-  if (!renderRes.ok) {
-    console.error(`   ✗ render failed: ${renderRes.error}`);
+  if (!initRes.ok) {
+    console.error(`   ✗ init_step_frames failed: ${initRes.error}`);
     process.exit(1);
   }
-  console.log("   ✓ loaded 4-frame sequence (frame 0)");
+  const { id } = initRes;
+  for (const f of seekFrames) {
+    const appendRes = await post(`/step-frames/${id}/frame`, { payload: f.payload, label: f.label });
+    if (!appendRes.ok) {
+      console.error(`   ✗ append_frame failed: ${appendRes.error}`);
+      process.exit(1);
+    }
+  }
+  const commitRes = await post(`/step-frames/${id}/commit`, {});
+  if (!commitRes.ok) {
+    console.error(`   ✗ commit_step_frames failed: ${commitRes.error}`);
+    process.exit(1);
+  }
+  console.log("   ✓ built 4-frame sequence via init_step_frames/append_frame/commit_step_frames (frame 0 shown)");
   await new Promise((r) => setTimeout(r, PAUSE));
 
   // Jump directly to frame 3 — no step() chain needed.
   const s3 = await post("/seek", { frame: 3 });
-  console.log(`   → seek(3) → frame ${s3.current_frame}/${s3.total_frames - 1}: "${JSON.parse(seekFrames).frames[3].label}"`);
+  console.log(`   → seek(3) → frame ${s3.current_frame}/${s3.total_frames - 1}: "${seekFrames[3].label}"`);
   await new Promise((r) => setTimeout(r, PAUSE));
 
   // Jump back to frame 1.
   const s1 = await post("/seek", { frame: 1 });
-  console.log(`   → seek(1) → frame ${s1.current_frame}/${s1.total_frames - 1}: "${JSON.parse(seekFrames).frames[1].label}"`);
+  console.log(`   → seek(1) → frame ${s1.current_frame}/${s1.total_frames - 1}: "${seekFrames[1].label}"`);
   await new Promise((r) => setTimeout(r, PAUSE));
 
   // Jump to frame 2.
   const s2 = await post("/seek", { frame: 2 });
-  console.log(`   → seek(2) → frame ${s2.current_frame}/${s2.total_frames - 1}: "${JSON.parse(seekFrames).frames[2].label}"`);
+  console.log(`   → seek(2) → frame ${s2.current_frame}/${s2.total_frames - 1}: "${seekFrames[2].label}"`);
   await new Promise((r) => setTimeout(r, PAUSE));
 }
 
@@ -887,31 +854,38 @@ if (RUN_INCREMENTAL) {
 
 // ── Section 14 — node_to_frame autonomous navigation (v0.2, U4e) ────────────
 //
-// render(type="step-frames", options.node_to_frame={...}) attaches click
-// listeners in the browser automatically: clicking a mapped node jumps
-// directly to its frame via POST /seek, with no agent involvement (no
-// wait_click() call). This script can only render the sequence and print
-// instructions — the resulting seek() calls are browser → server directly
-// and produce no response this script can observe.
+// commit_step_frames(id, node_to_frame={...}) attaches click listeners in the
+// browser automatically: clicking a mapped node jumps directly to its frame
+// via POST /seek, with no agent involvement (no wait_click() call).
+// (Entry point moved here from render(type="step-frames", options.node_to_frame)
+// in v0.26 Sprint 45 — render() is single-frame only now, so the sequence must
+// be built via init_step_frames/append_frame/commit_step_frames.) This script
+// can only build the sequence and print instructions — the resulting seek()
+// calls are browser → server directly and produce no response this script can
+// observe.
 
 async function runNodeToFrameDemo() {
   const nodeToFrame = { A: 0, B: 1, C: 2 };
-  const payload = JSON.stringify({
-    frame_type: "mermaid",
-    frames: [
-      { label: "Frame 0 — Client", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style A fill:#4caf50,color:#fff` },
-      { label: "Frame 1 — Gateway", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style B fill:#2196f3,color:#fff` },
-      { label: "Frame 2 — Database", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style C fill:#e91e63,color:#fff` },
-    ],
-  });
+  const frames = [
+    { label: "Frame 0 — Client", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style A fill:#4caf50,color:#fff` },
+    { label: "Frame 1 — Gateway", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style B fill:#2196f3,color:#fff` },
+    { label: "Frame 2 — Database", payload: `graph LR\n  A([Client]) --> B[API Gateway]\n  B --> C[(Database)]\n  style C fill:#e91e63,color:#fff` },
+  ];
 
-  const r = await post("/render", {
-    type: "step-frames",
-    payload,
-    options: { workspace: WORKSPACE, title: "14 — node_to_frame: click a node to jump", node_to_frame: nodeToFrame },
+  const initRes = await post("/step-frames/init", {
+    frame_type: "mermaid",
+    workspace: WORKSPACE,
+    title: "14 — node_to_frame: click a node to jump",
   });
-  if (!r.ok) { console.error(`   ✗ render failed: ${r.error}`); return; }
-  console.log("   ✓ rendered — click a node in the browser to jump directly to its mapped frame (no agent involvement):");
+  if (!initRes.ok) { console.error(`   ✗ init_step_frames failed: ${initRes.error}`); return; }
+  const { id } = initRes;
+  for (const f of frames) {
+    const appendRes = await post(`/step-frames/${id}/frame`, { payload: f.payload, label: f.label });
+    if (!appendRes.ok) { console.error(`   ✗ append_frame failed: ${appendRes.error}`); return; }
+  }
+  const commitRes = await post(`/step-frames/${id}/commit`, { node_to_frame: nodeToFrame });
+  if (!commitRes.ok) { console.error(`   ✗ commit_step_frames failed: ${commitRes.error}`); return; }
+  console.log("   ✓ built via init_step_frames/append_frame/commit_step_frames(node_to_frame) — click a node in the browser to jump directly to its mapped frame (no agent involvement):");
   console.log(`       Client (A) → frame 0  |  API Gateway (B) → frame 1  |  Database (C) → frame 2`);
 
   const WAIT_MS = Math.max(DELAY_MS, 8000);
