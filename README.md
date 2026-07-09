@@ -133,9 +133,9 @@ Arm the browser for a single node or edge click on the current Mermaid diagram. 
 
 `node_actions` (optional) — a map of node ID → string array. When provided, clicking a mapped node shows an inline popup menu listing the action strings; the selected item is returned in the `action` field. Nodes not in the map produce a plain click (`action: null`). Edge clicks are always plain.
 
-Only one `wait_click()` may be pending at a time — a second call cancels the first. Times out after 10 minutes.
+Only one `wait_click()` may be pending at a time — a second `wait_click()` call, or an arming `wait_done()` call, supersedes it. Times out after 10 minutes.
 
-**Returns:** `{ "ok": true, "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<selected>" | null }` on click (`action` is the chosen menu item string, or `null` for a plain click), or `{ "ok": true, "type": "timeout" }` on timeout.
+**Returns:** `{ "ok": true, "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<selected>" | null }` on click (`action` is the chosen menu item string, or `null` for a plain click); `{ "ok": true, "type": "timeout" }` on plain inactivity timeout; `{ "ok": true, "type": "superseded" }` when cancelled by a new arm.
 
 | Armed — clickable nodes get a blue outline                                                                    | After clicking a node with `node_actions` registered                                                                              |
 |---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
@@ -159,7 +159,7 @@ Append one frame to an in-progress builder. `payload` is validated against `type
 
 Finalize an in-progress builder: assembles the full step-frames JSON, writes a snapshot, updates canvas state (so `export()` and `step()`/`seek()` work on it), and deletes the builder entry. The browser already shows the sequence from `append_frame()` live previews.
 
-`node_to_frame` (optional) — map of node ID → frame index. When set, clicking a mapped node in the browser jumps directly to its frame via `POST /seek` — no `wait_click()` call needed. Overridden for the duration of any `wait_click()` call; the agent must build and commit a new sequence with the map to re-enable it.
+`node_to_frame` (optional) — map of node ID → frame index. When set, clicking a mapped node in the browser jumps directly to its frame via `POST /seek` — no `wait_click()` call needed. Disabled for the duration of any `wait_click()` call, then automatically re-enabled once that call resolves or times out — no need to build and commit a new sequence just to restore it.
 
 **Returns:** `{ "ok": true, "id": "<uuid>" }` or `{ "ok": false, "error": "..." }`
 
