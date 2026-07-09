@@ -10,7 +10,7 @@ import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
 import { hasMermaidKeyword, parseMermaid, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
-import { waitForClick, waitForDone } from "./events.js";
+import { waitForClick, waitForDone } from "./interaction.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
 import { generateExportHtml, writeExportHtmlToDisk } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
