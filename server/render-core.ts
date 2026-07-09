@@ -152,6 +152,6 @@ export function commitStepFramesResult(id: string, nodeToFrame?: Record<string, 
     id: commitId,
   });
   // Final broadcast for consistency (handles clear() called between appends).
-  broadcastStepFrames(frames, frame_type, 0, commitId, title);
+  broadcastStepFrames(frames, frame_type, 0, commitId, title, nodeToFrame);
   return { ok: true, ...(commitSnapshotId !== undefined ? { id: commitSnapshotId } : {}) };
 }

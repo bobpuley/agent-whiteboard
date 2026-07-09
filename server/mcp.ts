@@ -124,7 +124,7 @@ export function createMcpServer(): McpServer {
         const { frames, title, id } = state.presentation;
         // Same id as when this sequence was created — tells the browser this is
         // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-        broadcastStepFrames(frames, state.frameType, result.currentFrame, id ?? generateSnapshotId(), title);
+        broadcastStepFrames(frames, state.frameType, result.currentFrame, id ?? generateSnapshotId(), title, state.nodeToFrame);
       }
       return {
         content: [

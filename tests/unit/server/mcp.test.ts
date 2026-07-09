@@ -299,6 +299,22 @@ describe("MCP tool: step / seek", () => {
     expect(frames[currentFrame]).toMatchObject({ payload: "graph TD; C-->D" });
   });
 
+  it("forwards nodeToFrame on every step advance, not just the initial commit (bug B18 in docs/01)", async () => {
+    await buildStepFrames(
+      server,
+      [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }],
+      "ws1",
+      { A: 0, B: 1 }
+    );
+    vi.mocked(broadcastStepFrames).mockClear();
+
+    await callTool(server, "step", { direction: "next" });
+
+    expect(broadcastStepFrames).toHaveBeenCalledOnce();
+    const [, , , , , nodeToFrame] = vi.mocked(broadcastStepFrames).mock.calls[0];
+    expect(nodeToFrame).toEqual({ A: 0, B: 1 });
+  });
+
   it("seek jumps directly to a frame index", async () => {
     await buildStepFrames(server, [
       { payload: "graph TD; A-->B" },
@@ -483,6 +499,7 @@ describe("MCP tool: init_step_frames / append_frame / commit_step_frames", () =>
     await callTool(server, "append_frame", { id: initResult.id, payload: "graph TD; A" });
     await callTool(server, "append_frame", { id: initResult.id, payload: "graph TD; B" });
 
+    vi.mocked(broadcastStepFrames).mockClear();
     const commitResult = await callTool(server, "commit_step_frames", {
       id: initResult.id,
       node_to_frame: { A: 0, B: 1 },
@@ -491,6 +508,12 @@ describe("MCP tool: init_step_frames / append_frame / commit_step_frames", () =>
 
     const canvas = getCanvas();
     expect(isStepSequence(canvas) && canvas.nodeToFrame).toEqual({ A: 0, B: 1 });
+
+    // bug B18 in docs/01 — the live broadcast previously dropped nodeToFrame
+    // even though in-memory state (asserted above) had it correctly.
+    expect(broadcastStepFrames).toHaveBeenCalledOnce();
+    const [, , , , , nodeToFrame] = vi.mocked(broadcastStepFrames).mock.calls[0];
+    expect(nodeToFrame).toEqual({ A: 0, B: 1 });
   });
 });
 

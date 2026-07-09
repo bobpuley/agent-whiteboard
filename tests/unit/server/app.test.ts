@@ -470,6 +470,24 @@ describe("POST /step", () => {
     const [frames, , currentFrame] = spy.mock.calls[0];
     expect(frames[currentFrame]).toMatchObject({ type: "katex", payload: "E = mc^2" });
   });
+
+  it("forwards node_to_frame on every /step advance, not just the initial commit (bug B18 in docs/01)", async () => {
+    await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES, { node_to_frame: { A: 0, B: 1 } });
+
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
+    spy.mockClear();
+
+    await app.request("/step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "next" }),
+    });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [, , , , , nodeToFrame] = spy.mock.calls[0];
+    expect(nodeToFrame).toEqual({ A: 0, B: 1 });
+  });
 });
 
 // ── Sprint 9 — POST /slideshow / POST /slideshow/stop ─────────────────────────
@@ -1885,6 +1903,23 @@ describe("POST /step-frames/:id/commit", () => {
     const { getCanvas, isStepSequence } = await import("../../../server/session.js");
     const canvas = getCanvas();
     expect(isStepSequence(canvas) && canvas.nodeToFrame).toEqual({ A: 0, B: 1 });
+  });
+
+  it("forwards node_to_frame into the live broadcast, not just in-memory state (bug B18 in docs/01 — was silently dropped)", async () => {
+    const { broadcastStepFrames } = await import("../../../server/ws.js");
+    const spy = vi.mocked(broadcastStepFrames);
+
+    const id = await initAndAppend(2);
+    spy.mockClear();
+    await app.request(`/step-frames/${id}/commit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ node_to_frame: { A: 0, B: 1 } }),
+    });
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [, , , , , nodeToFrame] = spy.mock.calls[0];
+    expect(nodeToFrame).toEqual({ A: 0, B: 1 });
   });
 
   it("rejects a node_to_frame that is not a map of string → number", async () => {

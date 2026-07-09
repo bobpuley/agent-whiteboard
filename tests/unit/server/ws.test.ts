@@ -98,6 +98,37 @@ describe("ws", () => {
     });
   });
 
+  it("broadcastStepFrames forwards nodeToFrame when provided (bug B18 in docs/01 — was silently dropped)", () => {
+    const client = new FakeSocket();
+    addClient(client as never);
+    client.sent = [];
+
+    broadcastStepFrames(
+      [{ payload: "A" }, { payload: "B" }],
+      "mermaid",
+      0,
+      "sf-3",
+      "Seq Title",
+      { A: 0, B: 1 }
+    );
+
+    expect(JSON.parse(client.sent[0])).toMatchObject({
+      action: "replace",
+      id: "sf-3",
+      nodeToFrame: { A: 0, B: 1 },
+    });
+  });
+
+  it("broadcastStepFrames omits nodeToFrame when not provided", () => {
+    const client = new FakeSocket();
+    addClient(client as never);
+    client.sent = [];
+
+    broadcastStepFrames([{ payload: "A" }], "mermaid", 0, "sf-4");
+
+    expect(JSON.parse(client.sent[0])).not.toHaveProperty("nodeToFrame");
+  });
+
   // ── broadcastReplace — single "replace" builder (v0.23, U5) ─────────────────
   // Every render/step/seek/history-load/slideshow call path funnels through
   // this function; these tests cover its id/cursor/viewport/nodeToFrame
