@@ -1,6 +1,6 @@
 # Milestone v0.26.1 — Node-to-Frame Broadcast Fix (patch)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-07-09 via `/doc-creator-driver:intake` (bug report). Patch release bundling two bugfixes — a regression in `commit_step_frames()`'s live broadcast (B18) and the scheduling of the already-decided-but-unimplemented FR21 (B19). No new features, so it stays a `.1` patch of v0.26 rather than a new minor milestone (user decision: patch releases are for bugfixes until backward compatibility is guaranteed; see `02` §A1). B19 does touch the viewport-cache schema (composite `id:frameIndex` key, user decision) — a data-shape change, not a new architectural direction.
 
