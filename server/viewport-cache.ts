@@ -1,5 +1,9 @@
-// Global viewport-cache file — maps snapshot id -> user-adjusted Mermaid zoom/pan.
-// Separate from the immutable snapshot JSON files (F19 / C3 in docs/02).
+// Global viewport-cache file — maps "<snapshot id>:<frame index>" -> user-adjusted
+// Mermaid zoom/pan. Separate from the immutable snapshot JSON files (F19 / C3 in
+// docs/02). Composite key (v0.26.1, bug B19 in docs/01 — FR21): each frame of a
+// step-frames sequence persists its own manual viewport independently, consistent
+// with each frame now getting its own auto-fit trigger (was a bare `id` key,
+// shared across a whole sequence, pre-v0.26.1).
 
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
@@ -53,13 +57,17 @@ function writeCache(cache: Record<string, Viewport>): void {
   }
 }
 
-export function getViewport(id: string): Viewport | undefined {
-  return readCache()[id];
+function cacheKey(id: string, frameIndex: number): string {
+  return `${id}:${frameIndex}`;
 }
 
-export function setViewport(id: string, viewport: Viewport): void {
+export function getViewport(id: string, frameIndex: number): Viewport | undefined {
+  return readCache()[cacheKey(id, frameIndex)];
+}
+
+export function setViewport(id: string, frameIndex: number, viewport: Viewport): void {
   const cache = readCache();
-  cache[id] = viewport;
+  cache[cacheKey(id, frameIndex)] = viewport;
   writeCache(cache);
 }
 
@@ -67,13 +75,15 @@ export function deleteViewport(id: string): void {
   deleteViewports([id]);
 }
 
+/** Removes every per-frame entry for each given snapshot id (prefix match on "<id>:"). */
 export function deleteViewports(ids: string[]): void {
   if (ids.length === 0) return;
   const cache = readCache();
+  const prefixes = ids.map((id) => `${id}:`);
   let changed = false;
-  for (const id of ids) {
-    if (id in cache) {
-      delete cache[id];
+  for (const key of Object.keys(cache)) {
+    if (prefixes.some((prefix) => key.startsWith(prefix))) {
+      delete cache[key];
       changed = true;
     }
   }

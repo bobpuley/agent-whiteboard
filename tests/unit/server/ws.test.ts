@@ -129,6 +129,36 @@ describe("ws", () => {
     expect(JSON.parse(client.sent[0])).not.toHaveProperty("nodeToFrame");
   });
 
+  it("broadcastStepFrames forwards viewport when provided (bug B19/FR21 in docs/01 — per-frame restore)", () => {
+    const client = new FakeSocket();
+    addClient(client as never);
+    client.sent = [];
+
+    broadcastStepFrames(
+      [{ payload: "A" }],
+      "mermaid",
+      0,
+      "sf-5",
+      undefined,
+      undefined,
+      { scale: 1.2, positionX: 0.1, positionY: -0.1 }
+    );
+
+    expect(JSON.parse(client.sent[0])).toMatchObject({
+      viewport: { scale: 1.2, positionX: 0.1, positionY: -0.1 },
+    });
+  });
+
+  it("broadcastStepFrames omits viewport when not provided", () => {
+    const client = new FakeSocket();
+    addClient(client as never);
+    client.sent = [];
+
+    broadcastStepFrames([{ payload: "A" }], "mermaid", 0, "sf-6");
+
+    expect(JSON.parse(client.sent[0])).not.toHaveProperty("viewport");
+  });
+
   // ── broadcastReplace — single "replace" builder (v0.23, U5) ─────────────────
   // Every render/step/seek/history-load/slideshow call path funnels through
   // this function; these tests cover its id/cursor/viewport/nodeToFrame

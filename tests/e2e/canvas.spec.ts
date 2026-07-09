@@ -261,27 +261,45 @@ test("mermaid: a new diagram auto-fits within the canvas viewport", async ({ pag
   expect(svgBox.y + svgBox.height).toBeLessThanOrEqual(wrapperBox.y + wrapperBox.height + 2);
 });
 
-test("mermaid: step()/seek() within a sequence preserves the live zoom/pan", async ({ page, request }) => {
+test("mermaid: step()/seek() within a sequence re-fits/restores each frame independently (bug B19/FR21 — reverses the pre-v0.26.1 'whole sequence shares one viewport' behavior)", async ({ page, request }) => {
   await page.goto("/");
   await buildStepFrames(request, THREE_FRAMES);
   await expect(page.locator(".mermaid-container svg")).toBeVisible();
 
-  // Manually zoom in on frame 0.
+  const frame0AutoStyle = await page.locator(".mermaid-canvas").getAttribute("style");
+  const frame0Auto = parseTransform(frame0AutoStyle);
+
+  // Manually zoom in on frame 0. Chromium can animate a synthetic wheel
+  // gesture across several ticks, so settle briefly before sampling.
   await page.locator(".mermaid-wrapper").hover();
   await page.mouse.wheel(0, -600);
+  await page.waitForTimeout(200);
+  const frame0AdjustedStyle = await page.locator(".mermaid-canvas").getAttribute("style");
+  const frame0Adjusted = parseTransform(frame0AdjustedStyle);
+  expect(frame0Adjusted.scale).not.toBeCloseTo(frame0Auto.scale, 2); // confirms the zoom actually took effect
 
-  const beforeStyle = await page.locator(".mermaid-canvas").getAttribute("style");
-  const before = parseTransform(beforeStyle);
-  expect(before.scale).not.toBeCloseTo(1, 2); // confirms the zoom actually took effect
+  // Wait past the client's debounce window so /viewport has been reported
+  // for frame 0 specifically (id:0), not the whole sequence.
+  await page.waitForTimeout(1000);
 
+  // Navigate to frame 2 (a visibly bigger diagram) — it must get its own
+  // fresh auto-fit, not inherit frame 0's manually-zoomed transform.
   await page.getByRole("button", { name: "Next frame" }).click();
   await expect(page.locator(".step-label")).toHaveText("Step 2 — A→B");
+  const frame1Style = await page.locator(".mermaid-canvas").getAttribute("style");
+  const frame1 = parseTransform(frame1Style);
+  expect(frame1.scale).not.toBeCloseTo(frame0Adjusted.scale, 2);
 
-  const afterStyle = await page.locator(".mermaid-canvas").getAttribute("style");
-  const after = parseTransform(afterStyle);
-  expect(after.scale).toBeCloseTo(before.scale, 5);
-  expect(after.tx).toBeCloseTo(before.tx, 5);
-  expect(after.ty).toBeCloseTo(before.ty, 5);
+  // Navigate back to frame 0 — its own manually-adjusted viewport (not frame
+  // 1's, and not a fresh auto-fit) must be restored: per-frame persistence,
+  // not one shared viewport for the whole sequence.
+  await page.getByRole("button", { name: "Previous frame" }).click();
+  await expect(page.locator(".step-label")).toHaveText("Step 1 — A");
+  await expect(async () => {
+    const restoredStyle = await page.locator(".mermaid-canvas").getAttribute("style");
+    const restored = parseTransform(restoredStyle);
+    expect(restored.scale).toBeCloseTo(frame0Adjusted.scale, 1);
+  }).toPass({ timeout: 3000 });
 });
 
 test("mermaid: a manually adjusted viewport is restored when the same snapshot is reloaded from history", async ({ page, request }) => {

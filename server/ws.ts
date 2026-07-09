@@ -98,6 +98,10 @@ export function broadcastReplace(msg: ReplaceBroadcast): void {
  * for it at all, so every call site silently dropped the map even when the caller
  * had one — the exact drift the v0.23 broadcastReplace() unification was meant to
  * prevent, reintroduced one layer up. See docs/02 C2e.
+ * `viewport` (v0.26.1, bug B19/FR21 in docs/01): a per-frame saved viewport to
+ * restore instead of auto-fitting, looked up by the caller via
+ * `getViewport(id, cursor)` — each frame of a sequence now re-fits or restores
+ * independently instead of the whole sequence sharing one viewport.
  */
 export function broadcastStepFrames(
   frames: Array<{ payload: string; label?: string; type?: string }>,
@@ -105,7 +109,8 @@ export function broadcastStepFrames(
   cursor: number,
   id: string,
   title?: string,
-  nodeToFrame?: Record<string, number>
+  nodeToFrame?: Record<string, number>,
+  viewport?: Viewport
 ): void {
   broadcastReplace({
     type: frames[cursor].type ?? frameType,
@@ -116,5 +121,6 @@ export function broadcastStepFrames(
     id,
     title,
     nodeToFrame,
+    viewport,
   });
 }

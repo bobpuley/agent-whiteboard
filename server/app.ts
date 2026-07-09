@@ -131,8 +131,12 @@ export function createApp(): Hono {
     if (isStepSequence(state)) {
       const { frames, title, id } = state.presentation;
       // Same id as when this sequence was created — tells the browser this is
-      // a continuation, not a new diagram, so it must not re-fit (F19/C3).
-      broadcastStepFrames(frames, state.frameType, result.currentFrame, id ?? generateSnapshotId(), title, state.nodeToFrame);
+      // a continuation, not a new diagram (F19/C3). Each frame now re-fits or
+      // restores its own saved viewport independently (v0.26.1, bug B19/FR21) —
+      // no longer "must not re-fit" for the whole sequence.
+      const resolvedId = id ?? generateSnapshotId();
+      const viewport = getViewport(resolvedId, result.currentFrame);
+      broadcastStepFrames(frames, state.frameType, result.currentFrame, resolvedId, title, state.nodeToFrame, viewport);
     }
     return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });
   });
@@ -153,6 +157,7 @@ export function createApp(): Hono {
     }
     seekStepFrame(body.frame);
     const frame = frames[body.frame];
+    const resolvedId = id ?? generateSnapshotId();
     broadcastReplace({
       type: frame.type,
       payload: frame.payload,
@@ -161,7 +166,10 @@ export function createApp(): Hono {
       total,
       title,
       nodeToFrame: state.nodeToFrame,
-      id: id ?? generateSnapshotId(),
+      id: resolvedId,
+      // Per-frame restore (v0.26.1, bug B19/FR21) — each frame of a sequence
+      // re-fits or restores independently instead of sharing one viewport.
+      viewport: getViewport(resolvedId, body.frame),
     });
     return c.json({ ok: true, current_frame: body.frame, total_frames: total });
   });
@@ -452,8 +460,11 @@ export function createApp(): Hono {
         : undefined;
     // Pre-v0.11 snapshots may lack an id (J1, `02`) — not addressable by the
     // viewport cache; the browser falls back to treating it as unseen (auto-fit).
+    // History-load always redisplays from frame 0 (F10 — cursor is always 0 at
+    // write time), so the viewport lookup is always for frame 0 (v0.26.1, B19/FR21
+    // — composite id:frameIndex key, was bare id pre-v0.26.1).
     const snapshotId = typeof snapshot.id === "string" ? snapshot.id : undefined;
-    const viewport = snapshotId !== undefined ? getViewport(snapshotId) : undefined;
+    const viewport = snapshotId !== undefined ? getViewport(snapshotId, 0) : undefined;
 
     for (const frame of frames) {
       const validationError = await validateFrame(frame);
@@ -500,9 +511,14 @@ export function createApp(): Hono {
   // ── Mermaid viewport persistence (v0.19, F19/C3) ────────────────────────────
 
   app.post("/viewport", async (c) => {
-    const body = await c.req.json<{ id?: unknown; scale?: unknown; positionX?: unknown; positionY?: unknown }>();
+    const body = await c.req.json<{ id?: unknown; frame?: unknown; scale?: unknown; positionX?: unknown; positionY?: unknown }>();
     if (typeof body.id !== "string" || body.id.length === 0) {
       return c.json({ ok: false, error: "id must be a non-empty string" }, 400);
+    }
+    // frame (v0.26.1, bug B19/FR21): the cache key is now id:frameIndex, so each
+    // frame of a sequence persists its own manual viewport independently.
+    if (typeof body.frame !== "number" || !Number.isInteger(body.frame) || body.frame < 0) {
+      return c.json({ ok: false, error: "frame must be a non-negative integer" }, 400);
     }
     const { scale, positionX, positionY } = body;
     if (typeof scale !== "number" || !Number.isFinite(scale)) {
@@ -515,7 +531,7 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "positionY must be a finite number" }, 400);
     }
     const viewport: Viewport = { scale, positionX, positionY };
-    setViewport(body.id, viewport);
+    setViewport(body.id, body.frame, viewport);
     return c.json({ ok: true });
   });
 

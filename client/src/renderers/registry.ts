@@ -31,6 +31,9 @@ export interface RendererContext {
   nodeToFrameEnabled: boolean;
   nodeToFrame?: Record<string, number>;
   viewport?: Viewport;
+  /** Current step-frames cursor (v0.26.1, bug B19/FR21) — lets Mermaid.svelte
+   * key its per-frame auto-fit/restore decision on id+frame, not id alone. */
+  currentFrame: number;
 }
 
 export interface RendererEntry {
@@ -48,13 +51,14 @@ function htmlProps(type: "svg" | "html") {
 export const rendererRegistry: Record<RendererKey, RendererEntry> = {
   mermaid: {
     load: () => Promise.resolve(Mermaid as unknown as ComponentType<SvelteComponent>),
-    props: ({ presentation, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport }) => ({
+    props: ({ presentation, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport, currentFrame }) => ({
       source: presentation!.frames[0].payload,
       clickable,
       nodeActions,
       nodeToFrame: nodeToFrameEnabled ? nodeToFrame : undefined,
       snapshotId: presentation!.id,
       viewport,
+      currentFrame,
     }),
   },
   svg: {

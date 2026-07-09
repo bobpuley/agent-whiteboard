@@ -12,6 +12,12 @@
   // restore instead of auto-fitting.
   export let snapshotId: string | undefined = undefined;
   export let viewport: { scale: number; positionX: number; positionY: number } | undefined = undefined;
+  // v0.26.1 (bug B19/FR21): current step-frames cursor. Combined with
+  // snapshotId this forms the composite key ("<id>:<frame>") that decides
+  // whether to fit-or-restore — each frame of a sequence now re-fits or
+  // restores its own saved viewport independently, reversing the pre-v0.26.1
+  // "whole sequence shares one viewport" behavior.
+  export let currentFrame = 0;
 
   let wrapper: HTMLDivElement;
   let container: HTMLDivElement;
@@ -21,10 +27,12 @@
   // matches by the time its async work resolves has been superseded and
   // must not touch the DOM (B8 — stale-render race).
   let renderToken = 0;
-  // Tracks the last snapshot id we fit-or-restored a viewport for. A missing
-  // (undefined) incoming id — e.g. step()/seek() broadcasts — always means
-  // "continuation, do not touch the viewport", regardless of this value.
-  let lastSnapshotId: string | undefined = undefined;
+  // Tracks the last "<id>:<frame>" key we fit-or-restored a viewport for. A
+  // missing (undefined) incoming id — e.g. legacy pre-v0.11 snapshots — always
+  // means "continuation, do not touch the viewport", regardless of this value.
+  // v0.26.1 (bug B19/FR21): frame is now part of the key — step()/seek() to a
+  // different frame is no longer treated as "same continuation, skip the fit".
+  let lastSnapshotKey: string | undefined = undefined;
 
   // ── Zoom / pan state ────────────────────────────────────────────────────────
   let scale = 1;
@@ -91,7 +99,7 @@
     fetch("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: snapshotId, scale, positionX, positionY }),
+      body: JSON.stringify({ id: snapshotId, frame: currentFrame, scale, positionX, positionY }),
     }).catch(() => { /* server might not be listening */ });
   }
 
@@ -338,11 +346,16 @@
     return mermaidPromise;
   }
 
-  // v0.19 (F19/C3): a new snapshot id (different from the last one we saw)
-  // fits-to-view or restores a saved viewport; a repeated/absent id (step()/
-  // seek() continuations) leaves the live transform untouched.
+  // v0.19 (F19/C3): a new snapshot id+frame combination (different from the
+  // last one we saw) fits-to-view or restores a saved viewport.
+  // v0.26.1 (bug B19/FR21): frame is now part of the comparison — step()/
+  // seek() to a different frame within the same sequence used to leave the
+  // live transform untouched ("must not re-fit", pre-v0.26.1); each frame now
+  // re-fits or restores independently instead of the whole sequence sharing
+  // one viewport.
   function isNewSnapshot(): boolean {
-    return snapshotId !== undefined && snapshotId !== lastSnapshotId;
+    if (snapshotId === undefined) return false;
+    return `${snapshotId}:${currentFrame}` !== lastSnapshotKey;
   }
 
   async function renderDiagram(src: string, fitOrRestore: boolean) {
@@ -396,7 +409,7 @@
 
   onMount(() => {
     const fitOrRestore = isNewSnapshot();
-    if (snapshotId !== undefined) lastSnapshotId = snapshotId;
+    if (snapshotId !== undefined) lastSnapshotKey = `${snapshotId}:${currentFrame}`;
     void renderDiagram(source, fitOrRestore);
     lastRendered = source;
 
@@ -407,7 +420,7 @@
   afterUpdate(() => {
     if (source !== lastRendered) {
       const fitOrRestore = isNewSnapshot();
-      if (snapshotId !== undefined) lastSnapshotId = snapshotId;
+      if (snapshotId !== undefined) lastSnapshotKey = `${snapshotId}:${currentFrame}`;
       lastRendered = source;
       void renderDiagram(source, fitOrRestore);
     }

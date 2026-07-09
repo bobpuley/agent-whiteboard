@@ -488,6 +488,60 @@ describe("POST /step", () => {
     const [, , , , , nodeToFrame] = spy.mock.calls[0];
     expect(nodeToFrame).toEqual({ A: 0, B: 1 });
   });
+
+  describe("per-frame viewport lookup on /step (bug B19/FR21 — per-frame re-fit/restore)", () => {
+    const SNAP_ROOT = makeSnapRoot("step-viewport");
+
+    beforeEach(() => {
+      process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+    });
+
+    afterEach(() => {
+      delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+      try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+    });
+
+    it("looks up and forwards a per-frame cached viewport", async () => {
+      const { setViewport } = await import("../../../server/viewport-cache.js");
+      // commit_step_frames() in this suite always resolves to the mocked
+      // generateSnapshotId() constant — see the vi.mock at the top of this file.
+      setViewport("test-uuid-generated", 1, { scale: 1.6, positionX: 0.05, positionY: -0.1 });
+
+      await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
+
+      const { broadcastStepFrames } = await import("../../../server/ws.js");
+      const spy = vi.mocked(broadcastStepFrames);
+      spy.mockClear();
+
+      await app.request("/step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction: "next" }),
+      });
+
+      expect(spy).toHaveBeenCalledOnce();
+      const [, , , , , , viewport] = spy.mock.calls[0];
+      expect(viewport).toEqual({ scale: 1.6, positionX: 0.05, positionY: -0.1 });
+    });
+
+    it("omits viewport when no per-frame cache entry exists for the target frame", async () => {
+      await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
+
+      const { broadcastStepFrames } = await import("../../../server/ws.js");
+      const spy = vi.mocked(broadcastStepFrames);
+      spy.mockClear();
+
+      await app.request("/step", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction: "next" }),
+      });
+
+      expect(spy).toHaveBeenCalledOnce();
+      const [, , , , , , viewport] = spy.mock.calls[0];
+      expect(viewport).toBeUndefined();
+    });
+  });
 });
 
 // ── Sprint 9 — POST /slideshow / POST /slideshow/stop ─────────────────────────
@@ -903,6 +957,60 @@ describe("POST /seek", () => {
     expect(res.status).toBe(400);
     const body = await res.json<{ ok: boolean }>();
     expect(body.ok).toBe(false);
+  });
+
+  describe("per-frame viewport lookup (bug B19/FR21 — per-frame re-fit/restore)", () => {
+    const SNAP_ROOT = makeSnapRoot("seek-viewport");
+
+    beforeEach(() => {
+      process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+    });
+
+    afterEach(() => {
+      delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+      try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
+    });
+
+    it("looks up and forwards a per-frame cached viewport", async () => {
+      const { setViewport } = await import("../../../server/viewport-cache.js");
+      // commit_step_frames() in this suite always resolves to the mocked
+      // generateSnapshotId() constant — see the vi.mock at the top of this file.
+      setViewport("test-uuid-generated", 2, { scale: 0.8, positionX: 0.2, positionY: 0.1 });
+
+      await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
+
+      const { broadcastReplace } = await import("../../../server/ws.js");
+      const spy = vi.mocked(broadcastReplace);
+      spy.mockClear();
+
+      await app.request("/seek", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frame: 2 }),
+      });
+
+      expect(spy).toHaveBeenCalledOnce();
+      expect(spy.mock.calls[0][0]).toMatchObject({
+        viewport: { scale: 0.8, positionX: 0.2, positionY: 0.1 },
+      });
+    });
+
+    it("omits viewport when no per-frame cache entry exists for the target frame", async () => {
+      await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
+
+      const { broadcastReplace } = await import("../../../server/ws.js");
+      const spy = vi.mocked(broadcastReplace);
+      spy.mockClear();
+
+      await app.request("/seek", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frame: 2 }),
+      });
+
+      expect(spy).toHaveBeenCalledOnce();
+      expect(spy.mock.calls[0][0].viewport).toBeUndefined();
+    });
   });
 });
 
@@ -2521,20 +2629,20 @@ describe("POST /viewport (v0.19)", () => {
     const res = await app.request("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: "snap-1", scale: 1.4, positionX: 0.12, positionY: -0.05 }),
+      body: JSON.stringify({ id: "snap-1", frame: 0, scale: 1.4, positionX: 0.12, positionY: -0.05 }),
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
     const { getViewport } = await import("../../../server/viewport-cache.js");
-    expect(getViewport("snap-1")).toEqual({ scale: 1.4, positionX: 0.12, positionY: -0.05 });
+    expect(getViewport("snap-1", 0)).toEqual({ scale: 1.4, positionX: 0.12, positionY: -0.05 });
   });
 
   it("rejects a missing id", async () => {
     const res = await app.request("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scale: 1, positionX: 0, positionY: 0 }),
+      body: JSON.stringify({ frame: 0, scale: 1, positionX: 0, positionY: 0 }),
     });
     expect(res.status).toBe(400);
     const body = await res.json<{ ok: boolean; error: string }>();
@@ -2542,11 +2650,34 @@ describe("POST /viewport (v0.19)", () => {
     expect(body.error).toMatch(/id/);
   });
 
+  it("rejects a missing frame (bug B19/FR21 — cache key is now id:frameIndex)", async () => {
+    const res = await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", scale: 1, positionX: 0, positionY: 0 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/frame/);
+  });
+
+  it("rejects a negative frame", async () => {
+    const res = await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", frame: -1, scale: 1, positionX: 0, positionY: 0 }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.error).toMatch(/frame/);
+  });
+
   it("rejects a non-finite scale", async () => {
     const res = await app.request("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: "snap-1", scale: "big", positionX: 0, positionY: 0 }),
+      body: JSON.stringify({ id: "snap-1", frame: 0, scale: "big", positionX: 0, positionY: 0 }),
     });
     expect(res.status).toBe(400);
     const body = await res.json<{ ok: boolean; error: string }>();
@@ -2558,7 +2689,7 @@ describe("POST /viewport (v0.19)", () => {
     const res = await app.request("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: "snap-1", scale: 1, positionY: 0 }),
+      body: JSON.stringify({ id: "snap-1", frame: 0, scale: 1, positionY: 0 }),
     });
     expect(res.status).toBe(400);
     const body = await res.json<{ ok: boolean; error: string }>();
@@ -2569,26 +2700,42 @@ describe("POST /viewport (v0.19)", () => {
     const res = await app.request("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: "snap-1", scale: 1, positionX: 0 }),
+      body: JSON.stringify({ id: "snap-1", frame: 0, scale: 1, positionX: 0 }),
     });
     expect(res.status).toBe(400);
     const body = await res.json<{ ok: boolean; error: string }>();
     expect(body.error).toMatch(/positionY/);
   });
 
-  it("overwrites a previous entry for the same id", async () => {
+  it("overwrites a previous entry for the same id+frame", async () => {
     await app.request("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: "snap-1", scale: 1, positionX: 0, positionY: 0 }),
+      body: JSON.stringify({ id: "snap-1", frame: 0, scale: 1, positionX: 0, positionY: 0 }),
     });
     await app.request("/viewport", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: "snap-1", scale: 2, positionX: 0.3, positionY: 0.4 }),
+      body: JSON.stringify({ id: "snap-1", frame: 0, scale: 2, positionX: 0.3, positionY: 0.4 }),
     });
     const { getViewport } = await import("../../../server/viewport-cache.js");
-    expect(getViewport("snap-1")).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
+    expect(getViewport("snap-1", 0)).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
+  });
+
+  it("keeps entries for different frames of the same id independent (bug B19/FR21)", async () => {
+    await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", frame: 0, scale: 1, positionX: 0, positionY: 0 }),
+    });
+    await app.request("/viewport", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: "snap-1", frame: 1, scale: 2, positionX: 0.3, positionY: 0.4 }),
+    });
+    const { getViewport } = await import("../../../server/viewport-cache.js");
+    expect(getViewport("snap-1", 0)).toEqual({ scale: 1, positionX: 0, positionY: 0 });
+    expect(getViewport("snap-1", 1)).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
   });
 });
 
@@ -2687,7 +2834,7 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
   it("includes a cached viewport in the broadcast when one exists for that id", async () => {
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(SNAPSHOT_WITH_ID);
     const { setViewport } = await import("../../../server/viewport-cache.js");
-    setViewport("loaded-id-1", { scale: 1.7, positionX: 0.2, positionY: -0.1 });
+    setViewport("loaded-id-1", 0, { scale: 1.7, positionX: 0.2, positionY: -0.1 });
 
     const { broadcastReplace } = await import("../../../server/ws.js");
     const spy = vi.mocked(broadcastReplace);
@@ -2770,13 +2917,14 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     try { fsRmSync(SNAP_ROOT, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
-  it("POST /snapshots/delete-files removes the matching viewport-cache entry", async () => {
+  it("POST /snapshots/delete-files removes every per-frame viewport-cache entry for the deleted id", async () => {
     writeSnapshotWithId(SNAP_ROOT, "test-ws", "20260101_000000_screen.json", "id-to-delete");
     writeSnapshotWithId(SNAP_ROOT, "test-ws", "20260101_000001_screen.json", "id-to-keep");
 
     const { setViewport, getViewport } = await import("../../../server/viewport-cache.js");
-    setViewport("id-to-delete", { scale: 1, positionX: 0, positionY: 0 });
-    setViewport("id-to-keep", { scale: 2, positionX: 0.1, positionY: 0.1 });
+    setViewport("id-to-delete", 0, { scale: 1, positionX: 0, positionY: 0 });
+    setViewport("id-to-delete", 1, { scale: 1.5, positionX: 0.2, positionY: 0.2 });
+    setViewport("id-to-keep", 0, { scale: 2, positionX: 0.1, positionY: 0.1 });
 
     const res = await app.request("/snapshots/delete-files", {
       method: "POST",
@@ -2785,8 +2933,9 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     });
     expect(res.status).toBe(200);
 
-    expect(getViewport("id-to-delete")).toBeUndefined();
-    expect(getViewport("id-to-keep")).toEqual({ scale: 2, positionX: 0.1, positionY: 0.1 });
+    expect(getViewport("id-to-delete", 0)).toBeUndefined();
+    expect(getViewport("id-to-delete", 1)).toBeUndefined();
+    expect(getViewport("id-to-keep", 0)).toEqual({ scale: 2, positionX: 0.1, positionY: 0.1 });
   });
 
   it("POST /snapshots/delete-workspace removes every viewport-cache entry for that workspace", async () => {
@@ -2795,9 +2944,9 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     writeSnapshotWithId(SNAP_ROOT, "other-ws", "20260101_000000_screen.json", "other-ws-id");
 
     const { setViewport, getViewport } = await import("../../../server/viewport-cache.js");
-    setViewport("ws-id-1", { scale: 1, positionX: 0, positionY: 0 });
-    setViewport("ws-id-2", { scale: 1, positionX: 0, positionY: 0 });
-    setViewport("other-ws-id", { scale: 1, positionX: 0, positionY: 0 });
+    setViewport("ws-id-1", 0, { scale: 1, positionX: 0, positionY: 0 });
+    setViewport("ws-id-2", 0, { scale: 1, positionX: 0, positionY: 0 });
+    setViewport("other-ws-id", 0, { scale: 1, positionX: 0, positionY: 0 });
 
     const res = await app.request("/snapshots/delete-workspace", {
       method: "POST",
@@ -2806,9 +2955,9 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     });
     expect(res.status).toBe(200);
 
-    expect(getViewport("ws-id-1")).toBeUndefined();
-    expect(getViewport("ws-id-2")).toBeUndefined();
-    expect(getViewport("other-ws-id")).toEqual({ scale: 1, positionX: 0, positionY: 0 });
+    expect(getViewport("ws-id-1", 0)).toBeUndefined();
+    expect(getViewport("ws-id-2", 0)).toBeUndefined();
+    expect(getViewport("other-ws-id", 0)).toEqual({ scale: 1, positionX: 0, positionY: 0 });
   });
 });
 

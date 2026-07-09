@@ -6,7 +6,7 @@ import Katex from "../../../client/src/renderers/Katex.svelte";
 import VegaLite from "../../../client/src/renderers/VegaLite.svelte";
 import StepFramesPlaceholder from "../../../client/src/renderers/StepFramesPlaceholder.svelte";
 
-const baseCtx = { clickable: false, nodeActions: undefined, nodeToFrameEnabled: false, placeholder: null };
+const baseCtx = { clickable: false, nodeActions: undefined, nodeToFrameEnabled: false, placeholder: null, currentFrame: 0 };
 
 describe("rendererRegistry", () => {
   it("has an entry for every canvas type the server can send, plus the placeholder", () => {
@@ -30,6 +30,7 @@ describe("rendererRegistry", () => {
       nodeToFrameEnabled: true,
       nodeToFrame: { A: 0 },
       viewport: { scale: 1, positionX: 0, positionY: 0 },
+      currentFrame: 2,
     })).toEqual({
       source: "graph TD; A-->B",
       clickable: false,
@@ -37,6 +38,7 @@ describe("rendererRegistry", () => {
       nodeToFrame: { A: 0 },
       snapshotId: "abc",
       viewport: { scale: 1, positionX: 0, positionY: 0 },
+      currentFrame: 2,
     });
   });
 
