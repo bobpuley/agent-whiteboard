@@ -1,3 +1,11 @@
+## 0.26.4 — 2026-07-09
+
+**Milestone v0.27 — REST/MCP Parity Remediation, Sprint 52.** `step`/`seek`'s business logic was copied verbatim between `app.ts` and `mcp.ts` (F2) instead of living in `render-core.ts` alongside `render`/`init_step_frames`/`append_frame`/`commit_step_frames` — the one hot-path pair `render-core.ts`'s own header comment (NF12, "the two transports can never drift") claimed was already covered.
+
+- New `stepAndBroadcast(direction)`/`seekAndBroadcast(frame)` in `render-core.ts` are now the single implementation of the viewport-lookup + `resolvedId` + broadcast logic behind `step`/`seek`
+- `POST /step`/`POST /seek` (`app.ts`) and `step()`/`seek()` (`mcp.ts`) now only handle request-shape validation before calling the shared functions — no independent business logic remains in either file; several now-unused imports removed from both
+- No behavior change — output-equivalence verified by the full existing `app.test.ts`/`mcp.test.ts` step/seek coverage (461 unit tests total) passing unchanged, `tsc --noEmit` and `npm run lint` clean
+
 ## 0.26.3 — 2026-07-09
 
 **Milestone v0.27 — REST/MCP Parity Remediation, Sprint 51.** A follow-up REST↔MCP duplication audit (`docs/raw/design-problems.md`, F1–F7) found the v0.23 unified projector (NF14) closed drift only for the commands already routed through `render-core.ts` at the time each slice shipped — `slideshow` validation was one of the gaps left over.
