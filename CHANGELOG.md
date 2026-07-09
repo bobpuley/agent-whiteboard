@@ -1,3 +1,12 @@
+## 0.26.6 — 2026-07-09
+
+**Milestone v0.27 — REST/MCP Parity Remediation, Sprint 54.** REST's `/export-html` accepted export items as either `{workspace, filename}` or `{workspace, id}`; MCP's `export_html` only accepted `ids` — an undocumented feature asymmetry between the two transports (F4).
+
+- The server already sent `id` in every `/snapshots/all` entry — this was purely a client-side gap. `SnapshotEntry` gained `id`, and `DeleteExportModal.svelte`'s export flow ("whole workspace" and "selected subset") now resolves each selection to its `id` before building the request instead of sending `filename`
+- `app.ts`'s ~25-line filename-lookup branch (JSON parse + inline Frame-array validation) is removed — both transports now go through the same `findSnapshotByIdInWorkspace()` path
+- Snapshots without an `id` (pre-migration only — every snapshot written since the v0.26 schema migration always has one) are skipped client-side, with an error if that empties the export set
+- Full suite: 461 unit tests passing, `tsc --noEmit`, `svelte-check`, and `npm run lint` clean. Verified live: exporting a workspace (whole and selected subset) via the History panel downloads a working HTML file
+
 ## 0.26.5 — 2026-07-09
 
 **Milestone v0.27 — REST/MCP Parity Remediation, Sprint 53.** `GET /snapshots` (REST) fell back to `getLastWorkspace()` when `workspace` was omitted; MCP's `list_snapshots` already required it with no fallback — the same conceptual operation had different observable behavior depending on transport (F3).
