@@ -1,6 +1,6 @@
 # Milestone v0.26 — Architecture Consolidation: Unified Presentation Model (Sprints 39–48)
 
-**Status:** planned
+**Status:** released
 
 > Opened 2026-07-07 via `/doc-creator-driver:intake`, slice D of the architecture consolidation promoted from `desing-analysis/` (FR22 in `01_input-ideas.md`; full target architecture and decision points D1–D5 in `04_architecture.md` §9). This is the highest-value, highest-risk slice — the one the retired `desing-analysis/baseline-comparison.md` recommended gating on continued feature growth, but the user chose to adopt on architecture-quality principle ahead of a public release (`02` §N2/N4). Its changes are coupled (data model, reducer, WS contract, snapshot schema, MCP payload all move together) and cannot be split across a version boundary without a compat shim already ruled out (`02` N4) — so it stays **one milestone**, sequenced as 10 sprints (39–48) with individual acceptance criteria per `02` §N3, each landing in dependency order before the next starts. Tests for each contract change are rewritten within the same sprint that introduces it (not deferred to one final sprint) — the milestone's own traceability note attributes B5 to exactly that split between implementation and test coverage. **This milestone must complete before any public release.**
 
