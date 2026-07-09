@@ -1,3 +1,11 @@
+## 0.26.7 — 2026-07-09
+
+**Milestone v0.27 — REST/MCP Parity Remediation, Sprint 55.** `WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard")` was reimplemented independently 10 times across `app.ts`, `mcp.ts`, `snapshot.ts`, `viewport-cache.ts`, and `migrate-snapshots.ts` — no module exported a single canonical function (F5).
+
+- New `server/paths.ts` exports `getSnapshotsRoot()`, now the one implementation. `app.ts`'s closure-local `resolveSnapshotRoot()` and `viewport-cache.ts`'s private `snapshotsRoot()` wrappers are deleted in favor of calling it directly
+- Bonus fix found during implementation: `migrate-snapshots.ts`'s CLI `--dir` default fallback had the same root cause but wasn't in the original audit — fixed for consistency
+- No behavior change. Full suite: 463 unit tests passing (461 + 2 new, covering the new module directly), `tsc --noEmit` and `npm run lint` clean
+
 ## 0.26.6 — 2026-07-09
 
 **Milestone v0.27 — REST/MCP Parity Remediation, Sprint 54.** REST's `/export-html` accepted export items as either `{workspace, filename}` or `{workspace, id}`; MCP's `export_html` only accepted `ids` — an undocumented feature asymmetry between the two transports (F4).
