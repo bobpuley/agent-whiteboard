@@ -876,4 +876,19 @@ Everything renderable collapses to one atom and two orthogonal axes:
 
 No new units and no contract change beyond NF20/NF21 (both scoped in `03` §8 with an explicit browser-compatibility check before implementation) — this is U1/U2 catching up to the design D5 already specifies, not a new design.
 
+### 9.7 `app.ts` Responsibility Cleanup (v0.28)
+
+> 9.6 closed REST↔MCP drift; it didn't audit whether `app.ts` (U1's REST adapter) stayed a *thin* adapter internally. A follow-up manual review (`01` FR23, `02` §N7) found four responsibilities that belong in other units, invisible to 9.6's audit because they never showed up as REST/MCP divergence — they're duplication *within* one transport's file, not *between* transports.
+
+| Item | Misplaced logic | Correct unit | Requirement |
+|---|---|---|---|
+| 1 | `/snapshots/load`'s commit sequence (validate → set canvas state → broadcast → track workspace) | U1/`render-core.ts`, as a 4th commit function with persist-trigger `never` (`persist.ts` vocabulary, NF16) — same composition U0/U1 already own for `render`/step-frames, just never migrated here since there's no MCP caller to prompt it | NF25 |
+| 2 | Snapshot file deletion + workspace-path containment/existence checking, currently inline in `app.ts` with no owning unit | New storage-tier writer unit, `snapshot-writer.ts` (renamed from `snapshot.ts`), paired with `snapshot-reader.ts` — composes file deletion with U4's `viewport-cache.ts` cleanup internally, mirroring how U1 composes persistence internally | NF26 |
+| 3 | Four independently-implemented "is this workspace acceptable" checks within `app.ts` | Consolidated onto the existing `validateWorkspaceInput()` (already in `render-core.ts`/U1) — no new unit, just removing the 3 ad-hoc reimplementations | NF27 |
+| 4 | Snapshot-filename safety regex copy-pasted twice | One exported constant, colocated with `snapshot-writer.ts` (the delete path) since that's where the safety property matters most | NF28 |
+
+**Deferred, out of scope:** the neutral `{ok,error,category?}` error shape this section's own 9.3/"Contract changes this implies" paragraph already documents was never implemented anywhere in the code — `app.ts` currently derives HTTP status by substring-matching an error message instead. Fixing this "properly" touches every error-returning path in both `app.ts` and `mcp.ts`; explicitly deferred to a future intake rather than folded into this cleanup (see `02` §N7, `03` §9).
+
+No new architectural units beyond the `snapshot-writer.ts` rename/expansion — this is U1 shedding weight onto U1's own existing sibling (`render-core.ts`) and a new peer of `snapshot-reader.ts` in the persistence tier (U4), not a new design.
+
 Per `02` §N3, v0.26 stays one milestone (its changes are coupled and cannot land across a version boundary without a compat shim already ruled out) but its sprint tasks are strictly ordered with individual acceptance criteria — see `Milestone_v0.26.md`.
