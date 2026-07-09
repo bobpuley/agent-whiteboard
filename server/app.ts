@@ -7,9 +7,9 @@ import { existsSync, readFileSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./interaction.js";
 import type { ClickEvent } from "./interaction.js";
-import { clearCanvas, exportCanvas, getCanvas, getLastWorkspace, isStepSequence, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
+import { clearCanvas, exportCanvas, getLastWorkspace, setCanvas, setLastWorkspace, setStepFrames } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
-import { broadcast, broadcastReplace, broadcastStepFrames } from "./ws.js";
+import { broadcast, broadcastReplace } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
 import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
@@ -23,6 +23,8 @@ import {
   commitRenderResult,
   commitStepFramesResult,
   initStepFramesResult,
+  seekAndBroadcast,
+  stepAndBroadcast,
   validateWorkspaceInput,
 } from "./render-core.js";
 import { generateExportHtml } from "./export-html.js";
@@ -119,26 +121,7 @@ export function createApp(): Hono {
         400
       );
     }
-    const result = stepCursor(body.direction);
-    if (!result) {
-      return c.json({
-        ok: false,
-        error: "no step-frames sequence is loaded",
-      });
-    }
-    // Push new frame to browser.
-    const state = getCanvas();
-    if (isStepSequence(state)) {
-      const { frames, title, id } = state.presentation;
-      // Same id as when this sequence was created — tells the browser this is
-      // a continuation, not a new diagram (F19/C3). Each frame now re-fits or
-      // restores its own saved viewport independently (v0.26.1, bug B19/FR21) —
-      // no longer "must not re-fit" for the whole sequence.
-      const resolvedId = id ?? generateSnapshotId();
-      const viewport = getViewport(resolvedId, result.currentFrame);
-      broadcastStepFrames(frames, state.frameType, result.currentFrame, resolvedId, title, state.nodeToFrame, viewport);
-    }
-    return c.json({ ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames });
+    return c.json(stepAndBroadcast(body.direction));
   });
 
   app.post("/seek", async (c) => {
@@ -146,32 +129,7 @@ export function createApp(): Hono {
     if (typeof body.frame !== "number" || !Number.isInteger(body.frame)) {
       return c.json({ ok: false, error: "frame must be an integer" }, 400);
     }
-    const state = getCanvas();
-    if (!isStepSequence(state)) {
-      return c.json({ ok: false, error: "no step-frames sequence is loaded" });
-    }
-    const { frames, title, id } = state.presentation;
-    const total = frames.length;
-    if (body.frame < 0 || body.frame >= total) {
-      return c.json({ ok: false, error: `frame out of range: must be 0–${total - 1}` });
-    }
-    seekStepFrame(body.frame);
-    const frame = frames[body.frame];
-    const resolvedId = id ?? generateSnapshotId();
-    broadcastReplace({
-      type: frame.type,
-      payload: frame.payload,
-      frameLabel: frame.label,
-      cursor: body.frame,
-      total,
-      title,
-      nodeToFrame: state.nodeToFrame,
-      id: resolvedId,
-      // Per-frame restore (v0.26.1, bug B19/FR21) — each frame of a sequence
-      // re-fits or restores independently instead of sharing one viewport.
-      viewport: getViewport(resolvedId, body.frame),
-    });
-    return c.json({ ok: true, current_frame: body.frame, total_frames: total });
+    return c.json(seekAndBroadcast(body.frame));
   });
 
   app.post("/clear", (c) => {
