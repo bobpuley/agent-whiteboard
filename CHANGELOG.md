@@ -1,3 +1,11 @@
+## 0.26.8 — 2026-07-09
+
+**Milestone v0.27 — REST/MCP Parity Remediation, Sprint 56.** The "is this a valid Frame[]" predicate was reimplemented inline in `app.ts`'s `/snapshots/load` handler instead of reusing the existing `isFrameArray()` in `snapshot-reader.ts` (F6). The `export-html` copy of this same duplication was already removed incidentally by NF21 (Sprint 54).
+
+- `isFrameArray()` is now exported from `snapshot-reader.ts` and used directly in `app.ts`, replacing the inline predicate and its separate array/non-empty check with one call
+- Removed the now-fully-unused `Frame` type import from `app.ts`. No behavior change
+- Full suite: 463 unit tests passing, `tsc --noEmit` and `npm run lint` clean
+
 ## 0.26.7 — 2026-07-09
 
 **Milestone v0.27 — REST/MCP Parity Remediation, Sprint 55.** `WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard")` was reimplemented independently 10 times across `app.ts`, `mcp.ts`, `snapshot.ts`, `viewport-cache.ts`, and `migrate-snapshots.ts` — no module exported a single canonical function (F5).
