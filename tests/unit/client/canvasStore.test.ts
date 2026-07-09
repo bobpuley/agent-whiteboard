@@ -139,7 +139,7 @@ describe("canvasStore", () => {
     expect(state.nodeActions).toEqual({});
   });
 
-  it("set_node_actions enabled:false disarms clickable and clears nodeActions without restoring nodeToFrameEnabled", () => {
+  it("set_node_actions enabled:false disarms clickable, clears nodeActions, and auto-restores nodeToFrameEnabled when a nodeToFrame map is active (v0.26 Sprint 47, OQ12)", () => {
     canvasStore.dispatch({ action: "clear" });
     canvasStore.dispatch({
       action: "replace",
@@ -157,6 +157,26 @@ describe("canvasStore", () => {
     const state = get(canvasStore);
     expect(state.clickable).toBe(false);
     expect(state.nodeActions).toBeUndefined();
+    expect(state.nodeToFrameEnabled).toBe(true);
+    expect(state.nodeToFrame).toEqual({ A: 0 });
+  });
+
+  it("set_node_actions enabled:false leaves nodeToFrameEnabled false when no nodeToFrame map is active", () => {
+    canvasStore.dispatch({ action: "clear" });
+    canvasStore.dispatch({
+      action: "replace",
+      type: "mermaid",
+      payload: "graph TD; A-->B",
+      id: "id-4",
+      cursor: 0,
+      total: 1,
+    });
+    canvasStore.dispatch({ action: "set_node_actions", enabled: true });
+
+    canvasStore.dispatch({ action: "set_node_actions", enabled: false });
+
+    const state = get(canvasStore);
+    expect(state.nodeToFrame).toBeUndefined();
     expect(state.nodeToFrameEnabled).toBe(false);
   });
 

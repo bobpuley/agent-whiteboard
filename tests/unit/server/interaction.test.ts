@@ -48,38 +48,50 @@ describe("interaction primitive", () => {
 
   describe("createSingleFlightInteraction", () => {
     it("resolves a pending await() with the event passed to resolve()", async () => {
-      const interaction = createSingleFlightInteraction<string>("cancelled");
+      const interaction = createSingleFlightInteraction<string>("timed-out", "superseded");
       const promise = interaction.await();
       interaction.resolve("event");
       await expect(promise).resolves.toBe("event");
     });
 
-    it("a new await() cancels a pending one with the cancel event", async () => {
-      const interaction = createSingleFlightInteraction<string>("cancelled");
+    it("a new await() supersedes a pending one with the superseded event", async () => {
+      const interaction = createSingleFlightInteraction<string>("timed-out", "superseded");
       const first = interaction.await();
       const second = interaction.await();
-      await expect(first).resolves.toBe("cancelled");
+      await expect(first).resolves.toBe("superseded");
       interaction.resolve("event");
       await expect(second).resolves.toBe("event");
     });
 
-    it("await() resolves with the cancel event after the timeout", async () => {
-      const interaction = createSingleFlightInteraction<string>("cancelled");
+    it("await() resolves with the timeout event after the timeout, not superseded", async () => {
+      const interaction = createSingleFlightInteraction<string>("timed-out", "superseded");
       const promise = interaction.await();
       await vi.advanceTimersByTimeAsync(TEN_MINUTES_MS);
-      await expect(promise).resolves.toBe("cancelled");
+      await expect(promise).resolves.toBe("timed-out");
     });
 
     it("resolve() is a no-op when nothing is pending", () => {
-      const interaction = createSingleFlightInteraction<string>("cancelled");
+      const interaction = createSingleFlightInteraction<string>("timed-out", "superseded");
       expect(() => interaction.resolve("event")).not.toThrow();
     });
 
-    it("reset() resolves a pending await() with the cancel event", async () => {
-      const interaction = createSingleFlightInteraction<string>("cancelled");
+    it("reset() resolves a pending await() with the timeout event", async () => {
+      const interaction = createSingleFlightInteraction<string>("timed-out", "superseded");
       const promise = interaction.await();
       interaction.reset();
-      await expect(promise).resolves.toBe("cancelled");
+      await expect(promise).resolves.toBe("timed-out");
+    });
+
+    it("supersede() resolves a pending await() with the superseded event (v0.26 Sprint 47)", async () => {
+      const interaction = createSingleFlightInteraction<string>("timed-out", "superseded");
+      const promise = interaction.await();
+      interaction.supersede();
+      await expect(promise).resolves.toBe("superseded");
+    });
+
+    it("supersede() is a no-op when nothing is pending", () => {
+      const interaction = createSingleFlightInteraction<string>("timed-out", "superseded");
+      expect(() => interaction.supersede()).not.toThrow();
     });
   });
 
@@ -141,11 +153,11 @@ describe("interaction primitive", () => {
       await expect(promise).resolves.toEqual({ type: "timeout", id: "", label: "", action: null });
     });
 
-    it("a second waitForClick cancels the first with a timeout event", async () => {
+    it("a second waitForClick supersedes the first with a superseded event (v0.26 Sprint 47)", async () => {
       const first = waitForClick();
       const second = waitForClick();
 
-      await expect(first).resolves.toEqual({ type: "timeout", id: "", label: "", action: null });
+      await expect(first).resolves.toEqual({ type: "superseded", id: "", label: "", action: null });
 
       signalClick({ type: "edge", id: "e1", label: "Edge 1", action: "go" });
       await expect(second).resolves.toEqual({ type: "edge", id: "e1", label: "Edge 1", action: "go" });
@@ -159,6 +171,34 @@ describe("interaction primitive", () => {
       const promise = waitForClick();
       resetClick();
       await expect(promise).resolves.toEqual({ type: "timeout", id: "", label: "", action: null });
+    });
+  });
+
+  // v0.26 Sprint 47 (OQ11): arming wait_done() takes over the return channel
+  // from a pending wait_click(), superseding it rather than leaving it to
+  // time out on its own.
+  describe("wait_done supersedes a pending wait_click (v0.26 Sprint 47)", () => {
+    afterEach(() => {
+      resetClick();
+      setBroadcastFn(() => {});
+    });
+
+    it("waitForDone supersedes a pending waitForClick", async () => {
+      setBroadcastFn(() => {});
+      const clickPromise = waitForClick();
+
+      const donePromise = waitForDone();
+      await expect(clickPromise).resolves.toEqual({ type: "superseded", id: "", label: "", action: null });
+
+      signalDone();
+      await donePromise;
+    });
+
+    it("waitForDone with no pending waitForClick still arms and resolves normally", async () => {
+      setBroadcastFn(() => {});
+      const donePromise = waitForDone();
+      signalDone();
+      await expect(donePromise).resolves.toBeUndefined();
     });
   });
 });

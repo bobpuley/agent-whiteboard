@@ -35,8 +35,10 @@ export interface CanvasViewState {
   clickable: boolean;
   nodeActions: Record<string, string[]> | undefined;
   // nodeToFrameEnabled is set true on replace with nodeToFrame, and set false when
-  // set_node_actions enabled:true arrives (wait_click overrides it). It is NOT
-  // restored when set_node_actions enabled:false arrives — agent must re-render.
+  // set_node_actions enabled:true arrives (wait_click overrides it). It auto-restores
+  // to true when set_node_actions enabled:false arrives, provided the current
+  // presentation still carries a nodeToFrame map (v0.26 Sprint 47, OQ12) — no
+  // agent re-render needed to re-enable autonomous navigation after a wait_click().
   nodeToFrameEnabled: boolean;
 }
 
@@ -86,7 +88,9 @@ function reduce(state: CanvasViewState, cmd: RenderCommand): CanvasViewState {
       ...state,
       clickable: cmd.enabled,
       nodeActions: cmd.enabled ? (cmd.node_actions ?? {}) : undefined,
-      nodeToFrameEnabled: cmd.enabled ? false : state.nodeToFrameEnabled,
+      // Disarming restores nodeToFrame navigation automatically, provided the
+      // current presentation still has a map (v0.26 Sprint 47, OQ12).
+      nodeToFrameEnabled: cmd.enabled ? false : state.nodeToFrame !== undefined,
     };
   }
   return state; // set_done_armed is handled by doneStore, not this reducer

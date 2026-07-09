@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../server/app.js";
 import { resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 import { cancelSlideshow } from "../../../server/slideshow.js";
-import { resetClick } from "../../../server/interaction.js";
+import { resetClick, signalDone } from "../../../server/interaction.js";
 import { resetBuilders } from "../../../server/step-frames-builder.js";
 
 const WORKSPACE = "test-workspace";
@@ -702,11 +702,11 @@ describe("POST /node-click", () => {
     expect(await res.json()).toEqual({ ok: true, type: "edge", id: "L_A_B_0", label: "HTTP", action: null });
   });
 
-  it("second /wait-click cancels the first (replaces listener)", async () => {
+  it("second /wait-click supersedes the first (replaces listener, v0.26 Sprint 47)", async () => {
     const first = app.request("/wait-click", { method: "POST" });
     await new Promise((r) => setTimeout(r, 0));
 
-    // Second call cancels first — first resolves with timeout.
+    // Second call supersedes first — first resolves with type: "superseded".
     const second = app.request("/wait-click", { method: "POST" });
     await new Promise((r) => setTimeout(r, 0));
 
@@ -720,8 +720,22 @@ describe("POST /node-click", () => {
     const firstBody = await (await first).json<{ ok: boolean; type: string }>();
     const secondBody = await (await second).json<{ ok: boolean; type: string }>();
 
-    expect(firstBody).toEqual({ ok: true, type: "timeout", id: "", label: "", action: null });
+    expect(firstBody).toEqual({ ok: true, type: "superseded", id: "", label: "", action: null });
     expect(secondBody).toEqual({ ok: true, type: "node", id: "X", label: "X", action: null });
+  });
+
+  it("/wait-done supersedes a pending /wait-click (v0.26 Sprint 47, OQ11)", async () => {
+    const clickPromise = app.request("/wait-click", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    const donePromise = app.request("/wait-done", { method: "POST" });
+    await new Promise((r) => setTimeout(r, 0));
+
+    const clickBody = await (await clickPromise).json<{ ok: boolean; type: string }>();
+    expect(clickBody).toEqual({ ok: true, type: "superseded", id: "", label: "", action: null });
+
+    signalDone();
+    expect(await (await donePromise).json()).toEqual({ ok: true });
   });
 
   it("/wait-click resolves with timeout after timeout fires", async () => {

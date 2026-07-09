@@ -29,7 +29,7 @@ vi.mock("../../../server/ws.js", () => ({
 import { createMcpServer } from "../../../server/mcp.js";
 import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
-import { signalClick, signalDone } from "../../../server/interaction.js";
+import { resetClick, signalClick, signalDone } from "../../../server/interaction.js";
 import { getCanvas, isStepSequence, resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 
 interface ToolCallResult {
@@ -386,6 +386,7 @@ describe("MCP tool: wait_click / wait_done", () => {
 
   afterEach(() => {
     vi.mocked(broadcast).mockClear();
+    resetClick();
   });
 
   it("wait_click arms the browser and resolves with the clicked event", async () => {
@@ -404,6 +405,26 @@ describe("MCP tool: wait_click / wait_done", () => {
     signalDone();
     const result = await promise;
     expect(result).toEqual({ ok: true });
+  });
+
+  it("a second wait_click supersedes the first, returning type: superseded (v0.26 Sprint 47)", async () => {
+    const first = callTool(server, "wait_click", {});
+    const second = callTool(server, "wait_click", {});
+
+    expect(await first).toEqual({ ok: true, type: "superseded" });
+
+    signalClick({ type: "node", id: "n1", label: "Node 1", action: null });
+    expect(await second).toEqual({ ok: true, type: "node", id: "n1", label: "Node 1", action: null });
+  });
+
+  it("wait_done supersedes a pending wait_click (v0.26 Sprint 47, OQ11)", async () => {
+    const clickPromise = callTool(server, "wait_click", {});
+    const donePromise = callTool(server, "wait_done", {});
+
+    expect(await clickPromise).toEqual({ ok: true, type: "superseded" });
+
+    signalDone();
+    expect(await donePromise).toEqual({ ok: true });
   });
 });
 

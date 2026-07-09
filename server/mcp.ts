@@ -326,7 +326,7 @@ export function createMcpServer(): McpServer {
         "  action is null when no popup was shown or user clicked without selecting; string value when menu item was selected.\n" +
         "On timeout (10 min): returns { \"ok\": true, \"type\": \"timeout\" }.\n" +
         "Applies to graph/flowchart diagrams reliably; other Mermaid types (sequenceDiagram, erDiagram, classDiagram) are best-effort — node IDs may be opaque or extraction may fail.\n" +
-        "Only one wait_click() may be pending at a time — a second call cancels the first.\n" +
+        "Only one wait_click() may be pending at a time — a second wait_click() or an arming wait_done() supersedes it, returning { \"ok\": true, \"type\": \"superseded\" } to the superseded call instead of waiting out the full timeout.\n" +
         "Example — plain click: render({ type: \"mermaid\", payload: \"graph TD; A-->B\" }) → wait_click() → handle result\n" +
         "Example — popup menu: wait_click({ node_actions: { \"B\": [\"Explain\", \"Drill down\"] } }) → user clicks B → selects action",
       inputSchema: z.object({
@@ -347,9 +347,9 @@ export function createMcpServer(): McpServer {
       const event = await waitForClick();
       // Disarm the browser.
       broadcast({ action: "set_node_actions", enabled: false });
-      if (event.type === "timeout") {
+      if (event.type === "timeout" || event.type === "superseded") {
         return {
-          content: [{ type: "text", text: JSON.stringify({ ok: true, type: "timeout" }) }],
+          content: [{ type: "text", text: JSON.stringify({ ok: true, type: event.type }) }],
         };
       }
       return {
