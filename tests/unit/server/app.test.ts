@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../server/app.js";
 import { resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 import { cancelSlideshow } from "../../../server/slideshow.js";
-import { resetClick } from "../../../server/events.js";
+import { resetClick } from "../../../server/interaction.js";
 import { resetBuilders } from "../../../server/step-frames-builder.js";
 
 const WORKSPACE = "test-workspace";

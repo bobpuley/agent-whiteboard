@@ -73,9 +73,9 @@
 
 **Shipped in Phase 2:**
 - Slideshow / auto-play (`slideshow()`, `slideshow_stop()`) — Sprint 9 ✅. Each slide broadcast using the same WebSocket event format as `POST /render`. (Historical: `step-frames` slides expanded into individual timer ticks — removed v0.26 Sprint 45 along with `type: "step-frames"` as a top-level content type; a slide is always exactly one frame now.)
-- `wait_done()` tool + Done button — Sprint 10 ✅. `server/events.ts` EventEmitter bus; `signalDone()` called by `POST /user-done`; `waitForDone()` called by both `POST /wait-done` (REST) and `wait_done()` (MCP tool). See §3 and §4.
+- `wait_done()` tool + Done button — Sprint 10 ✅. `signalDone()` called by `POST /user-done`; `waitForDone()` called by both `POST /wait-done` (REST) and `wait_done()` (MCP tool). Built on the `Interaction` primitive in `server/interaction.ts` since v0.26 Sprint 46 (was its own EventEmitter bus in the now-removed `server/events.ts` through v0.25). See §3, §4, and §9.2 (U7).
 - Channels API experiment (`server/channel.ts`) — Sprint 10 ✅. Stdio MCP channel server + HTTP relay on port 3001. Useful for async push events; not used as the primary "wait for user" primitive (see `02` E1).
-- `wait_click()` tool (plain click, no popup) + `POST /node-click` endpoint — Sprint 12 ✅. Browser arms click listeners on Mermaid SVG nodes/edges; `signalClick()`/`waitForClick()` EventEmitter bus in `server/events.ts`. See §3 and §4.
+- `wait_click()` tool (plain click, no popup) + `POST /node-click` endpoint — Sprint 12 ✅. Browser arms click listeners on Mermaid SVG nodes/edges; `signalClick()`/`waitForClick()` built on the `Interaction` primitive in `server/interaction.ts` (v0.26 Sprint 46; previously its own EventEmitter bus in `server/events.ts`). See §3 and §4.
 
 **Remaining Phase 2 / Phase 3:**
 - `wait_click()` — `node_actions` popup menu + edge support (Sprint 14) ✅
@@ -103,7 +103,7 @@
 | `export([id])`                    | Without `id`: returns the last submitted source payload verbatim as a string (current behavior). With optional `id` (UUID, v0.11 ✅): scans all workspace snapshot files for a record whose `id` field matches and returns its payload. Empty string if canvas is empty or cleared (no-id case). Error `{ ok: false, error: "graph not found" }` if id provided but no matching snapshot found. Old snapshots without an `id` field are not addressable. See F16 (`03`). Implemented in `server/snapshot-reader.ts` (`findSnapshotById`). |
 | `step(direction)`                 | Advances (`"next"`) or rewinds (`"prev"`) the step cursor for a loaded `step-frames` sequence. Broadcasts the target frame using its effective type (`frame.type ?? frameType`, v0.17). Returns `{ ok: true, current_frame: N, total_frames: M }`. No-op (returns error) if no step-frames sequence is loaded. (MVP — Sprint 7 ✅) |
 | `seek(frame)` *(Sprint 13)*       | Jumps the step-frame cursor to an arbitrary frame index. Broadcasts the target frame using its effective type (`frame.type ?? frameType`, v0.17). Useful for random-access navigation without repeated `step()` calls. Returns `{ ok: true, current_frame: N, total_frames: M }`. Error if no `step-frames` sequence is loaded or frame is out of range. (Phase 2 — Sprint 13) |
-| `wait_done()`                     | Calls `waitForDone()` from `server/events.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click. (Phase 2 — Sprint 10 ✅) |
+| `wait_done()`                     | Calls `waitForDone()` from `server/interaction.ts` — suspends until `signalDone()` fires (user clicks Done) or the 10-minute timeout elapses. Returns `{ ok: true }`. All concurrent `wait_done()` calls resolve simultaneously on a single click (broadcast-mode `Interaction`, see §9.2 U7). (Phase 2 — Sprint 10 ✅; rebuilt on the `Interaction` primitive v0.26 Sprint 46) |
 | `wait_click()` *(Sprint 12 ✅)*   | Arms the browser click listener; suspends until `signalClick(event)` fires (user clicks a node/edge) or the 10-minute timeout elapses. No `node_actions` in Sprint 12 — any click is accepted, no popup. Only one `wait_click()` active at a time; a second call cancels the first. Returns `{ ok: true, type: "node"\|"edge", id, label, action: null }` on click (`action` is always present; null in Sprint 12 because no popup menu exists yet); `{ ok: true, type: "timeout" }` on timeout. (Phase 2 — Sprint 12 ✅) |
 | `wait_click(node_actions)` *(Sprint 14)*  | Extends Sprint 12 with optional `node_actions`: map of node ID → string[] — pushed to browser via WebSocket `set_node_actions` before suspending. Nodes with registered actions show a popup menu on click; user selects one. Returns `{ ok: true, type, id, label, action }` — `action` is **always present**: null when no popup was shown or when user clicked without selecting a menu item; string value when a menu item was selected. (Phase 2 — Sprint 14) |
 | `init_step_frames(frame_type, workspace, title?)` *(v0.8)* | Creates a new entry in the in-memory step-frames builder map (`server/step-frames-builder.ts`) keyed by a UUID. Validates `workspace` (same rules as `render()`) and `frame_type`. Pushes a 0-frame placeholder to the browser via WebSocket. Returns `{ ok: true, id }`. Sets an inactivity TTL timer (30 min). |
@@ -169,7 +169,7 @@ The REST fallback endpoints (`POST /render`, `POST /clear`, `GET /export`) retur
 
 `POST /wait-done` was added in Sprint 10 (Phase 2 ✅). No body. Long-polls until `signalDone()` fires or the 10-minute timeout elapses. Returns `{ ok: true }`.
 
-`POST /node-click` — Phase 2 (Sprint 12). Body: `{ "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }`. Calls `signalClick(event)` (events.ts) to resolve any pending `waitForClick()`. Returns `{ "ok": true }`. No-op if no `wait_click()` is pending.
+`POST /node-click` — Phase 2 (Sprint 12). Body: `{ "type": "node"|"edge", "id": "<id>", "label": "<label>", "action": "<chosen>" }`. Calls `signalClick(event)` (`interaction.ts`) to resolve any pending `waitForClick()`. Returns `{ "ok": true }`. No-op if no `wait_click()` is pending.
 
 `POST /wait-click` accepts an optional `node_actions` body (`Record<string, string[]>`). If provided, the server validates it and broadcasts it to the browser via `set_node_actions` — popup menus appear for registered nodes exactly as they do via the MCP `wait_click(node_actions)` tool. Invalid `node_actions` returns `{ ok: false, error: "..." }` with 400. Omitting the body (or sending an empty body) arms a plain-click listener with no popup.
 
@@ -271,13 +271,13 @@ agent calls export()
 
 ```
 agent calls wait_done()
-  → server sets doneArmed = true  (in-memory flag in events.ts)
+  → server sets doneArmed = true  (in-memory flag in interaction.ts)
   → server pushes { action: "set_done_armed", armed: true } to browser via WebSocket
   → browser shows Done button
 
 user clicks Done button in browser
   → browser fires POST /user-done to Hono server
-  → server calls signalDone()  (events.ts EventEmitter bus)
+  → server calls signalDone()  (broadcast-mode Interaction in interaction.ts)
   → all pending waitForDone() promises resolve
   → any suspended wait_done() MCP tool calls return { ok: true } to agent
   → server sets doneArmed = false
@@ -553,7 +553,7 @@ agent calls wait_click()
   → user clicks a node
   → browser fires POST /node-click:
       { type: "node", id: "A", label: "Client" }
-  → server calls signalClick(event)  (events.ts EventEmitter bus)
+  → server calls signalClick(event)  (single-flight-mode Interaction in interaction.ts)
   → waitForClick() resolves
   → server pushes { action: "set_node_actions", enabled: false } to disarm browser
   → MCP wait_click() returns { ok: true, type: "node", id: "A", label: "Client" }
@@ -669,7 +669,7 @@ agent-whiteboard/
 │   ├── mcp.ts            # MCP tool definitions and handlers. Same planned shared-core extraction as app.ts, v0.21.
 │   ├── session.ts        # in-memory canvas state
 │   ├── slideshow.ts      # slideshow timer logic
-│   ├── events.ts         # signalDone/waitForDone + signalClick/waitForClick EventEmitter bus
+│   ├── interaction.ts    # Interaction primitive (arm/await/resolve, U7/D4, v0.26 Sprint 46) — broadcast-mode signalDone/waitForDone + single-flight-mode signalClick/waitForClick as configurations of it (was a bespoke EventEmitter bus in events.ts through v0.25)
 │   ├── validate.ts       # Mermaid keyword + parse validation
 │   ├── ws.ts             # WebSocket push to browser
 │   ├── snapshot.ts       # render snapshot writer (Phase 2 — Sprint 16)
@@ -800,7 +800,7 @@ Everything renderable collapses to one atom and two orthogonal axes:
 | U4 | Persistence | Snapshot read/write, viewport cache, list/delete; enforces the persist policy | Mechanism shipped; explicit required-trigger policy is new (v0.25); schema migration is v0.26 |
 | U5 | Projection / Broadcast | The one function building every server→browser message | **Shipped (v0.23)** — `broadcastReplace()`/`broadcastStepFrames()` in `server/ws.ts` collapse the 13 hand-built sites into 1 |
 | U6 | Render Surface | Renderer registry (type→component) + canvas controller + auto-fit/viewport + async-ordering guard | Store/reducer decomposition shipped (v0.21); registry is new (v0.24) |
-| U7 | Return Channel | One arm/await/resolve Interaction primitive (`wait_done`/`wait_click`/`node_to_frame` as variants) | Today three separate-but-similar mechanisms; generalized in v0.26 |
+| U7 | Return Channel | One arm/await/resolve Interaction primitive (`wait_done`/`wait_click`/`node_to_frame` as variants) | **Shipped v0.26 Sprint 46:** `server/interaction.ts` provides `createBroadcastInteraction()` (wait_done — every pending `await()` resolves independently, one `resolve()` wakes all) and `createSingleFlightInteraction()` (wait_click — a new `await()` cancels the pending one); `signalDone`/`waitForDone`/`signalClick`/`waitForClick` are now thin configurations over these, replacing the bespoke EventEmitter bus in the removed `server/events.ts`. `node_to_frame` conforms to the same conceptual shape (arm on `commit_step_frames`, resolve on click) but its resolver runs entirely client-side (`POST /seek` called directly by the browser, no agent round-trip — see U4e), so it has no server-side arm/await state and shares no code with this module; supersession (`type:"superseded"`) and click-map auto-restore land in Sprint 47. |
 | U8 | Export (read-side) | `export()`/`export_html` over *persisted* presentations; strictly downstream of U4, read-only | Shipped (v0.13–v0.15); adapts to the new schema in v0.26 |
 | — | Playback controller | Timer advancing a cursor; owns no validation/broadcast/persist code of its own | Broadcast construction moved out in v0.23 (`slideshow.ts` now calls `broadcastReplace`/`broadcastStepFrames`, same as every other call path); persist logic (`finalizeSlideshow()`) still lives in `slideshow.ts` until v0.25 (persist policy) |
 

@@ -1,13 +1,13 @@
 // WebSocket push to all connected browser clients.
 
 import type WebSocket from "ws";
-import { getDoneArmed, setBroadcastFn } from "./events.js";
+import { getDoneArmed, setBroadcastFn } from "./interaction.js";
 import type { Viewport } from "./viewport-cache.js";
 
 const clients = new Set<WebSocket>();
 
-// Wire up the broadcast function so events.ts can push state changes without
-// a circular import.
+// Wire up the broadcast function so interaction.ts can push state changes
+// without a circular import.
 setBroadcastFn((msg) => broadcast(msg));
 
 export function addClient(ws: WebSocket): void {

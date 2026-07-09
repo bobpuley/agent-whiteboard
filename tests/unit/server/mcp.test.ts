@@ -29,7 +29,7 @@ vi.mock("../../../server/ws.js", () => ({
 import { createMcpServer } from "../../../server/mcp.js";
 import * as snapshotReaderModule from "../../../server/snapshot-reader.js";
 import { broadcast, broadcastReplace, broadcastStepFrames } from "../../../server/ws.js";
-import { signalClick, signalDone } from "../../../server/events.js";
+import { signalClick, signalDone } from "../../../server/interaction.js";
 import { getCanvas, isStepSequence, resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 
 interface ToolCallResult {
