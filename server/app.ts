@@ -6,16 +6,15 @@ import { existsSync, readFileSync, readdirSync, rmSync, unlinkSync } from "fs";
 import { Hono } from "hono";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./interaction.js";
 import type { ClickEvent } from "./interaction.js";
-import { clearCanvas, exportCanvas, getLastWorkspace, setCanvas, setLastWorkspace, setStepFrames } from "./session.js";
-import type { CanvasType, StepFrame } from "./session.js";
-import { broadcast, broadcastReplace } from "./ws.js";
-import { generateSnapshotId } from "./snapshot.js";
+import { clearCanvas, exportCanvas, getLastWorkspace, setLastWorkspace } from "./session.js";
+import type { CanvasType } from "./session.js";
+import { broadcast } from "./ws.js";
 import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, isFrameArray, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
-import { assembleStepFramesPayload } from "./persist.js";
 import {
+  applyLoadedSnapshotResult,
   appendFrameAndBroadcast,
   commitRenderResult,
   commitStepFramesResult,
@@ -26,7 +25,7 @@ import {
 } from "./render-core.js";
 import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
-import { deleteViewports, getViewport, setViewport } from "./viewport-cache.js";
+import { deleteViewports, setViewport } from "./viewport-cache.js";
 import type { Viewport } from "./viewport-cache.js";
 import { getSnapshotsRoot } from "./paths.js";
 
@@ -396,51 +395,14 @@ export function createApp(): Hono {
         : undefined;
     // Pre-v0.11 snapshots may lack an id (J1, `02`) — not addressable by the
     // viewport cache; the browser falls back to treating it as unseen (auto-fit).
-    // History-load always redisplays from frame 0 (F10 — cursor is always 0 at
-    // write time), so the viewport lookup is always for frame 0 (v0.26.1, B19/FR21
-    // — composite id:frameIndex key, was bare id pre-v0.26.1).
     const snapshotId = typeof snapshot.id === "string" ? snapshot.id : undefined;
-    const viewport = snapshotId !== undefined ? getViewport(snapshotId, 0) : undefined;
+    const rawPayload = typeof snapshot.rawPayload === "string" ? snapshot.rawPayload : undefined;
 
-    for (const frame of frames) {
-      const validationError = await validateFrame(frame);
-      if (validationError) {
-        return c.json({ ok: false, error: validationError });
-      }
+    const result = await applyLoadedSnapshotResult(frames, workspace, title, nodeToFrame, snapshotId, rawPayload);
+    if (!result.ok) {
+      return c.json({ ok: false, error: result.error });
     }
 
-    // Broadcast to browser and update in-memory state — write-silent (no saveSnapshot).
-
-    // A concrete id is required on every broadcast (v0.26 Sprint 42) — pre-v0.11
-    // snapshots may lack one (J1, `02`), so synthesize a fresh one here. It only
-    // ever affects auto-fit-vs-restore on the client, same as the "no id" case
-    // this replaces: a synthesized id has no viewport-cache entry either, so the
-    // browser still auto-fits.
-    const resolvedId = snapshotId ?? generateSnapshotId();
-
-    if (frames.length > 1) {
-      const stepFrames: StepFrame[] = frames.map((f) => ({ payload: f.payload, type: f.type, ...(f.label !== undefined ? { label: f.label } : {}) }));
-      // rawPayload (v0.26 Sprint 43) carries the verbatim original step-frames
-      // envelope — reconstruct only if a hand-edited/pre-migration file lacks it.
-      const rawPayload = typeof snapshot.rawPayload === "string" ? snapshot.rawPayload : assembleStepFramesPayload(frames[0].type, stepFrames);
-      setStepFrames(stepFrames, frames[0].type, rawPayload, title, nodeToFrame, resolvedId);
-      broadcastReplace({
-        type: frames[0].type,
-        payload: frames[0].payload,
-        frameLabel: frames[0].label,
-        cursor: 0,
-        total: frames.length,
-        title,
-        nodeToFrame,
-        id: resolvedId,
-        viewport,
-      });
-    } else {
-      setCanvas(frames[0].type as CanvasType, frames[0].payload, title, resolvedId);
-      broadcastReplace({ type: frames[0].type, payload: frames[0].payload, title, id: resolvedId, cursor: 0, total: 1, viewport });
-    }
-
-    setLastWorkspace(workspace);
     return c.json({ ok: true });
   });
 
