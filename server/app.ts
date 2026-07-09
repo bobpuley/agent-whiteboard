@@ -7,7 +7,7 @@ import type { ClickEvent } from "./interaction.js";
 import { clearCanvas, exportCanvas, getLastWorkspace, setLastWorkspace } from "./session.js";
 import type { CanvasType } from "./session.js";
 import { broadcast } from "./ws.js";
-import { FRAME_TYPES, hasMermaidKeyword, nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
+import { FRAME_TYPES, hasMermaidKeyword, isValidSnapshotFilename, nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, isFrameArray, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
@@ -332,7 +332,7 @@ export function createApp(): Hono {
     }
 
     // Path safety: filename must end with _screen.json and contain no / or ..
-    if (!/^[^/]+_screen\.json$/.test(filename) || filename.includes("..")) {
+    if (!isValidSnapshotFilename(filename)) {
       return c.json({ ok: false, error: "invalid filename: path traversal not allowed" });
     }
 

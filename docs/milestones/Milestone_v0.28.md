@@ -20,7 +20,7 @@
   - *Regression coverage:* existing tests for both endpoints pass unchanged.
 
 ### Sprint 61 — Dedupe the snapshot-filename safety regex
-- [ ] **NF28.** `/^[^/]+_screen\.json$/`, copy-pasted in `/snapshots/load` and `snapshot-writer.ts`'s delete-files logic (post-NF26), becomes one exported constant/helper.
+- [x] **NF28.** `/^[^/]+_screen\.json$/`, copy-pasted in `/snapshots/load` and `snapshot-writer.ts`'s delete-files logic (post-NF26), becomes one exported constant/helper.
   - *Acceptance:* no behavior change; both call sites import the shared pattern.
   - *Regression coverage:* existing filename-validation tests at both sites pass unchanged.
 
