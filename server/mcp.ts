@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clearCanvas, exportCanvas } from "./session.js";
 import { broadcast } from "./ws.js";
-import { validateFrame } from "./validate.js";
+import { nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
 import { getSnapshotsRoot } from "./paths.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
@@ -241,8 +241,7 @@ export function createMcpServer(): McpServer {
         "Example — plain click: render({ type: \"mermaid\", payload: \"graph TD; A-->B\" }) → wait_click() → handle result\n" +
         "Example — popup menu: wait_click({ node_actions: { \"B\": [\"Explain\", \"Drill down\"] } }) → user clicks B → selects action",
       inputSchema: z.object({
-        node_actions: z
-          .record(z.string(), z.array(z.string()))
+        node_actions: nodeActionsSchema
           .optional()
           .describe(
             "Optional map of node ID → action labels. " +
@@ -384,8 +383,7 @@ export function createMcpServer(): McpServer {
         'Example with node_to_frame: commit_step_frames({ id: "<uuid>", node_to_frame: { "A": 0, "B": 1, "C": 2 } })',
       inputSchema: z.object({
         id: z.string().describe("Builder ID returned by init_step_frames()."),
-        node_to_frame: z
-          .record(z.string(), z.number())
+        node_to_frame: nodeToFrameSchema
           .optional()
           .describe("Optional node ID → frame index map for autonomous browser navigation on click."),
       }),

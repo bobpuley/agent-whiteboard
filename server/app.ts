@@ -10,7 +10,7 @@ import { clearCanvas, exportCanvas, getLastWorkspace, setCanvas, setLastWorkspac
 import type { CanvasType, StepFrame } from "./session.js";
 import { broadcast, broadcastReplace } from "./ws.js";
 import { generateSnapshotId } from "./snapshot.js";
-import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, validateFrame } from "./validate.js";
+import { FRAME_TYPES, hasMermaidKeyword, isValidWorkspaceName, nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import type { Slide } from "./slideshow.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, isFrameArray, listAllSnapshots, listSnapshots, loadSnapshotContent } from "./snapshot-reader.js";
@@ -34,18 +34,6 @@ import { getSnapshotsRoot } from "./paths.js";
 export { MERMAID_KEYWORDS } from "./validate.js";
 export function isValidMermaid(payload: string): boolean {
   return hasMermaidKeyword(payload);
-}
-
-function isNodeActionsValid(v: unknown): v is Record<string, string[]> {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-  return Object.values(v as object).every(
-    (arr) => Array.isArray(arr) && (arr as unknown[]).every((s) => typeof s === "string")
-  );
-}
-
-function isNodeToFrameValid(v: unknown): v is Record<string, number> {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
-  return Object.values(v as object).every((n) => typeof n === "number");
 }
 
 /** Best-effort read of a snapshot file's `id` field, for viewport-cache cleanup on delete. */
@@ -235,10 +223,11 @@ export function createApp(): Hono {
     try {
       const body = await c.req.json<{ node_to_frame?: unknown }>();
       if (body.node_to_frame !== undefined) {
-        if (!isNodeToFrameValid(body.node_to_frame)) {
+        const parsed = nodeToFrameSchema.safeParse(body.node_to_frame);
+        if (!parsed.success) {
           return c.json({ ok: false, error: "node_to_frame must be a map of node ID → frame index" }, 400);
         }
-        nodeToFrame = body.node_to_frame;
+        nodeToFrame = parsed.data;
       }
     } catch {
       // No body or non-JSON body — commit with no node_to_frame.
@@ -291,13 +280,14 @@ export function createApp(): Hono {
     try {
       const body = await c.req.json<{ node_actions?: unknown }>();
       if (body.node_actions !== undefined) {
-        if (!isNodeActionsValid(body.node_actions)) {
+        const parsed = nodeActionsSchema.safeParse(body.node_actions);
+        if (!parsed.success) {
           return c.json(
             { ok: false, error: "node_actions must be a map of node ID → string[]" },
             400
           );
         }
-        nodeActions = body.node_actions as Record<string, string[]>;
+        nodeActions = parsed.data;
       }
     } catch {
       // No body or non-JSON body — treat as plain click (node_actions stays {}).
