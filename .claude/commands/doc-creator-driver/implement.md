@@ -44,8 +44,8 @@ Do not change requirements or architecture.
       * Merge git branch into master (same commit message format as existing merges)
       * Run: `git tag --list --sort=v:refname` to inspect existing tags
         - No tags exist → propose `0.1.0`
-        - Tags exist → increment the patch segment of the highest tag (e.g. `0.1.3` → `0.1.4`)
-      * AskUserQuestion: "Proposed tag is <tag>. Confirm or provide an override."
+        - Tags exist → increment the patch segment of the highest tag (e.g. `0.1.3` → `0.1.4`) → increment the minor segment of the highest tag-minor (e.g. `0.1.3` → `0.2.0`)
+      * AskUserQuestion: "Proposed tags are <tag>, <tag-minor>. Confirm or provide an override."
       * Update/create CHANGELOG.md:
         - Prepend a new section header `## <tag> — <YYYY-MM-DD>` followed by bullet points summarising the sprint changes (derive from branch commits via `git log`)
         - `git add CHANGELOG.md && git commit -m "chore: update changelog for <tag>"`
