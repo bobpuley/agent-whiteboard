@@ -233,7 +233,7 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `POST /step-frames/init` | `{ "frame_type": "...", "workspace": "...", "title": "..." }` — starts an incremental builder, returns `{ "ok": true, "id": "<uuid>" }` |
 | `POST /step-frames/:id/frame` | `{ "payload": "...", "label": "...", "type": "..." }` (`type` optional, overrides the sequence's `frame_type`) — appends a frame, returns `{ "ok": true, "frame_count": N }` |
 | `POST /step-frames/:id/commit` | `{ "node_to_frame": { "<id>": N, ... } }` (optional body) — finalizes the builder, returns `{ "ok": true, "id": "<uuid>" }` |
-| `GET /snapshots` | `?workspace=` optional (defaults to the last-used workspace) — lists that workspace's snapshots, used by the browser History panel |
+| `GET /snapshots` | `?workspace=` **required**, no fallback — lists that workspace's snapshots (REST equivalent of the MCP `list_snapshots` tool) |
 | `GET /snapshots/all` | Lists every workspace and its snapshot count, current workspace flagged with `isCurrent: true` |
 | `POST /snapshots/load` | `{ "filename": "..._screen.json", "workspace": "..." (optional) }` — loads a past snapshot onto the canvas (write-silent, no new snapshot is created) |
 | `POST /snapshots/delete-files` | `{ "workspace": "...", "filenames": ["..._screen.json", ...] }` — deletes specific snapshot files |

@@ -326,19 +326,14 @@ export function createApp(): Hono {
   // ── History navigator (v0.4 — Sprint 17) ──────────────────────────────────────
 
   app.get("/snapshots", (c) => {
-    const queryWorkspace = c.req.query("workspace");
-    let workspace: string;
-    if (queryWorkspace !== undefined) {
-      if (queryWorkspace.length === 0) {
-        return c.json({ ok: false, error: "workspace must be a non-empty string" }, 400);
-      }
-      if (!isValidWorkspaceName(queryWorkspace)) {
-        return c.json({ ok: false, error: "invalid workspace: path traversal not allowed" }, 400);
-      }
-      workspace = queryWorkspace;
-    } else {
-      workspace = getLastWorkspace();
+    // Workspace is mandatory, no lastWorkspace fallback — matches MCP's
+    // list_snapshots exactly (F3/NF20; same validateWorkspaceInput() both
+    // transports already use for render()/slideshow()).
+    const workspaceResult = validateWorkspaceInput(c.req.query("workspace"));
+    if (!workspaceResult.ok) {
+      return c.json({ ok: false, error: workspaceResult.error }, 400);
     }
+    const { workspace } = workspaceResult;
     const root = process.env.WHITEBOARD_SNAPSHOTS_DIR ?? join(homedir(), ".agent-whiteboard");
     const snapshots = listSnapshots(workspace, root);
     return c.json({ ok: true, snapshots });
