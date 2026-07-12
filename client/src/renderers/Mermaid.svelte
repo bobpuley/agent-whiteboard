@@ -1,5 +1,6 @@
 <script lang="ts">
   import { afterUpdate, onDestroy, onMount } from "svelte";
+  import { createPanZoom } from "./mermaid/panZoom";
 
   export let source: string;
   export let clickable = false;
@@ -35,123 +36,18 @@
   let lastSnapshotKey: string | undefined = undefined;
 
   // ── Zoom / pan state ────────────────────────────────────────────────────────
-  let scale = 1;
-  let tx = 0; // translate X
-  let ty = 0; // translate Y
-  let dragging = false;
-  let dragStartX = 0;
-  let dragStartY = 0;
-  let dragOriginTx = 0;
-  let dragOriginTy = 0;
-
-  const MIN_SCALE = 0.1;
-  const MAX_SCALE = 10;
-  const ZOOM_FACTOR = 0.001; // scale delta per wheel pixel
-  const FIT_MARGIN = 0.92; // small breathing room around the fitted diagram
-  const VIEWPORT_REPORT_DEBOUNCE_MS = 800;
-
-  /** Scale-to-contain the diagram's natural (viewBox) size within wrapper, centered. */
-  function fitToView(svg: SVGSVGElement) {
-    if (!wrapper) return;
-    const viewBox = svg.getAttribute("viewBox");
-    let w: number;
-    let h: number;
-    if (viewBox) {
-      const parts = viewBox.trim().split(/\s+/).map(Number);
-      w = parts[2];
-      h = parts[3];
-    } else {
-      w = svg.clientWidth || 1;
-      h = svg.clientHeight || 1;
-    }
-    if (!w || !h) return;
-    const wrapperW = wrapper.clientWidth;
-    const wrapperH = wrapper.clientHeight;
-    const fitScale = Math.min(wrapperW / w, wrapperH / h) * FIT_MARGIN;
-    scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, fitScale));
-    tx = (wrapperW - w * scale) / 2;
-    ty = (wrapperH - h * scale) / 2;
-  }
-
-  /** Restore a previously-saved viewport (normalized fractions -> pixels). */
-  function applyViewport(vp: { scale: number; positionX: number; positionY: number }) {
-    if (!wrapper) return;
-    scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, vp.scale));
-    tx = vp.positionX * wrapper.clientWidth;
-    ty = vp.positionY * wrapper.clientHeight;
-  }
-
-  let reportTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** Debounced report of the live viewport to the server, keyed by snapshotId. */
-  function scheduleViewportReport() {
-    if (reportTimer) clearTimeout(reportTimer);
-    reportTimer = setTimeout(() => {
-      reportTimer = null;
-      reportViewport();
-    }, VIEWPORT_REPORT_DEBOUNCE_MS);
-  }
-
-  function reportViewport() {
-    if (!snapshotId || !wrapper) return;
-    const positionX = tx / wrapper.clientWidth;
-    const positionY = ty / wrapper.clientHeight;
-    fetch("/viewport", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: snapshotId, frame: currentFrame, scale, positionX, positionY }),
-    }).catch(() => { /* server might not be listening */ });
-  }
-
-  /** Manual "reset view" — re-fit and treat it as a deliberate user choice. */
-  function resetTransform() {
-    const svg = container?.querySelector("svg");
-    if (svg) fitToView(svg);
-    else {
-      scale = 1;
-      tx = 0;
-      ty = 0;
-    }
-    scheduleViewportReport();
-  }
-
-  function onWheel(e: WheelEvent) {
-    e.preventDefault();
-    const delta = -e.deltaY * ZOOM_FACTOR;
-    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale + delta * scale));
-
-    // Zoom toward the cursor position inside the wrapper.
-    const rect = wrapper.getBoundingClientRect();
-    const cursorX = e.clientX - rect.left;
-    const cursorY = e.clientY - rect.top;
-
-    // Adjust translation so the point under the cursor stays fixed.
-    tx = cursorX - (cursorX - tx) * (newScale / scale);
-    ty = cursorY - (cursorY - ty) * (newScale / scale);
-    scale = newScale;
-    scheduleViewportReport();
-  }
-
-  function onMousedown(e: MouseEvent) {
-    if (e.button !== 0) return; // left button only
-    dragging = true;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    dragOriginTx = tx;
-    dragOriginTy = ty;
-    e.preventDefault();
-  }
-
-  function onMousemove(e: MouseEvent) {
-    if (!dragging) return;
-    tx = dragOriginTx + (e.clientX - dragStartX);
-    ty = dragOriginTy + (e.clientY - dragStartY);
-    scheduleViewportReport();
-  }
-
-  function onMouseup() {
-    dragging = false;
-  }
+  // Extracted to renderers/mermaid/panZoom.ts (v0.29 Sprint 62, NF29 part 1).
+  // The getters read the component's live wrapper/container bindings and
+  // snapshotId/currentFrame props at call time, same as when this logic lived
+  // inline here.
+  const panZoom = createPanZoom({
+    getWrapper: () => wrapper,
+    getContainer: () => container,
+    getSnapshotId: () => snapshotId,
+    getCurrentFrame: () => currentFrame,
+  });
+  const { scale, tx, ty, dragging, fitToView, applyViewport, resetTransform, onWheel, onMousedown, onMousemove, onMouseup } =
+    panZoom;
 
   // ── Node / edge click detection ─────────────────────────────────────────────
 
@@ -431,7 +327,7 @@
     window.removeEventListener("mouseup", onMouseup);
     detachClickListeners();
     detachNodeToFrameListeners();
-    if (reportTimer) clearTimeout(reportTimer);
+    panZoom.destroy();
   });
 
   // Re-attach (or detach) click listeners when clickable prop changes.
@@ -440,8 +336,8 @@
   // Re-attach (or detach) node-to-frame listeners when nodeToFrame prop changes.
   $: if (nodeToFrame) { attachNodeToFrameListeners(nodeToFrame) } else { detachNodeToFrameListeners() }
 
-  $: transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-  $: cursor = dragging ? "grabbing" : "grab";
+  $: transform = `translate(${$tx}px, ${$ty}px) scale(${$scale})`;
+  $: cursor = $dragging ? "grabbing" : "grab";
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
