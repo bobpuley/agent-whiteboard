@@ -3,6 +3,7 @@
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
   import { trapFocus } from "./lib/trapFocus";
   import { fetchAllSnapshots } from "./lib/fetchSnapshots";
+  import SnapshotRow from "./lib/SnapshotRow.svelte";
 
   export let open = false;
 
@@ -46,21 +47,6 @@
   }
 
   $: if (open) fetchSnapshots();
-
-  function formatTimestamp(iso: string): string {
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    } catch {
-      return iso;
-    }
-  }
 
   $: hasAnySnapshot = workspaces.some((g) => g.snapshots.length > 0);
 </script>
@@ -122,11 +108,7 @@
               {#each group.snapshots as entry (group.name + "/" + entry.filename)}
                 <li class="snapshot-item">
                   <button class="snapshot-row" on:click={() => loadSnapshot(group.name, entry.filename)}>
-                    <span class="snapshot-title">{entry.title ?? "—"}</span>
-                    <span class="snapshot-meta">
-                      <span class="type-badge">{entry.type}</span>
-                      <span class="snapshot-time">{formatTimestamp(entry.timestamp)}</span>
-                    </span>
+                    <SnapshotRow title={entry.title} type={entry.type} timestamp={entry.timestamp} />
                   </button>
                 </li>
               {/each}
@@ -330,35 +312,5 @@
 
   .snapshot-row:hover {
     background: #f5f5f5;
-  }
-
-  .snapshot-title {
-    font-size: 13px;
-    color: #222;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .snapshot-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .type-badge {
-    font-size: 11px;
-    background: #e8f4fd;
-    color: #2980b9;
-    padding: 1px 6px;
-    border-radius: 10px;
-    font-weight: 500;
-    flex-shrink: 0;
-  }
-
-  .snapshot-time {
-    font-size: 11px;
-    color: #999;
   }
 </style>
