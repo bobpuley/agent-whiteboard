@@ -20,7 +20,7 @@
   - *Regression coverage:* existing history-panel and delete/export-modal Playwright e2e tests pass unchanged (including any visual/DOM-structure assertions).
 
 ### Sprint 65 — Extract `DeleteExportModal.svelte`'s server calls into `lib/snapshotActions.ts`
-- [ ] **NF32.** Move the inline fetch logic for `/snapshots/delete-workspace`, `/snapshots/delete-files`, and `/export-html` (including response parsing and error-message extraction) into exported functions (`deleteWorkspace`, `deleteFiles`, `exportItems`) in a new `lib/snapshotActions.ts`. `DeleteExportModal.svelte` calls these and keeps only step/UI orchestration (confirm-arming, step transitions, done/error display).
+- [x] **NF32.** Move the inline fetch logic for `/snapshots/delete-workspace`, `/snapshots/delete-files`, and `/export-html` (including response parsing and error-message extraction) into exported functions (`deleteWorkspace`, `deleteFiles`, `exportItems`) in a new `lib/snapshotActions.ts`. `DeleteExportModal.svelte` calls these and keeps only step/UI orchestration (confirm-arming, step transitions, done/error display).
   - *Acceptance:* delete and export flows (whole-workspace and selected-subset, both modes) behave identically, including error messages shown on failure.
   - *Regression coverage:* existing delete/export Playwright e2e tests pass unchanged.
 

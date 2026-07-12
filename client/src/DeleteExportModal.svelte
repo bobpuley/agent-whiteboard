@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from "svelte";
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
-  import { triggerDownload } from "./lib/download";
   import { trapFocus } from "./lib/trapFocus";
   import SnapshotRow from "./lib/SnapshotRow.svelte";
+  import { deleteWorkspace, deleteFiles, exportItems } from "./lib/snapshotActions";
 
   export let mode: "delete" | "export";
   export let open = false;
@@ -98,38 +98,13 @@
     doneTimer = setTimeout(() => dispatch("close"), 1200);
   }
 
-  async function exportItems(items: Array<{ workspace: string; id: string }>) {
-    const res = await fetch("/export-html", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }),
-    });
-    if (!res.ok) {
-      let message = "Export failed";
-      try {
-        const data = await res.json();
-        message = data.error ?? message;
-      } catch {
-        /* ignore — keep default message */
-      }
-      throw new Error(message);
-    }
-    await triggerDownload(res);
-  }
-
   async function runWholeAction() {
     if (!selectedWorkspace) return;
     busy = true;
     errorMessage = null;
     try {
       if (mode === "delete") {
-        const res = await fetch("/snapshots/delete-workspace", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspace: selectedWorkspace.name }),
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error ?? "Delete failed");
+        await deleteWorkspace(selectedWorkspace.name);
         dispatch("deleted");
         showDone(`Deleted entire workspace "${selectedWorkspace.name}"`);
       } else {
@@ -157,13 +132,7 @@
     const filenames = [...selectedFilenames];
     try {
       if (mode === "delete") {
-        const res = await fetch("/snapshots/delete-files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspace: selectedWorkspace.name, filenames }),
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error ?? "Delete failed");
+        await deleteFiles(selectedWorkspace.name, filenames);
         dispatch("deleted");
         showDone(`Deleted ${filenames.length} snapshot${filenames.length === 1 ? "" : "s"} from "${selectedWorkspace.name}"`);
       } else {
