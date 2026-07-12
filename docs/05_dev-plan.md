@@ -33,6 +33,7 @@
 | v0.26.1    | Node-to-Frame Broadcast Fix (patch)                              | 49–50    | released    | [Milestone_v0.26.1.md](./milestones/Milestone_v0.26.1.md) |
 | v0.27      | REST/MCP Parity Remediation                                      | 51–57    | released    | [Milestone_v0.27.md](./milestones/Milestone_v0.27.md) |
 | v0.28      | `app.ts` Responsibility Cleanup                                  | 58–61    | released    | [Milestone_v0.28.md](./milestones/Milestone_v0.28.md) |
+| v0.29      | Client Component Responsibility Cleanup                          | 62–65    | released    | [Milestone_v0.29.md](./milestones/Milestone_v0.29.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
 > v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`, `02` §N, `04` §9) — sequenced one slice per milestone; v0.26 must complete before any public release.

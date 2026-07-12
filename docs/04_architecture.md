@@ -892,3 +892,21 @@ No new units and no contract change beyond NF20/NF21 (both scoped in `03` §8 wi
 One architectural adjustment beyond the `snapshot-writer.ts` rename/expansion: `validateWorkspaceInput()` (and the new `isValidSnapshotFilename()`) live in `validate.ts`, not `render-core.ts` — a cycle-avoidance move discovered during implementation, not part of the original plan. Otherwise this is U1 shedding weight onto U1's own existing sibling (`render-core.ts`) and a new peer of `snapshot-reader.ts` in the persistence tier (U4), not a new design.
 
 Per `02` §N3, v0.26 stays one milestone (its changes are coupled and cannot land across a version boundary without a compat shim already ruled out) but its sprint tasks are strictly ordered with individual acceptance criteria — see `Milestone_v0.26.md`.
+
+### 9.8 Client Component Responsibility Cleanup (v0.29)
+
+> ✅ RESOLVED (2026-07-12, `Milestone_v0.29.md` Sprints 62–65) — all 5 items below landed as output-equivalence refactors (NF29–NF32), verified by the full unit suite (484 tests) and the 38-test Playwright e2e suite passing unchanged after each sprint, plus clean `tsc --noEmit` and `npm run lint` throughout.
+
+> 9.7 audited U1 (`app.ts`, the REST adapter) for internal bloat. This is the same audit one tier over: U6 (Render Surface, `client/src/`), never covered by 9.6's REST↔MCP audit or 9.7's server-only review. A direct file review (`01` FR24, `02` §N8, `docs/06_frontend-desing-review.md`) found `renderers/Mermaid.svelte` carrying three responsibilities that don't belong to "render Mermaid source," plus two small duplications between `HistoryPanel.svelte` and `DeleteExportModal.svelte`, U6's history/modal components.
+
+| Item | Misplaced logic | Correct home | Requirement |
+|---|---|---|---|
+| 1 | Pan/zoom camera (scale/translate state, wheel/drag handlers, fit-to-view, debounced `/viewport` report) | `renderers/mermaid/panZoom.ts` — organizational split, not a reusable-widget extraction (`02` §N8: one consumer today) | NF29 |
+| 2 | Click-to-server-action routing (`/node-click`) + node-action popup UI | `renderers/mermaid/nodeInteractions.ts` (routing) + `renderers/mermaid/NodeActionPopup.svelte` (popup UI) | NF29 |
+| 3 | Autonomous node→frame navigation wiring (`/seek`) | Same module as item 2's routing (`nodeInteractions.ts`) — both are "map a clicked Mermaid node to a server call" | NF30 |
+| 4 | `formatTimestamp()` + snapshot-row markup/CSS duplicated between `HistoryPanel.svelte`/`DeleteExportModal.svelte` | `lib/formatTimestamp.ts` + `lib/SnapshotRow.svelte` | NF31 |
+| 5 | `DeleteExportModal.svelte`'s inline fetch logic for delete/export server calls | `lib/snapshotActions.ts` (`deleteWorkspace`, `deleteFiles`, `exportItems`) — modal keeps step/UI orchestration only | NF32 |
+
+**Deferred, out of scope** (unchanged from `docs/06_frontend-desing-review.md`): `App.svelte` (reviewed, clean — no U6 controller-level violation); splitting `DeleteExportModal.svelte` into two components (its shared step-1/step-2 shell is parameterized, not duplicated); a generic fetch helper for `Mermaid.svelte`'s remaining three call sites (`/node-click` ×2, `/seek`, `/viewport`) — no shared shape across only three sites.
+
+This is U6 shedding weight onto new peer modules within its own render-surface tier, not a new unit and not a change to U6's row in the 9.2 unit map — `renderers/Mermaid.svelte` stays the registry-facing component (`renderers/registry.ts` is unaffected), it just delegates to siblings instead of doing everything inline.

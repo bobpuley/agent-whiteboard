@@ -150,3 +150,4 @@ One `happy-dom` `Window` instance is created per export call and torn down after
 | `client/src/HistoryPanel.svelte` | "Export selected" button in select-bar |
 | `package.json` | add `happy-dom` dependency |
 | `docs/04_architecture.md` | document `POST /export-html` endpoint |
+
