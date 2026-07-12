@@ -1,6 +1,8 @@
 <script lang="ts">
   import { afterUpdate, onDestroy, onMount } from "svelte";
   import { createPanZoom } from "./mermaid/panZoom";
+  import { createNodeInteractions, type PopupRequest } from "./mermaid/nodeInteractions";
+  import NodeActionPopup from "./mermaid/NodeActionPopup.svelte";
 
   export let source: string;
   export let clickable = false;
@@ -72,22 +74,23 @@
     return group.id || null
   }
 
-  function stopPropagation(e: Event) {
-    // Prevent wrapper's mousedown from starting a drag when clicking a node.
-    e.stopPropagation()
-  }
+  // ── Click routing + node-to-frame wiring ────────────────────────────────────
+  // Extracted to renderers/mermaid/nodeInteractions.ts (v0.29 Sprint 63,
+  // NF29 part 2 + NF30). Popup *state* lives in this component (bound to
+  // <NodeActionPopup>); nodeInteractions.ts only decides whether a click
+  // should request a popup or fire a plain click.
+  let popup: PopupRequest | null = null
 
-  // ── Popup menu state ─────────────────────────────────────────────────────────
-
-  interface PopupState {
-    x: number
-    y: number
-    nodeId: string
-    nodeLabel: string
-    actions: string[]
-  }
-
-  let popup: PopupState | null = null
+  const nodeInteractions = createNodeInteractions({
+    getContainer: () => container,
+    extractNodeId,
+    extractNodeLabel,
+    extractEdgeId,
+    getNodeActions: () => nodeActions,
+    onPopupRequest: (p) => { popup = p },
+  })
+  const { attachClickListeners, detachClickListeners, attachNodeToFrameListeners, detachNodeToFrameListeners } =
+    nodeInteractions
 
   function dismissPopup() {
     popup = null
@@ -95,134 +98,9 @@
 
   async function selectAction(action: string) {
     if (!popup) return
-    const { nodeId: id, nodeLabel: label } = popup
+    const p = popup
     popup = null
-    await fetch('/node-click', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'node', id, label, action }),
-    }).catch(() => { /* server might not be listening */ })
-  }
-
-  async function onNodeClick(e: Event) {
-    e.stopPropagation()
-    const el = (e.currentTarget as Element).closest('.node') ?? (e.currentTarget as Element)
-    const id = extractNodeId(el) ?? el.id
-    const label = extractNodeLabel(el)
-
-    // If this node has registered actions, show the popup menu.
-    const actions = nodeActions?.[id]
-    if (actions && actions.length > 0) {
-      const me = e as MouseEvent
-      popup = { x: me.clientX, y: me.clientY, nodeId: id, nodeLabel: label, actions }
-      return
-    }
-
-    // Plain click — no popup.
-    await fetch('/node-click', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'node', id, label }),
-    }).catch(() => { /* server might not be listening */ })
-  }
-
-  async function onEdgeClick(e: Event) {
-    e.stopPropagation()
-    const el = e.currentTarget as Element
-    const id = extractEdgeId(el) ?? ''
-    const label = el.textContent?.trim() ?? ''
-    // Edge clicks are always plain (no popup).
-    await fetch('/node-click', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'edge', id, label }),
-    }).catch(() => { /* server might not be listening */ })
-  }
-
-  let clickCleanup: (() => void) | null = null
-
-  function attachClickListeners() {
-    detachClickListeners()
-    if (!container) return
-    const svg = container.querySelector('svg')
-    if (!svg) return
-
-    const nodes = svg.querySelectorAll<Element>('.node')
-    const edgeLabels = svg.querySelectorAll<Element>('.edgeLabel')
-
-    for (const node of nodes) {
-      node.addEventListener('click', onNodeClick)
-      node.addEventListener('mousedown', stopPropagation)
-      ;(node as HTMLElement).style.cursor = 'pointer'
-      node.classList.add('clickable-node')
-    }
-    for (const edge of edgeLabels) {
-      edge.addEventListener('click', onEdgeClick)
-      edge.addEventListener('mousedown', stopPropagation)
-      ;(edge as HTMLElement).style.cursor = 'pointer'
-    }
-
-    clickCleanup = () => {
-      for (const node of nodes) {
-        node.removeEventListener('click', onNodeClick)
-        node.removeEventListener('mousedown', stopPropagation)
-        ;(node as HTMLElement).style.cursor = ''
-        node.classList.remove('clickable-node')
-      }
-      for (const edge of edgeLabels) {
-        edge.removeEventListener('click', onEdgeClick)
-        edge.removeEventListener('mousedown', stopPropagation)
-        ;(edge as HTMLElement).style.cursor = ''
-      }
-    }
-  }
-
-  function detachClickListeners() {
-    clickCleanup?.()
-    clickCleanup = null
-  }
-
-  // ── Autonomous node-to-frame navigation ────────────────────────────────────
-
-  let ntfCleanup: (() => void) | null = null
-
-  function attachNodeToFrameListeners(map: Record<string, number>) {
-    detachNodeToFrameListeners()
-    if (!container) return
-    const svg = container.querySelector('svg')
-    if (!svg) return
-
-    const nodes = svg.querySelectorAll<HTMLElement>('.node')
-    for (const node of nodes) {
-      const id = extractNodeId(node)
-      if (id === null || !(id in map)) continue
-      const targetFrame = map[id]
-      const handler = (e: Event) => {
-        e.stopPropagation()
-        fetch('/seek', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ frame: targetFrame }),
-        }).catch(() => { /* no-op */ })
-      }
-      node.addEventListener('click', handler)
-      node.addEventListener('mousedown', stopPropagation)
-      node.style.cursor = 'pointer'
-      ntfCleanup = (() => {
-        const prev = ntfCleanup
-        return () => {
-          prev?.()
-          node.removeEventListener('click', handler)
-          node.removeEventListener('mousedown', stopPropagation)
-          node.style.cursor = ''
-        }
-      })()
-    }
-  }
-
-  function detachNodeToFrameListeners() {
-    ntfCleanup?.()
-    ntfCleanup = null
+    await nodeInteractions.selectAction(p, action)
   }
 
   // ── Mermaid rendering ───────────────────────────────────────────────────────
@@ -363,22 +241,7 @@
 
   <div class="zoom-hint">scroll to zoom · drag to pan · dbl-click to reset</div>
 
-  {#if popup}
-    <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-    <div class="popup-backdrop" on:click={dismissPopup}></div>
-    <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div
-      class="node-action-popup"
-      style="position: fixed; left: {popup.x}px; top: {popup.y}px;"
-      on:click|stopPropagation={() => {}}
-    >
-      {#each popup.actions as action, i (i)}
-        <div class="popup-item" role="button" tabindex="0" on:click={() => selectAction(action)} on:keydown={(e) => e.key === 'Enter' && selectAction(action)}>
-          {action}
-        </div>
-      {/each}
-    </div>
-  {/if}
+  <NodeActionPopup {popup} on:select={(e) => selectAction(e.detail)} on:dismiss={dismissPopup} />
 </div>
 
 <style>
@@ -435,42 +298,5 @@
   :global(.mermaid-container svg .node.clickable-node polygon) {
     outline: 2px solid #3498db;
     outline-offset: 2px;
-  }
-
-  /* Transparent backdrop — covers the whole viewport to catch outside clicks. */
-  .popup-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 99;
-  }
-
-  /* Floating popup menu. */
-  .node-action-popup {
-    z-index: 100;
-    background: #fff;
-    border: 1px solid #d0d0d0;
-    border-radius: 6px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-    min-width: 140px;
-    overflow: hidden;
-    transform: translate(4px, 4px); /* slight offset from cursor */
-  }
-
-  .popup-item {
-    padding: 9px 16px;
-    font-size: 13px;
-    color: #222;
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-  }
-
-  .popup-item:hover {
-    background: #f0f5ff;
-    color: #1a6ec7;
-  }
-
-  .popup-item + .popup-item {
-    border-top: 1px solid #f0f0f0;
   }
 </style>

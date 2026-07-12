@@ -10,7 +10,7 @@
   - *Regression coverage:* existing pan/zoom/viewport-persistence Playwright e2e tests pass unchanged.
 
 ### Sprint 63 — Extract click routing + popup into `nodeInteractions.ts` / `NodeActionPopup.svelte`
-- [ ] **NF29 (part 2) + NF30.** Move click-to-server-action routing (`attachClickListeners`/`detachClickListeners`, `onNodeClick`/`onEdgeClick`, `POST /node-click`) and autonomous node→frame navigation wiring (`attachNodeToFrameListeners`/`detachNodeToFrameListeners`, `POST /seek`) into `renderers/mermaid/nodeInteractions.ts`. Move the node-action popup (state, markup, styles) into `renderers/mermaid/NodeActionPopup.svelte`, rendered from `Mermaid.svelte`.
+- [x] **NF29 (part 2) + NF30.** Move click-to-server-action routing (`attachClickListeners`/`detachClickListeners`, `onNodeClick`/`onEdgeClick`, `POST /node-click`) and autonomous node→frame navigation wiring (`attachNodeToFrameListeners`/`detachNodeToFrameListeners`, `POST /seek`) into `renderers/mermaid/nodeInteractions.ts`. Move the node-action popup (state, markup, styles) into `renderers/mermaid/NodeActionPopup.svelte`, rendered from `Mermaid.svelte`.
   - *Acceptance:* node/edge click routing, the node-action popup menu, and node-to-frame navigation all behave identically, including listener attach/detach timing on `clickable`/`nodeToFrame` prop changes.
   - *Regression coverage:* existing click-routing, popup-menu, and node-to-frame Playwright e2e tests pass unchanged.
 
