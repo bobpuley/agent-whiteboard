@@ -3,6 +3,7 @@
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
   import { triggerDownload } from "./lib/download";
   import { trapFocus } from "./lib/trapFocus";
+  import SnapshotRow from "./lib/SnapshotRow.svelte";
 
   export let mode: "delete" | "export";
   export let open = false;
@@ -79,21 +80,6 @@
     else next.add(filename);
     selectedFilenames = next;
     confirmingSubset = false;
-  }
-
-  function formatTimestamp(iso: string): string {
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-    } catch {
-      return iso;
-    }
   }
 
   function armConfirm(which: "whole" | "subset") {
@@ -290,11 +276,7 @@
                     aria-label="Select snapshot {s.title ?? s.filename}"
                   />
                   <span class="modal-snapshot-row">
-                    <span class="snapshot-title">{s.title ?? "—"}</span>
-                    <span class="snapshot-meta">
-                      <span class="type-badge">{s.type}</span>
-                      <span class="snapshot-time">{formatTimestamp(s.timestamp)}</span>
-                    </span>
+                    <SnapshotRow title={s.title} type={s.type} timestamp={s.timestamp} />
                   </span>
                 </label>
               </li>
@@ -549,36 +531,6 @@
     flex-direction: column;
     gap: 2px;
     min-width: 0;
-  }
-
-  .snapshot-title {
-    font-size: 13px;
-    color: #222;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .snapshot-meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .type-badge {
-    font-size: 11px;
-    background: #e8f4fd;
-    color: #2980b9;
-    padding: 1px 6px;
-    border-radius: 10px;
-    font-weight: 500;
-    flex-shrink: 0;
-  }
-
-  .snapshot-time {
-    font-size: 11px;
-    color: #999;
   }
 
   .modal-error {

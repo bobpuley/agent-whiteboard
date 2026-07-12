@@ -15,7 +15,7 @@
   - *Regression coverage:* existing click-routing, popup-menu, and node-to-frame Playwright e2e tests pass unchanged.
 
 ### Sprint 64 — Shared `formatTimestamp` and `SnapshotRow`
-- [ ] **NF31.** Extract `formatTimestamp()` (currently duplicated in `HistoryPanel.svelte` and `DeleteExportModal.svelte`) into `lib/formatTimestamp.ts`. Extract the snapshot-row display (title + type badge + timestamp — markup and CSS both currently duplicated between the same two files) into `lib/SnapshotRow.svelte`, used by both.
+- [x] **NF31.** Extract `formatTimestamp()` (currently duplicated in `HistoryPanel.svelte` and `DeleteExportModal.svelte`) into `lib/formatTimestamp.ts`. Extract the snapshot-row display (title + type badge + timestamp — markup and CSS both currently duplicated between the same two files) into `lib/SnapshotRow.svelte`, used by both.
   - *Acceptance:* identical rendered markup and styling in both the history panel and the delete/export modal.
   - *Regression coverage:* existing history-panel and delete/export-modal Playwright e2e tests pass unchanged (including any visual/DOM-structure assertions).
 
