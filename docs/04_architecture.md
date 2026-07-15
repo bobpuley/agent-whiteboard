@@ -444,7 +444,11 @@ user enters export mode → clicks "Export workspace" on a workspace accordion h
           "katex"      → katex.renderToString(payload, { displayMode: true, throwOnError: false }) → HTML string
           "vega-lite"  → vl.compile(spec).spec → vega.parse() → new vega.View().toSVG() → SVG string
           "svg"        → DOMPurify(window).sanitize(payload, { USE_PROFILES: { svg: true } })
-          "html"       → DOMPurify(window).sanitize(payload, { USE_PROFILES: { html: true } })
+          "html"       → DOMPurify(window).sanitize(payload, { USE_PROFILES: { html: true },
+                         FORBID_TAGS: ["style"] })  // a <style> tag is document-scoped, not
+                         scoped to its .item-section — fixed v0.30, real root cause of bug B20
+                         ("main too narrow"): a payload's own theme stylesheet was silently
+                         overriding the whole export's layout. See B20 in `01`, `03` F17.
           "step-frames"→ expand each frame → render each frame by frame_type (recursive; mermaid frames
                          become their own client-rendered containers, same as above)
       → IF render fails (non-mermaid types, or malformed step-frames JSON): replace content with

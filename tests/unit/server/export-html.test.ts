@@ -87,6 +87,28 @@ describe("generateExportHtml — layout containment (B20)", () => {
     expect(result.html).toMatch(/\.item-section\s*\{[^}]*overflow-x:\s*auto/);
     expect(result.html).toMatch(/\.frame-section\s*\{[^}]*overflow-x:\s*auto/);
   });
+
+  it("strips a <style> tag embedded in an html-type payload, so it can't leak out and override the export's own layout (B20 real root cause)", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsD2",
+        filename: "leaky-style.json",
+        record: {
+          frames: [
+            {
+              type: "html",
+              payload: "<style>body { max-width: 900px; margin: 0 auto; }</style><p>hi</p>",
+            },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    expect(result.html).not.toContain("<style>body");
+    expect(result.html).toContain("<p>hi</p>");
+  });
 });
 
 describe("generateExportHtml — table border alignment (B21)", () => {
