@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>History icon — style options</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f4f5f6;
+    color: #222;
+    padding: 32px 24px 80px;
+  }
+
+  h1 {
+    font-size: 20px;
+    margin: 0 0 6px;
+  }
+
+  p.intro {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 32px;
+    max-width: 640px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    max-width: 1100px;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e2e2e2;
+    border-radius: 8px;
+    padding: 20px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .card.current {
+    border-color: #d8d8d8;
+    background: #fafafa;
+  }
+
+  .card-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    text-align: center;
+  }
+
+  .card-sub {
+    font-size: 11px;
+    color: #999;
+    text-align: center;
+    margin-top: -10px;
+  }
+
+  /* ── Exact copy of App.svelte's controls-panel / panel-icon-btn styles ── */
+  .controls-panel {
+    position: static;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 8px;
+    background: #fff;
+    border: 1px solid #d8d8d8;
+    border-radius: 6px;
+    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .panel-icon-btn {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    color: #555;
+    transition: background 0.1s;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .panel-icon-btn:hover {
+    background: #f0f0f0;
+  }
+
+  .panel-icon-btn.history-btn-accent:hover {
+    background: #e8f4fd;
+    border-color: #2980b9;
+    color: #2980b9;
+  }
+
+  .panel-icon-btn.delete-btn:hover {
+    background: #fdf0f0;
+    border-color: #e74c3c;
+    color: #e74c3c;
+  }
+
+  .panel-icon-btn.export-btn:hover {
+    background: #e8f4fd;
+    border-color: #2980b9;
+    color: #2980b9;
+  }
+
+  .panel-sep {
+    height: 1px;
+    background: #e5e5e5;
+    margin: 0 2px;
+  }
+  /* ── end copy ── */
+
+  .hover-hint {
+    font-size: 10px;
+    color: #bbb;
+  }
+
+  footer {
+    max-width: 640px;
+    margin-top: 40px;
+    font-size: 12px;
+    color: #999;
+  }
+
+  code {
+    background: #eee;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+
+<h1>History button — icon style options</h1>
+<p class="intro">
+  The history button currently uses a raw emoji (&#128337;), while delete and export use
+  clean line-style SVG icons (24×24 viewBox, <code>stroke="currentColor"</code>,
+  <code>stroke-width="2.2"</code>, round caps/joins — a Feather-icon-style outline).
+  Each card below is the real <code>.controls-panel</code> markup/CSS from
+  <code>App.svelte</code>, with only the history icon swapped. Hover any button to see
+  its real hover state.
+</p>
+
+<div class="grid">
+
+  <!-- Baseline: current emoji -->
+  <div class="card current">
+    <div class="card-label">Current (emoji)</div>
+    <div class="card-sub">baseline — not in the SVG line-icon style</div>
+    <div class="controls-panel">
+      <button class="panel-icon-btn" aria-label="Toggle history panel">&#128337;</button>
+      <div class="panel-sep"></div>
+      <button class="panel-icon-btn delete-btn" aria-label="Delete snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <button class="panel-icon-btn export-btn" aria-label="Export snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Option A: Clock (outline) -->
+  <div class="card">
+    <div class="card-label">A — Clock</div>
+    <div class="card-sub">closest literal match to the current emoji's meaning</div>
+    <div class="controls-panel">
+      <button class="panel-icon-btn history-btn-accent" aria-label="Toggle history panel">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </button>
+      <div class="panel-sep"></div>
+      <button class="panel-icon-btn delete-btn" aria-label="Delete snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <button class="panel-icon-btn export-btn" aria-label="Export snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Option B: Rotate-ccw / history arrow -->
+  <div class="card">
+    <div class="card-label">B — Rotate-back arrow</div>
+    <div class="card-sub">common "history/revert" convention (undo-style)</div>
+    <div class="controls-panel">
+      <button class="panel-icon-btn history-btn-accent" aria-label="Toggle history panel">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      </button>
+      <div class="panel-sep"></div>
+      <button class="panel-icon-btn delete-btn" aria-label="Delete snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <button class="panel-icon-btn export-btn" aria-label="Export snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Option C: List -->
+  <div class="card">
+    <div class="card-label">C — List</div>
+    <div class="card-sub">emphasizes "a list of past snapshots"</div>
+    <div class="controls-panel">
+      <button class="panel-icon-btn history-btn-accent" aria-label="Toggle history panel">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </button>
+      <div class="panel-sep"></div>
+      <button class="panel-icon-btn delete-btn" aria-label="Delete snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <button class="panel-icon-btn export-btn" aria-label="Export snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Option D: Archive -->
+  <div class="card">
+    <div class="card-label">D — Archive box</div>
+    <div class="card-sub">"a box of saved past snapshots"</div>
+    <div class="controls-panel">
+      <button class="panel-icon-btn history-btn-accent" aria-label="Toggle history panel">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+        </svg>
+      </button>
+      <div class="panel-sep"></div>
+      <button class="panel-icon-btn delete-btn" aria-label="Delete snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <button class="panel-icon-btn export-btn" aria-label="Export snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Option E: Layers -->
+  <div class="card">
+    <div class="card-label">E — Layers / stack</div>
+    <div class="card-sub">"multiple past states stacked up"</div>
+    <div class="controls-panel">
+      <button class="panel-icon-btn history-btn-accent" aria-label="Toggle history panel">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+        </svg>
+      </button>
+      <div class="panel-sep"></div>
+      <button class="panel-icon-btn delete-btn" aria-label="Delete snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+      <button class="panel-icon-btn export-btn" aria-label="Export snapshots">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Each history button above also gets an accent hover state (light blue, matching export's hover)
+  instead of the current plain-grey hover, purely so it reads as "part of the same button family" —
+  easy to drop if you'd rather keep the neutral hover it has today. Source icons: Feather Icons
+  outline set (same visual language as the existing delete/export glyphs).
+</footer>
+
+</body>
+</html>
