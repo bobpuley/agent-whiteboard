@@ -212,15 +212,15 @@ File-system watch (`CLAUDE_SCREEN.md`) is **dropped** — superseded by MCP.
 
 ---
 
-## 5d. Known Gaps (from user bug report, 2026-07-15) — scheduled v0.30
+## 5d. Known Gaps (from user bug report, 2026-07-15) — resolved v0.30
 
-> Found while the user tested a real export file (`study-coach_algorithms-20260713-201859.html`) on a wide desktop viewport; logged as B20–B22 in `01_input-ideas.md`. F17 has been clarified above to state the expected behavior explicitly; all three scheduled for Milestone v0.30.
+> Found while the user tested a real export file (`study-coach_algorithms-20260713-201859.html`) on a wide desktop viewport; logged as B20–B22 in `01_input-ideas.md`. F17 has been clarified above to state the expected behavior explicitly; all three fixed in Milestone v0.30 (Sprints 66–68).
 
 | Bug | Requirement touched | Gap | Resolution (v0.30, pending) |
 |-----|---------------------|-----|------------------------------|
-| B20 | F17 (`POST /export-html`, layout) | No requirement specified that `<main>` should use available viewport width, or that contained elements (tables, code blocks) must not visually exceed their section's border; the shipped layout renders `<main>` narrow on wide screens with overflowing content. | Not yet implemented — see `Milestone_v0.30.md`. |
-| B21 | F17 (`POST /export-html`, layout) | No requirement specified that table borders must render as a uniformly aligned grid; some exported tables show a right-side row border that doesn't line up with the table's outer border. | Not yet implemented — see `Milestone_v0.30.md`. |
-| B22 | F17 (`POST /export-html`, nav structure) | The nav's documented structure ("workspace/item hierarchy") never specified frame-level granularity, even though `<main>` already has per-frame sub-sections for step-frames items; there's no way to jump to a specific frame from the left menu. | Not yet implemented — see `Milestone_v0.30.md`. |
+| B20 | F17 (`POST /export-html`, layout) | No requirement specified that `<main>` should use available viewport width, or that contained elements (tables, code blocks) must not visually exceed their section's border; the shipped layout renders `<main>` narrow on wide screens with overflowing content. | `.item-section`/`.frame-section` gained `overflow-x: auto`; `table`/`pre`/`code` gained `max-width: 100%`. Root cause (confirmed via Playwright repro): `<main>` was already correctly filling available width — an unconstrained table/code block overflowed its section and expanded the whole page's scrollable width, which is what made `<main>` look narrow relative to the ballooned page. Containing the overflow at the section level fixes both symptoms. |
+| B21 | F17 (`POST /export-html`, layout) | No requirement specified that table borders must render as a uniformly aligned grid; some exported tables show a right-side row border that doesn't line up with the table's outer border. | `table` gained `border-collapse: collapse`, removing the default `border-collapse: separate` + `border-spacing` offset between a table's outer border and its cells' borders (confirmed via Playwright repro: offset dropped from 3px to sub-pixel rounding). |
+| B22 | F17 (`POST /export-html`, nav structure) | The nav's documented structure ("workspace/item hierarchy") never specified frame-level granularity, even though `<main>` already has per-frame sub-sections for step-frames items; there's no way to jump to a specific frame from the left menu. | `assembleHtml()`'s TOC-building loop now emits one `<li>` per frame (nested `<ul class="toc-frames">`) for step-frames items, titled with the frame's own label (falling back to `Frame N`); the item's own (parent) link points at the frame-0 anchor, identical to that frame's own submenu entry. |
 
 ---
 
