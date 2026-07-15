@@ -228,14 +228,16 @@ const LAYOUT_CSS = `
   main { flex: 1; padding: 32px 40px; min-width: 0; }
   .workspace-section { margin-bottom: 48px; }
   .workspace-heading { font-size: 20px; font-weight: 700; color: #222; margin: 0 0 20px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
-  .item-section { margin-bottom: 28px; padding: 20px; background: #fff; border: 1px solid #e8e8e8; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .item-section { margin-bottom: 28px; padding: 20px; background: #fff; border: 1px solid #e8e8e8; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow-x: auto; }
   .item-heading { font-size: 15px; font-weight: 600; color: #333; margin: 0 0 4px; }
   .item-meta { font-size: 12px; color: #888; margin: 0 0 16px; display: flex; align-items: center; gap: 8px; }
   .type-badge { background: #e8f4fd; color: #2980b9; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-  .frame-section { margin-top: 16px; padding: 12px 16px; border: 1px solid #f0f0f0; border-radius: 4px; background: #fafafa; }
+  .frame-section { margin-top: 16px; padding: 12px 16px; border: 1px solid #f0f0f0; border-radius: 4px; background: #fafafa; overflow-x: auto; }
   .frame-heading { font-size: 12px; color: #777; margin: 0 0 10px; font-style: italic; }
   .export-error { color: #c0392b; background: #fdf0f0; padding: 10px 14px; border-radius: 4px; border-left: 3px solid #e74c3c; font-size: 13px; margin: 0; }
   svg { max-width: 100%; height: auto; }
+  table { max-width: 100%; }
+  pre, code { max-width: 100%; }
 `.trim();
 
 function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: boolean): string {
