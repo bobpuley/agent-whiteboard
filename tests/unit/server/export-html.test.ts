@@ -88,3 +88,21 @@ describe("generateExportHtml — layout containment (B20)", () => {
     expect(result.html).toMatch(/\.frame-section\s*\{[^}]*overflow-x:\s*auto/);
   });
 });
+
+describe("generateExportHtml — table border alignment (B21)", () => {
+  it("collapses table borders so a table's outer border can't sit offset from its rows' cell borders", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsE",
+        filename: "table.json",
+        record: {
+          frames: [{ type: "html", payload: "<table><tr><td>a</td></tr></table>" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    expect(result.html).toMatch(/table\s*\{[^}]*border-collapse:\s*collapse/);
+  });
+});
