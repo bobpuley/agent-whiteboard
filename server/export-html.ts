@@ -236,7 +236,7 @@ const LAYOUT_CSS = `
   .frame-heading { font-size: 12px; color: #777; margin: 0 0 10px; font-style: italic; }
   .export-error { color: #c0392b; background: #fdf0f0; padding: 10px 14px; border-radius: 4px; border-left: 3px solid #e74c3c; font-size: 13px; margin: 0; }
   svg { max-width: 100%; height: auto; }
-  table { max-width: 100%; }
+  table { max-width: 100%; border-collapse: collapse; }
   pre, code { max-width: 100%; }
 `.trim();
 

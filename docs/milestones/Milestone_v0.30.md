@@ -11,7 +11,8 @@
   - *Regression coverage:* new test in `tests/unit/server/export-html.test.ts` asserting the relevant CSS rules are present in assembled output; manual visual check against the reported file.
 
 ### Sprint 67 — Fix table border alignment (B21)
-- [ ] **B21.** Fix the table CSS so borders render as a clean, uniformly aligned grid — every row's right edge flush with the table's outer border, no per-row drift (likely a `border-collapse`/`box-sizing` interaction in the current table styling).
+- [x] **B21.** Fix the table CSS so borders render as a clean, uniformly aligned grid — every row's right edge flush with the table's outer border, no per-row drift (likely a `border-collapse`/`box-sizing` interaction in the current table styling).
+  - *Root cause (found via Playwright repro):* no `table` rule set `border-collapse`, so tables used the browser default `border-collapse: separate` plus its default `border-spacing`, which visibly offsets a table's own outer border from its cells' borders (confirmed: table's right edge measured 3px right of every row's right edge). Fixed by adding `border-collapse: collapse` to the `table` rule in `LAYOUT_CSS` — confirmed via the same repro that the offset drops to sub-pixel (0.5px rendering rounding, not visible).
   - *Acceptance:* tables in the exported HTML show no visible misalignment between row borders and the table's outer border, matching `./unaligned_right_border.png`'s reported defect resolved.
   - *Regression coverage:* manual visual check against the reported file (table-border alignment is not practically assertable via DOM/CSS unit tests).
 
