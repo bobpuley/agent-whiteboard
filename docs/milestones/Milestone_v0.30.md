@@ -1,6 +1,6 @@
 # Milestone v0.30 — Export HTML Layout & Navigation Fixes (Sprints 66–68)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-07-15 via `/doc-creator-driver:intake` (bug report). User tested a real export file (`study-coach_algorithms-20260713-201859.html`) on a wide desktop viewport and found three layout defects plus one navigation gap in `server/export-html.ts`'s assembled document (F17 in `03`, see B20–B22 in `01`, `5d` in `03`). All four fixes are scoped to `export-html.ts`'s `LAYOUT_CSS` constant and `assembleHtml()` — no other module touched, no architecture change (see `04`'s HTML Export data flow, updated in place).
 
