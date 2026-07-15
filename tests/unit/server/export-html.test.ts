@@ -69,3 +69,22 @@ describe("generateExportHtml — concurrent-call safety (B14)", () => {
     expect(typeof (global as unknown as { document?: unknown }).document).toBe("undefined");
   });
 });
+
+describe("generateExportHtml — layout containment (B20)", () => {
+  it("gives .item-section and .frame-section their own horizontal scroll region, so an oversized table/code block can't overflow the page", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsD",
+        filename: "wide.json",
+        record: {
+          frames: [{ type: "html", payload: "<table><tr><td>wide</td></tr></table>" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    expect(result.html).toMatch(/\.item-section\s*\{[^}]*overflow-x:\s*auto/);
+    expect(result.html).toMatch(/\.frame-section\s*\{[^}]*overflow-x:\s*auto/);
+  });
+});
