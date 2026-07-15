@@ -106,3 +106,52 @@ describe("generateExportHtml — table border alignment (B21)", () => {
     expect(result.html).toMatch(/table\s*\{[^}]*border-collapse:\s*collapse/);
   });
 });
+
+describe("generateExportHtml — per-frame nav submenu for step-frames items (B22)", () => {
+  it("gives a step-frames item one nav submenu entry per frame, with the parent link pointing at frame 0", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsF",
+        filename: "steps.json",
+        record: {
+          title: "Chapter 2 — Sorting",
+          frames: [
+            { type: "mermaid", payload: "graph TD; A-->B", label: "Overview" },
+            { type: "mermaid", payload: "graph TD; B-->C" },
+            { type: "mermaid", payload: "graph TD; C-->D", label: "Wrap-up" },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+
+    // Parent TOC entry points at frame 0's anchor, not the item's own section id.
+    expect(result.html).toMatch(/<li><a href="#item-1-frame-0">Chapter 2 — Sorting<\/a><ul class="toc-frames">/);
+    // One submenu entry per frame, using each frame's own label (falling back to "Frame N").
+    expect(result.html).toContain('<li><a href="#item-1-frame-0">Overview</a></li>');
+    expect(result.html).toContain('<li><a href="#item-1-frame-1">Frame 2</a></li>');
+    expect(result.html).toContain('<li><a href="#item-1-frame-2">Wrap-up</a></li>');
+    // <main>'s existing per-frame sub-sections are unaffected — anchors line up with them.
+    expect(result.html).toContain('<section class="frame-section" id="item-1-frame-0">');
+  });
+
+  it("still emits a single, non-nested TOC link for a plain (non-step-frames) item", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsG",
+        filename: "plain.json",
+        record: {
+          title: "Single diagram",
+          frames: [{ type: "mermaid", payload: "graph TD; A-->B" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    expect(result.html).toContain('<li><a href="#item-1">Single diagram</a></li>');
+    expect(result.html).not.toContain('<ul class="toc-frames">');
+  });
+});

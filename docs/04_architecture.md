@@ -452,10 +452,10 @@ user enters export mode → clicks "Export workspace" on a workspace accordion h
   → tear down happy-dom Window
   → assemble HTML document:
       → <nav>: table of contents — workspace list → item list (linking to section anchors)
-          → [gap found 2026-07-15, see B22 in `01`, scheduled v0.30 — not yet implemented]:
-            for step-frames items, item entry expands into one submenu link per frame
-            (frame label, falling back to "Frame N"); the item's own link points at frame 0's
-            anchor, mirroring <main>'s existing per-frame sub-sections below
+          → for step-frames items, item entry expands into one submenu link per frame
+            (<ul class="toc-frames">, frame label, falling back to "Frame N"); the item's own
+            link points at frame 0's anchor, mirroring <main>'s existing per-frame sub-sections
+            below (fixed v0.30, bug B22, see `01`)
       → <main>: workspace <section id="ws-{name}"> → item <section id="item-{id}">
           → for step-frames: frame sub-sections <section class="frame" id="item-{id}-frame-{n}">
       → <style>: layout CSS always included; KaTeX CSS included only when ≥1 katex items present

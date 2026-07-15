@@ -225,6 +225,8 @@ const LAYOUT_CSS = `
   nav a:hover { text-decoration: underline; }
   nav .toc-ws { font-weight: 600; color: #333; font-size: 12px; margin-top: 10px; padding-left: 0 !important; }
   nav .toc-ws > a { font-weight: 600; color: #333; padding-left: 0; }
+  nav .toc-frames { padding-left: 12px; }
+  nav .toc-frames a { font-size: 12px; color: #5b8ab8; }
   main { flex: 1; padding: 32px 40px; min-width: 0; }
   .workspace-section { margin-bottom: 48px; }
   .workspace-heading { font-size: 20px; font-weight: 700; color: #222; margin: 0 0 20px; padding-bottom: 8px; border-bottom: 2px solid #e0e0e0; }
@@ -269,13 +271,25 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: bool
     for (const item of wsList) {
       const itemId = nextId();
       const label = item.title ?? formatTimestampHuman(item.timestamp);
-      tocHtml += `<li><a href="#${itemId}">${escapeHtml(label)}</a></li>`;
+      const { content } = item;
+
+      if (content.kind === "stepFrames") {
+        // Parent link points at frame 0's anchor — same target as that
+        // frame's own submenu entry below (B22 in `01`).
+        tocHtml += `<li><a href="#${itemId}-frame-0">${escapeHtml(label)}</a><ul class="toc-frames">`;
+        for (let i = 0; i < content.frames.length; i++) {
+          const frameLabel = content.frames[i].label ?? `Frame ${i + 1}`;
+          tocHtml += `<li><a href="#${itemId}-frame-${i}">${escapeHtml(frameLabel)}</a></li>`;
+        }
+        tocHtml += `</ul></li>`;
+      } else {
+        tocHtml += `<li><a href="#${itemId}">${escapeHtml(label)}</a></li>`;
+      }
 
       mainHtml += `<section class="item-section" id="${itemId}">`;
       mainHtml += `<h3 class="item-heading">${escapeHtml(item.title ?? "—")}</h3>`;
       mainHtml += `<p class="item-meta"><span class="type-badge">${escapeHtml(item.type)}</span><span>${escapeHtml(formatTimestampHuman(item.timestamp))}</span></p>`;
 
-      const { content } = item;
       if (content.kind === "error") {
         mainHtml += `<p class="export-error">${escapeHtml(content.message)}</p>`;
       } else if (content.kind === "stepFrames") {
