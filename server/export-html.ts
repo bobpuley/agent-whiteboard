@@ -88,7 +88,14 @@ function renderSvgPayload(payload: string, purify: ReturnType<typeof DOMPurify>)
 }
 
 function renderHtmlPayload(payload: string, purify: ReturnType<typeof DOMPurify>): string {
-  return purify.sanitize(payload, { USE_PROFILES: { html: true } });
+  // FORBID_TAGS: ["style"] — a <style> element is document-scoped, not scoped
+  // to the .item-section it's nested inside. An "html" payload that ships its
+  // own theme stylesheet (e.g. a markdown->HTML converter's readable-width
+  // CSS) would otherwise leak out and override the whole export's layout —
+  // this is the real cause behind bug B20's "main is too narrow" report:
+  // LAYOUT_CSS's own <main>/<body> rules were being overridden by a later,
+  // equal-specificity rule from a payload-embedded <style> tag.
+  return purify.sanitize(payload, { USE_PROFILES: { html: true }, FORBID_TAGS: ["style"] });
 }
 
 // ── Rendered item types ────────────────────────────────────────────────────
