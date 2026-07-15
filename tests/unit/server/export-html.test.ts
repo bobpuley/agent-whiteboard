@@ -88,7 +88,7 @@ describe("generateExportHtml — layout containment (B20)", () => {
     expect(result.html).toMatch(/\.frame-section\s*\{[^}]*overflow-x:\s*auto/);
   });
 
-  it("strips a <style> tag embedded in an html-type payload, so it can't leak out and override the export's own layout (B20 real root cause)", async () => {
+  it("scopes a <style> tag embedded in an html-type payload to its own item, instead of stripping it or leaking it document-wide (B20 real root cause)", async () => {
     const items: ValidatedExportItem[] = [
       {
         workspace: "wsD2",
@@ -97,7 +97,8 @@ describe("generateExportHtml — layout containment (B20)", () => {
           frames: [
             {
               type: "html",
-              payload: "<style>body { max-width: 900px; margin: 0 auto; }</style><p>hi</p>",
+              payload:
+                "<style>body { max-width: 900px; margin: 0 auto; } td { background: #eaf6ff; }</style><table><tr><td>hi</td></tr></table>",
             },
           ],
           timestamp: new Date().toISOString(),
@@ -106,8 +107,12 @@ describe("generateExportHtml — layout containment (B20)", () => {
     ];
 
     const result = await generateExportHtml(items);
-    expect(result.html).not.toContain("<style>body");
-    expect(result.html).toContain("<p>hi</p>");
+    // The payload's own formatting (td background) is preserved, not discarded...
+    expect(result.html).toContain("td { background: #eaf6ff; }");
+    // ...but wrapped in @scope to the item's own container, so its `body {}`
+    // rule can never match the real <body> (there's no <body> descendant of
+    // #item-1) and can't override the export's layout.
+    expect(result.html).toMatch(/<style>@scope \(#item-1\) \{[\s\S]*body \{ max-width: 900px/);
   });
 });
 

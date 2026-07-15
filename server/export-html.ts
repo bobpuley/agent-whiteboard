@@ -88,14 +88,28 @@ function renderSvgPayload(payload: string, purify: ReturnType<typeof DOMPurify>)
 }
 
 function renderHtmlPayload(payload: string, purify: ReturnType<typeof DOMPurify>): string {
-  // FORBID_TAGS: ["style"] — a <style> element is document-scoped, not scoped
-  // to the .item-section it's nested inside. An "html" payload that ships its
-  // own theme stylesheet (e.g. a markdown->HTML converter's readable-width
-  // CSS) would otherwise leak out and override the whole export's layout —
-  // this is the real cause behind bug B20's "main is too narrow" report:
-  // LAYOUT_CSS's own <main>/<body> rules were being overridden by a later,
-  // equal-specificity rule from a payload-embedded <style> tag.
-  return purify.sanitize(payload, { USE_PROFILES: { html: true }, FORBID_TAGS: ["style"] });
+  return purify.sanitize(payload, { USE_PROFILES: { html: true } });
+}
+
+/**
+ * Contains any <style> tag embedded in rendered "html"/"svg" content to the
+ * element it's meant to style, instead of leaking document-wide. A <style>
+ * element is normally document-scoped regardless of DOM nesting — a payload
+ * shipping its own theme stylesheet (e.g. a markdown->HTML converter's
+ * readable-width CSS, `body { max-width: 900px }`) would otherwise silently
+ * override the whole export's layout. `@scope` limits selector matching to
+ * `anchorId`'s subtree: a `body {}` rule then matches nothing (no `<body>`
+ * descendant exists there), while `table {}`/`code {}`/etc. still apply
+ * correctly to the payload's own content. Real root cause of bug B20 ("main
+ * too narrow") — see `01`/`03`/`04`. An earlier fix (`FORBID_TAGS: ["style"]`)
+ * closed the leak but also discarded the payload's own legitimate table/code
+ * formatting living in the same <style> block; scoping keeps both.
+ */
+function scopeEmbeddedStyles(html: string, anchorId: string): string {
+  return html.replace(
+    /<style>([\s\S]*?)<\/style>/gi,
+    (_, css: string) => `<style>@scope (#${anchorId}) {\n${css}\n}</style>`
+  );
 }
 
 // ── Rendered item types ────────────────────────────────────────────────────
@@ -305,11 +319,11 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: bool
           const frameId = `${itemId}-frame-${i}`;
           mainHtml += `<section class="frame-section" id="${frameId}">`;
           mainHtml += `<h4 class="frame-heading">${escapeHtml(frame.label ?? `Frame ${i + 1}`)}</h4>`;
-          mainHtml += frame.html;
+          mainHtml += scopeEmbeddedStyles(frame.html, frameId);
           mainHtml += `</section>`;
         }
       } else {
-        mainHtml += content.html;
+        mainHtml += scopeEmbeddedStyles(content.html, itemId);
       }
 
       mainHtml += `</section>`;
