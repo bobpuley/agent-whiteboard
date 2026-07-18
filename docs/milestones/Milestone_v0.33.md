@@ -1,6 +1,6 @@
 # Milestone v0.33 — Dark Theme & Theme Selector (Sprint 74)
 
-**Status:** in progress
+**Status:** released
 
 ### Sprint 74 — Board dark theme + toolbar toggle
 - [x] Define CSS custom properties for board-chrome colors (`--bg`, `--fg`, `--panel-bg`, `--border`, etc.) for `:root[data-theme="light"]` and `:root[data-theme="dark"]`.

@@ -1,3 +1,13 @@
+## 0.28.0 — 2026-07-18
+
+**Milestone v0.33 — Dark Theme & Theme Selector (Sprint 74) complete.** The board chrome (toolbar, history panel, delete/export modal) now supports a Light/Dark theme, toggled from the toolbar and persisted across sessions — rendered content on the canvas is explicitly untouched (FR27 in `01`, F24–F26 in `03`).
+
+- **`client/src/theme.css`:** board-chrome color custom properties (`--board-*`) defined for `:root[data-theme="light"]` and `:root[data-theme="dark"]`; a dedicated `--board-canvas-bg` keeps the canvas itself light grey even in dark mode, since rendered content isn't themed and generally assumes a light backdrop.
+- **`client/src/stores/themeStore.ts`:** persists the selected theme to `localStorage`, defaults to Light when nothing is stored, and applies it via a `data-theme` attribute on `<html>`.
+- **`App.svelte`, `HistoryPanel.svelte`, `DeleteExportModal.svelte`, `SnapshotRow.svelte`:** hardcoded hex colors swept to `var(--board-*)` references; a sun/moon toggle button added to the toolbar's controls-panel, bound to `themeStore`.
+- **Isolation (F26):** no server/export-pipeline changes — rendered content (`Html.svelte`/`Mermaid.svelte`, `export-html` in both `cdn` and `offline` modes) never reads board theme variables. A static test (`themeIsolation.test.ts`) asserts every declared custom property is namespaced `--board-` and that no renderer source references one.
+- Full suite: 513 unit tests passing (up from 507 pre-milestone), `tsc --noEmit`/`svelte-check` clean throughout.
+
 ## 0.27.5 — 2026-07-18
 
 **Milestone v0.32 — Export Delivery Model: CDN Default & Filesystem Boundary (Sprint 73) complete.** HTML export switches its default dependency-loading from fully embedded to CDN-linked, and the MCP `export_html` tool drops its `output_path` parameter entirely — closing a way for the agent to write to an arbitrary filesystem path that could bypass a write-only-within-project-folders guardrail (FR26 in `01`, O1–O4 in `02`, F21–F23 in `03`).
