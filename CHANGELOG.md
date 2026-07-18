@@ -1,3 +1,15 @@
+## 0.27.4 — 2026-07-18
+
+**Milestone v0.31 — Bootstrap House Style for HTML Content (Sprints 69–72) complete.** `type: "html"` payloads can now use Bootstrap 5 (CSS-only) component classes instead of hand-authored CSS, in both the live canvas and HTML exports (FR25 in `01`, F20 in `03`).
+
+- **Sprint 69:** added the `bootstrap` npm dependency (CSS-only, no JS import); generalized `export-html.ts`'s `scopeEmbeddedStyles()` into a reusable `scopeCss(css, anchorIds[])` primitive that wraps a CSS string in `@scope (<selector-list>) { ... }`, supporting a comma-separated multi-anchor list for one shared stylesheet scoped across every relevant anchor in a single export
+- **Sprint 70:** `assembleHtml()` reads `bootstrap.min.css` at export-assembly time and includes it in the export's `<style>` block only when the export contains ≥1 `html`-type item (plain or step-frames frame), scoped via `scopeCss()` to every such item/frame's own anchor id
+- **Sprint 71:** `Html.svelte` lazy-loads the same stylesheet only when `type === "html"` mounts (never for `"svg"`), via Vite's `?inline` CSS import, scoped to its own container with a client-side `scopeCss` helper (duplicated from the server's — no shared client/server module in this codebase)
+- **Bug found via manual browser verification, fixed in both Sprint 70 (retroactively) and Sprint 71:** `@scope` only matches elements within the scope root's own subtree, so Bootstrap's `:root`-scoped CSS custom properties (its entire color system) silently never applied — only non-variable properties like padding worked, with no error surfaced. Fixed by rewriting `:root` → `:scope` in the Bootstrap CSS text before wrapping (`:scope` inside an `@scope` block refers to the scope root element itself, and properties set there inherit normally to every descendant). Verified live via Playwright/Chromium screenshots before and after the fix; documented as a resolved risk in `02` (L7)
+- **Sprint 72:** the `render` MCP tool's `"html"` type description now names Bootstrap 5 explicitly, gives concrete class examples (`card`, `alert alert-info`, `badge`, `table table-striped`), and states the CSS-only/no-JS-components caveat (dropdowns, modals, tooltips, popovers, collapses, carousels, offcanvas render static markup only)
+- Added a Bootstrap house style slide to the manual showcase (`tests/human_driven/showcase.js`), alongside the existing plain-HTML slide
+- Full suite: 499 unit tests passing (up from 491 pre-milestone), `tsc --noEmit` (server) and `svelte-check` (client) clean throughout. `03` F20, `02` L7, and `04`'s dependency table/export pseudocode/`Html.svelte` tree note moved from planned to resolved/shipped
+
 ## 0.27.3 — 2026-07-15
 
 **Milestone v0.30 — Export HTML Layout & Navigation Fixes (Sprints 66–68) complete.** User-reported export bugs, all in `server/export-html.ts`'s assembled document (F17 in `03`, B20–B22 in `01`): a narrow `<main>` column on wide screens with tables/code blocks bleeding past their section border, misaligned table right borders, and no way to jump to a specific frame of a step-frames export from the left-menu nav.
