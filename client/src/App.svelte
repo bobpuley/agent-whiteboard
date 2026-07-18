@@ -6,6 +6,7 @@
   import { canvasStore } from "./stores/canvasStore.js";
   import { doneStore } from "./stores/doneStore.js";
   import { modalStore } from "./stores/modalStore.js";
+  import { themeStore } from "./stores/themeStore.js";
   import { stepNav } from "./stores/stepNav.js";
   import { disconnected, initRouter } from "./stores/wsRouter.js";
   import { rendererRegistry } from "./renderers/registry.js";
@@ -129,6 +130,26 @@
   {/if}
 
   <div class="controls-panel">
+    <button
+      class="panel-icon-btn"
+      on:click={themeStore.toggle}
+      aria-label={$themeStore === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      aria-pressed={$themeStore === "dark"}
+      title={$themeStore === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+    >
+      {#if $themeStore === "dark"}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/>
+        </svg>
+      {:else}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      {/if}
+    </button>
+
+    <div class="panel-sep"></div>
+
     <button class="panel-icon-btn" on:click={() => { historyOpen = !historyOpen; }} aria-label="Toggle history panel" aria-pressed={historyOpen} title="History">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
