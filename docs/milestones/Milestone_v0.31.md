@@ -1,6 +1,6 @@
 # Milestone v0.31 — Bootstrap House Style for HTML Content (Sprints 69–72)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-07-15 via `/doc-creator-driver:intake` (feature request, FR25 in `01`). Raw request: give an agent a small, meaningful, deterministic style set for `type: "html"` payloads instead of hand-authoring CSS per snapshot — prompted by a real export (`study-coach_algorithms-20260713-201859.html`) showing a bespoke mini design system (callouts, badges, legends, a calendar-heatmap grid) reinvented from scratch. Full design resolved via `/grill-me`: Bootstrap 5, CSS-only, scoped via the same `@scope`/`scopeEmbeddedStyles()` mechanism B20 shipped in v0.30, lazy-loaded live and conditionally included on export — see F20 in `03`, L7 in `02`, and the dependency/`Html.svelte` notes in `04`.
 
