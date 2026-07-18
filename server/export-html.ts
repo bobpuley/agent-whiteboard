@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { createRequire } from "module";
 import { dirname, join, resolve } from "path";
+import { createHash } from "crypto";
 import { Window } from "happy-dom";
 import katex from "katex";
 import * as vl from "vega-lite";
@@ -22,6 +23,15 @@ export interface ExportResult {
   html: string;
   downloadFilename: string;
 }
+
+/**
+ * "cdn" (default at the interface layer — MCP always uses it, REST defaults
+ * to it) links Mermaid/Bootstrap/KaTeX from jsdelivr instead of embedding
+ * them, so the assembled HTML is small enough to return inline (see O1–O3
+ * in `02`). "offline" reproduces the pre-v0.32 fully-embedded behavior for
+ * offline reading, reachable only via REST/webview (F21–F23 in `03`).
+ */
+export type ExportMode = "cdn" | "offline";
 
 // ── Global DOM setup for happy-dom ────────────────────────────────────────
 
@@ -277,6 +287,60 @@ function getMermaidBundle(): string {
   return cachedMermaidBundle;
 }
 
+// ── CDN asset references (cdn mode) ─────────────────────────────────────────
+
+interface CdnAsset {
+  url: string;
+  integrity: string;
+}
+
+const cachedCdnAssets = new Map<string, CdnAsset>();
+
+/**
+ * Builds a pinned-version, SRI-hashed jsdelivr reference for an npm package's
+ * dist file. The hash is computed from the *locally installed* copy (same
+ * `package.json` version jsdelivr's npm mirror serves) rather than hardcoded,
+ * so it never drifts out of sync when mermaid/bootstrap/katex are
+ * version-bumped — no manual regeneration step required.
+ */
+function getCdnAsset(pkgName: string, distRelPath: string): CdnAsset {
+  const cacheKey = `${pkgName}/${distRelPath}`;
+  const cached = cachedCdnAssets.get(cacheKey);
+  if (cached) return cached;
+
+  const req = createRequire(import.meta.url);
+  const filePath = req.resolve(`${pkgName}/${distRelPath}`);
+  const buffer = readFileSync(filePath);
+  const version = (req(`${pkgName}/package.json`) as { version: string }).version;
+  const integrity = `sha384-${createHash("sha384").update(buffer).digest("base64")}`;
+  const asset: CdnAsset = {
+    url: `https://cdn.jsdelivr.net/npm/${pkgName}@${version}/${distRelPath}`,
+    integrity,
+  };
+  cachedCdnAssets.set(cacheKey, asset);
+  return asset;
+}
+
+function getMermaidCdnAsset(): CdnAsset {
+  return getCdnAsset("mermaid", "dist/mermaid.min.js");
+}
+
+function getBootstrapCdnAsset(): CdnAsset {
+  return getCdnAsset("bootstrap", "dist/css/bootstrap.min.css");
+}
+
+function getKatexCdnAsset(): CdnAsset {
+  return getCdnAsset("katex", "dist/katex.min.css");
+}
+
+function cdnScriptTag(asset: CdnAsset): string {
+  return `<script src="${asset.url}" integrity="${asset.integrity}" crossorigin="anonymous"></script>`;
+}
+
+function cdnStylesheetTag(asset: CdnAsset): string {
+  return `<link rel="stylesheet" href="${asset.url}" integrity="${asset.integrity}" crossorigin="anonymous">`;
+}
+
 const LAYOUT_CSS = `
   * { box-sizing: border-box; }
   body { font-family: system-ui, -apple-system, sans-serif; margin: 0; display: flex; background: #f9f9f9; }
@@ -305,7 +369,12 @@ const LAYOUT_CSS = `
   pre, code { max-width: 100%; }
 `.trim();
 
-function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: boolean): string {
+function assembleHtml(
+  items: RenderedItem[],
+  hasKatex: boolean,
+  hasMermaid: boolean,
+  mode: ExportMode
+): string {
   // Group by workspace, order workspaces by earliest item timestamp.
   const wsMap = new Map<string, RenderedItem[]>();
   for (const item of items) {
@@ -378,26 +447,48 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: bool
     mainHtml += `</section>`;
   }
 
-  const katexBlock = hasKatex ? `<style>${getKatexCss()}</style>\n` : "";
-  const bootstrapBlock =
-    htmlAnchorIds.length > 0 ? `<style>${scopeCss(getBootstrapCss(), htmlAnchorIds)}</style>\n` : "";
-  const mermaidBlock = hasMermaid
-    ? `<script>${getMermaidBundle()}</script>
-<script>
+  const hasBootstrap = htmlAnchorIds.length > 0;
+
+  const katexBlock = hasKatex
+    ? mode === "cdn"
+      ? `${cdnStylesheetTag(getKatexCdnAsset())}\n`
+      : `<style>${getKatexCss()}</style>\n`
+    : "";
+
+  // Bootstrap's bare-element scoping (@scope, bug B20) only works when the
+  // CSS is inlined as a <style> block — a CDN <link> can't be @scope-wrapped.
+  // cdn mode links Bootstrap unscoped anyway (accepted risk, see O4 in `02`);
+  // offline mode keeps the inlined+scoped behavior unchanged.
+  const bootstrapBlock = hasBootstrap
+    ? mode === "cdn"
+      ? `${cdnStylesheetTag(getBootstrapCdnAsset())}\n`
+      : `<style>${scopeCss(getBootstrapCss(), htmlAnchorIds)}</style>\n`
+    : "";
+
+  const mermaidInitScript = `<script>
 document.addEventListener("DOMContentLoaded", function () {
   mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
   mermaid.run({ querySelector: ".mermaid" });
 });
 </script>
-`
+`;
+  const mermaidBlock = hasMermaid
+    ? mode === "cdn"
+      ? `${cdnScriptTag(getMermaidCdnAsset())}\n${mermaidInitScript}`
+      : `<script>${getMermaidBundle()}</script>\n${mermaidInitScript}`
     : "";
+
+  const csp =
+    mode === "cdn"
+      ? "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; object-src 'none'; base-uri 'none'"
+      : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'";
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
 <title>Whiteboard Export</title>
 <style>${LAYOUT_CSS}</style>
 ${katexBlock}${bootstrapBlock}</head>
@@ -455,7 +546,8 @@ export function writeExportHtmlToDisk(
 // ── Public entrypoint ──────────────────────────────────────────────────────
 
 async function generateExportHtmlInner(
-  items: ValidatedExportItem[]
+  items: ValidatedExportItem[],
+  mode: ExportMode
 ): Promise<ExportResult> {
   const win = new Window();
   const savedGlobals = saveGlobals();
@@ -483,7 +575,7 @@ async function generateExportHtmlInner(
   const hasKatex = itemsIncludeType(items, "katex");
   const hasMermaid = itemsIncludeType(items, "mermaid");
 
-  const html = assembleHtml(rendered, hasKatex, hasMermaid);
+  const html = assembleHtml(rendered, hasKatex, hasMermaid, mode);
   const uniqueWorkspaces = [...new Set(items.map((i) => i.workspace))];
   const downloadFilename = buildDownloadFilename(uniqueWorkspaces);
 
@@ -501,8 +593,11 @@ async function generateExportHtmlInner(
 // call's globals are ever active at once.
 let exportQueue: Promise<unknown> = Promise.resolve();
 
-export function generateExportHtml(items: ValidatedExportItem[]): Promise<ExportResult> {
-  const result = exportQueue.then(() => generateExportHtmlInner(items));
+export function generateExportHtml(
+  items: ValidatedExportItem[],
+  mode: ExportMode
+): Promise<ExportResult> {
+  const result = exportQueue.then(() => generateExportHtmlInner(items, mode));
   // Chain the queue off a version that never rejects, so one failed export
   // doesn't permanently wedge every export queued after it; the caller of
   // generateExportHtml() still sees the original rejection via `result`.

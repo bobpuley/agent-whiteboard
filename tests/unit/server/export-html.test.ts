@@ -33,8 +33,8 @@ describe("generateExportHtml — concurrent-call safety (B14)", () => {
     ];
 
     const [resultA, resultB] = await Promise.all([
-      generateExportHtml(itemsA),
-      generateExportHtml(itemsB),
+      generateExportHtml(itemsA, "offline"),
+      generateExportHtml(itemsB, "offline"),
     ]);
 
     expect(resultA.html).toContain("AAA1");
@@ -55,7 +55,7 @@ describe("generateExportHtml — concurrent-call safety (B14)", () => {
       vegaItem("wsB", "BBB3", "line"),
     ];
 
-    await Promise.all([generateExportHtml(itemsA), generateExportHtml(itemsB)]);
+    await Promise.all([generateExportHtml(itemsA, "offline"), generateExportHtml(itemsB, "offline")]);
 
     // Without serialization, the shorter call's `finally` can restore global
     // DOM state to a snapshot that still points at the longer call's
@@ -64,7 +64,7 @@ describe("generateExportHtml — concurrent-call safety (B14)", () => {
     expect(typeof (global as unknown as { document?: unknown }).document).toBe("undefined");
 
     // A subsequent, purely sequential call must still work correctly.
-    const resultC = await generateExportHtml([vegaItem("wsC", "CCC1", "point")]);
+    const resultC = await generateExportHtml([vegaItem("wsC", "CCC1", "point")], "offline");
     expect(resultC.html).toContain("CCC1");
     expect(typeof (global as unknown as { document?: unknown }).document).toBe("undefined");
   });
@@ -83,7 +83,7 @@ describe("generateExportHtml — layout containment (B20)", () => {
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     expect(result.html).toMatch(/\.item-section\s*\{[^}]*overflow-x:\s*auto/);
     expect(result.html).toMatch(/\.frame-section\s*\{[^}]*overflow-x:\s*auto/);
   });
@@ -106,7 +106,7 @@ describe("generateExportHtml — layout containment (B20)", () => {
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     // The payload's own formatting (td background) is preserved, not discarded...
     expect(result.html).toContain("td { background: #eaf6ff; }");
     // ...but wrapped in @scope to the item's own container, so its `body {}`
@@ -129,7 +129,7 @@ describe("generateExportHtml — table border alignment (B21)", () => {
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     expect(result.html).toMatch(/table\s*\{[^}]*border-collapse:\s*collapse/);
   });
 });
@@ -161,7 +161,7 @@ describe("generateExportHtml — Bootstrap house style (v0.31 Sprint 70)", () =>
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     expect(result.html).toContain(BOOTSTRAP_SIGNATURE);
   });
 
@@ -186,7 +186,7 @@ describe("generateExportHtml — Bootstrap house style (v0.31 Sprint 70)", () =>
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     const scopeMatch = result.html.match(/@scope \(([^)]*)\) \{\n@charset[\s\S]*?\n\}<\/style>/);
     expect(scopeMatch).not.toBeNull();
     const bootstrapBlock = scopeMatch![0];
@@ -206,7 +206,7 @@ describe("generateExportHtml — Bootstrap house style (v0.31 Sprint 70)", () =>
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     expect(result.html).not.toContain(BOOTSTRAP_SIGNATURE);
   });
 
@@ -238,7 +238,7 @@ describe("generateExportHtml — Bootstrap house style (v0.31 Sprint 70)", () =>
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     const match = result.html.match(/@scope \(([^)]*)\) \{\n@charset/);
     expect(match).not.toBeNull();
     const selectorList = match![1];
@@ -258,7 +258,7 @@ describe("generateExportHtml — Bootstrap house style (v0.31 Sprint 70)", () =>
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     // The Bootstrap block is wrapped in @scope to #item-1 only — the export's
     // own <nav>/<h2>/<h3> chrome sits outside that scope root entirely.
     const scopeMatch = result.html.match(/@scope \(([^)]*)\) \{\n@charset/);
@@ -284,7 +284,7 @@ describe("generateExportHtml — per-frame nav submenu for step-frames items (B2
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
 
     // Parent TOC entry points at frame 0's anchor, not the item's own section id.
     expect(result.html).toMatch(/<li><a href="#item-1-frame-0">Chapter 2 — Sorting<\/a><ul class="toc-frames">/);
@@ -309,8 +309,106 @@ describe("generateExportHtml — per-frame nav submenu for step-frames items (B2
       },
     ];
 
-    const result = await generateExportHtml(items);
+    const result = await generateExportHtml(items, "offline");
     expect(result.html).toContain('<li><a href="#item-1">Single diagram</a></li>');
     expect(result.html).not.toContain('<ul class="toc-frames">');
+  });
+});
+
+describe("generateExportHtml — CDN mode (v0.32, FR26 in `01`, F21-F23 in `03`)", () => {
+  it("links Mermaid from a pinned, SRI-hashed jsdelivr URL instead of embedding the ~3.3MB bundle", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsCdnMermaid",
+        filename: "mermaid.json",
+        record: {
+          frames: [{ type: "mermaid", payload: "graph TD; A-->B" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items, "cdn");
+    expect(result.html).toMatch(
+      /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/mermaid@[\d.]+\/dist\/mermaid\.min\.js" integrity="sha384-[^"]+" crossorigin="anonymous"><\/script>/
+    );
+    expect(result.html).toContain("mermaid.initialize");
+    // Embedding the real bundle pushes output well past 1MB; a CDN link keeps it small.
+    expect(result.html.length).toBeLessThan(50_000);
+  });
+
+  it("links Bootstrap and KaTeX from pinned, SRI-hashed jsdelivr URLs instead of embedding the CSS", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsCdnHtml",
+        filename: "html.json",
+        record: {
+          frames: [
+            { type: "html", payload: '<div class="alert alert-info">hi</div>' },
+            { type: "katex", payload: "x^2" },
+          ],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items, "cdn");
+    expect(result.html).toMatch(
+      /<link rel="stylesheet" href="https:\/\/cdn\.jsdelivr\.net\/npm\/bootstrap@[\d.]+\/dist\/css\/bootstrap\.min\.css" integrity="sha384-[^"]+" crossorigin="anonymous">/
+    );
+    expect(result.html).toMatch(
+      /<link rel="stylesheet" href="https:\/\/cdn\.jsdelivr\.net\/npm\/katex@[\d.]+\/dist\/katex\.min\.css" integrity="sha384-[^"]+" crossorigin="anonymous">/
+    );
+    // No embedded Bootstrap CSS text (same signature other describe blocks use to confirm inlining).
+    expect(result.html).not.toContain(".alert{--bs-alert-bg");
+  });
+
+  it("does not @scope the CDN-linked Bootstrap stylesheet — a <link> can't be scope-wrapped (accepted risk, O4 in `02`)", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsCdnScope",
+        filename: "html.json",
+        record: {
+          frames: [{ type: "html", payload: '<table class="table"><tr><td>x</td></tr></table>' }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items, "cdn");
+    expect(result.html).not.toContain("@scope");
+  });
+
+  it("widens the CSP to allow cdn.jsdelivr.net for script-src and style-src", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsCdnCsp",
+        filename: "mermaid.json",
+        record: {
+          frames: [{ type: "mermaid", payload: "graph TD; A-->B" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items, "cdn");
+    expect(result.html).toMatch(/script-src[^;]*https:\/\/cdn\.jsdelivr\.net/);
+    expect(result.html).toMatch(/style-src[^;]*https:\/\/cdn\.jsdelivr\.net/);
+  });
+
+  it("leaves the CSP unchanged (no cdn.jsdelivr.net) in offline mode", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsOfflineCsp",
+        filename: "mermaid.json",
+        record: {
+          frames: [{ type: "mermaid", payload: "graph TD; A-->B" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items, "offline");
+    expect(result.html).not.toContain("cdn.jsdelivr.net");
   });
 });
