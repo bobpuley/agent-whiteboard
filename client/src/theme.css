@@ -1,0 +1,72 @@
+/* Board-chrome theme variables (F24, v0.33). Scoped to the whiteboard's own
+   UI (toolbar, panels, modals) via component-local var() references — never
+   read by rendered content, which lives inside the @scope-wrapped
+   #html-renderer-root (see client/src/lib/scopeCss.ts) and uses its own
+   Bootstrap/Mermaid styling. Falls back to light when data-theme is unset. */
+
+:root,
+:root[data-theme="light"] {
+  --board-bg: #ffffff;
+  --board-bg-panel: #fafafa;
+  --board-bg-hover: #f0f0f0;
+  --board-bg-row-hover: #f5f5f5;
+  --board-border: #d8d8d8;
+  --board-border-light: #e8e8e8;
+  --board-border-mid: #cccccc;
+  --board-border-faint: #e0e0e0;
+  --board-text: #333333;
+  --board-text-strong: #222222;
+  --board-text-secondary: #555555;
+  --board-text-muted: #888888;
+  --board-text-faint: #999999;
+  --board-text-subtle: #aaaaaa;
+  --board-text-subtlest: #bbbbbb;
+  --board-accent: #2980b9;
+  --board-accent-bg: #e8f4fd;
+  --board-accent-hover: #1f6699;
+  --board-danger: #e74c3c;
+  --board-danger-dark: #c0392b;
+  --board-danger-bg: #fdf0f0;
+  --board-success: #27ae60;
+  --board-success-bg: #f0fff4;
+  --board-warn-bg: #fff8e1;
+  --board-divider: #eeeeee;
+  --board-disabled-bg: #dddddd;
+  --board-shadow-controls: rgba(0, 0, 0, 0.06);
+  --board-shadow-panel: rgba(0, 0, 0, 0.08);
+  --board-shadow-modal: rgba(0, 0, 0, 0.25);
+  --board-overlay: rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="dark"] {
+  --board-bg: #1a1a1a;
+  --board-bg-panel: #242424;
+  --board-bg-hover: #333333;
+  --board-bg-row-hover: #2c2c2c;
+  --board-border: #3d3d3d;
+  --board-border-light: #333333;
+  --board-border-mid: #4d4d4d;
+  --board-border-faint: #454545;
+  --board-text: #e6e6e6;
+  --board-text-strong: #f5f5f5;
+  --board-text-secondary: #b3b3b3;
+  --board-text-muted: #999999;
+  --board-text-faint: #888888;
+  --board-text-subtle: #777777;
+  --board-text-subtlest: #666666;
+  --board-accent: #4ea3d8;
+  --board-accent-bg: #1c3a4a;
+  --board-accent-hover: #6bb8e8;
+  --board-danger: #e74c3c;
+  --board-danger-dark: #f1685a;
+  --board-danger-bg: #3a2020;
+  --board-success: #2ecc71;
+  --board-success-bg: #16321f;
+  --board-warn-bg: #4a3f1a;
+  --board-divider: #333333;
+  --board-disabled-bg: #3a3a3a;
+  --board-shadow-controls: rgba(0, 0, 0, 0.4);
+  --board-shadow-panel: rgba(0, 0, 0, 0.5);
+  --board-shadow-modal: rgba(0, 0, 0, 0.6);
+  --board-overlay: rgba(0, 0, 0, 0.6);
+}
