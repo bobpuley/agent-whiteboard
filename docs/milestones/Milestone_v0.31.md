@@ -24,9 +24,9 @@
 - [x] Unit test in `tests/unit/client/Html.test.ts`: Bootstrap stylesheet is injected/loaded for `type: "html"`, not for `type: "svg"`; plus a regression test confirming the `:root` → `:scope` rewrite. Matching regression test added to `tests/unit/server/export-html.test.ts` for the Sprint 70 export path.
 
 ### Sprint 72 — Agent-facing documentation (`server/mcp.ts`)
-- [ ] Rewrite the `render` tool's `"html"` description line: name Bootstrap 5 explicitly, give concrete class examples appropriate to static content (`alert alert-info`, `card`, `badge`, `table table-striped`), and state the CSS-only/no-JS caveat (dropdowns, modals, tooltips, popovers, collapses, carousels, offcanvas render static markup only, not interactive).
-- [ ] Confirm the `append_frame`/step-frames path (which validates against the same content types) needs no separate documentation change — it shares `type: "html"` semantics with `render()`.
-- [ ] Manual check: the updated description reads clearly as a tool-call preview (no truncation/formatting issues in Claude Code's tool list).
+- [x] Rewrite the `render` tool's `"html"` description line: name Bootstrap 5 explicitly, give concrete class examples appropriate to static content (`alert alert-info`, `card`, `badge`, `table table-striped`), and state the CSS-only/no-JS caveat (dropdowns, modals, tooltips, popovers, collapses, carousels, offcanvas render static markup only, not interactive).
+- [x] Confirm the `append_frame`/step-frames path (which validates against the same content types) needs no separate documentation change — it shares `type: "html"` semantics with `render()`. Confirmed: `append_frame`/`init_step_frames`/`slideshow` reference the same `type` enum generically, with no duplicated per-type prose to update.
+- [x] Manual check: the updated description reads clearly as a tool-call preview (no truncation/formatting issues in Claude Code's tool list). Verified via a fresh MCP client connection to the live dev server.
 
 ---
 
