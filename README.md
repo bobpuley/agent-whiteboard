@@ -169,9 +169,9 @@ List the snapshots stored for a workspace (`id`, `timestamp`, `type`, optional `
 
 **Returns:** `{ "ok": true, "snapshots": [...] }`
 
-### `export_html(workspace, ids, output_path?)`
+### `export_html(workspace, ids)`
 
-Export one or more snapshots (by UUID, discovered via `list_snapshots()`) to a single self-contained HTML file — the agent-facing equivalent of the browser History panel's "Export selected". Mermaid diagrams render client-side in the exported file; KaTeX/Vega-Lite/SVG/HTML render server-side. The HTML is **not** returned inline (it can be several MB with the embedded Mermaid bundle) — it's written to disk and the path is returned. Defaults to `<snapshots_dir>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html`; `output_path` (optional, absolute) overrides the destination.
+Export one or more snapshots (by UUID, discovered via `list_snapshots()`) to a single self-contained HTML document — the agent-facing equivalent of the browser History panel's "Export selected". Mermaid diagrams render client-side in the exported file; KaTeX/Vega-Lite/SVG/HTML render server-side. Dependencies (Mermaid, Bootstrap, KaTeX) are linked from a CDN (pinned version + SRI hash), which keeps the assembled HTML small enough to return **inline** as a string in the tool response — this tool has no filesystem access and never writes to disk. The resulting file needs network access to render correctly when opened. For a fully offline-capable export, or to save the file to a specific path, use `POST /export-html` with `{ "mode": "offline" }` instead (see REST fallback below).
 
 **Returns:** `{ "ok": true, "path": "<absolute path>" }` or `{ "ok": false, "error": "..." }`
 
@@ -238,9 +238,9 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `POST /snapshots/load` | `{ "filename": "..._screen.json", "workspace": "..." (optional) }` — loads a past snapshot onto the canvas (write-silent, no new snapshot is created) |
 | `POST /snapshots/delete-files` | `{ "workspace": "...", "filenames": ["..._screen.json", ...] }` — deletes specific snapshot files |
 | `POST /snapshots/delete-workspace` | `{ "workspace": "..." }` — deletes an entire workspace's snapshot folder |
-| `POST /export-html` | `{ "items": [{ "workspace": "...", "id": "..." }, ...] }` — returns the assembled HTML file as a download, not JSON |
+| `POST /export-html` | `{ "items": [{ "workspace": "...", "id": "..." }, ...], "mode": "cdn" \| "offline" }` (`mode` optional, defaults to `"cdn"`) — returns the assembled HTML file as a download, not JSON |
 
-All endpoints return the same JSON shapes as the MCP tools, except `POST /export-html`, which streams the HTML file directly (`Content-Disposition: attachment`).
+All endpoints return the same JSON shapes as the MCP tools, except `POST /export-html`, which streams the HTML file directly (`Content-Disposition: attachment`). `mode: "cdn"` (default) links Mermaid/Bootstrap/KaTeX from a CDN; `mode: "offline"` embeds them for offline reading, at the cost of a much larger file (the Mermaid bundle alone is ~3.3MB).
 
 ## History & snapshots
 

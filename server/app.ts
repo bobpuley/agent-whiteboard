@@ -23,7 +23,7 @@ import {
   validateWorkspaceInput,
 } from "./render-core.js";
 import { generateExportHtml } from "./export-html.js";
-import type { ValidatedExportItem } from "./export-html.js";
+import type { ExportMode, ValidatedExportItem } from "./export-html.js";
 import { setViewport } from "./viewport-cache.js";
 import type { Viewport } from "./viewport-cache.js";
 import { getSnapshotsRoot } from "./paths.js";
@@ -465,10 +465,13 @@ export function createApp(): Hono {
   // ── HTML Export (v0.13) ────────────────────────────────────────────────────
 
   app.post("/export-html", async (c) => {
-    const body = await c.req.json<{ items?: unknown }>();
+    const body = await c.req.json<{ items?: unknown; mode?: unknown }>();
     if (!Array.isArray(body.items) || body.items.length === 0) {
       return c.json({ ok: false, error: "items must be a non-empty array" }, 400);
     }
+    // Default cdn (v0.32, F23): offline (fully embedded, today's pre-v0.32
+    // behavior) is opt-in via mode: "offline"; any other value falls back to cdn.
+    const mode: ExportMode = body.mode === "offline" ? "offline" : "cdn";
 
     const root = getSnapshotsRoot();
     const validItems: ValidatedExportItem[] = [];
@@ -492,7 +495,7 @@ export function createApp(): Hono {
       return c.json({ ok: false, error: "no valid items to export" }, 400);
     }
 
-    const { html, downloadFilename } = await generateExportHtml(validItems);
+    const { html, downloadFilename } = await generateExportHtml(validItems, mode);
 
     return new Response(html, {
       status: 200,

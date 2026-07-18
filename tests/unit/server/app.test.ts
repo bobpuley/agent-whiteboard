@@ -3093,6 +3093,23 @@ describe("POST /export-html (v0.13, ids-only since v0.27/NF21)", () => {
     expect(disposition).toMatch(/export-/);
   });
 
+  it("treats an invalid/unrecognized mode value as cdn (v0.32, F23)", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
+        mode: "not-a-real-mode",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toMatch(/<link rel="stylesheet" href="https:\/\/cdn\.jsdelivr\.net\/npm\/katex@/);
+  });
+
   // v0.14 — Mermaid export fix (Sprint 27): server no longer pre-renders
   // Mermaid via happy-dom; raw source is embedded and rendered client-side.
   const VALID_MERMAID_RECORD = {
@@ -3132,7 +3149,7 @@ describe("POST /export-html (v0.13, ids-only since v0.27/NF21)", () => {
     expect(body).not.toContain('<p class="export-error">');
   });
 
-  it("embeds the mermaid.js bundle and bootstrap script when mermaid items are present", async () => {
+  it("defaults to cdn mode: links mermaid.js from jsdelivr instead of embedding it", async () => {
     vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_MERMAID_RECORD);
 
     const res = await app.request("/export-html", {
@@ -3140,6 +3157,24 @@ describe("POST /export-html (v0.13, ids-only since v0.27/NF21)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: [{ workspace: "my-ws", id: "uuid-1" }],
+      }),
+    });
+
+    const body = await res.text();
+    expect(body).toContain('mermaid.initialize({ startOnLoad: false, securityLevel: "strict" })');
+    expect(body).toContain('mermaid.run({ querySelector: ".mermaid" })');
+    expect(body).toMatch(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/mermaid@[\d.]+\/dist\/mermaid\.min\.js" integrity="sha384-[^"]+"/);
+  });
+
+  it("mode: \"offline\" embeds the mermaid.js bundle inline instead of linking a CDN", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_MERMAID_RECORD);
+
+    const res = await app.request("/export-html", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [{ workspace: "my-ws", id: "uuid-1" }],
+        mode: "offline",
       }),
     });
 
