@@ -168,7 +168,7 @@
 <style>
   :global(body) {
     margin: 0;
-    background: #fff;
+    background: var(--board-bg);
     font-family: sans-serif;
   }
 
@@ -200,7 +200,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    border: 1px solid #d8d8d8;
+    border: 1px solid var(--board-border);
     border-radius: 6px;
     overflow: hidden;
     min-height: 0;
@@ -210,9 +210,9 @@
     padding: 10px 20px;
     font-size: 15px;
     font-weight: 600;
-    color: #333;
-    border-bottom: 1px solid #e8e8e8;
-    background: #fafafa;
+    color: var(--board-text);
+    border-bottom: 1px solid var(--board-border-light);
+    background: var(--board-bg-panel);
     user-select: none;
   }
 
@@ -226,7 +226,7 @@
   }
 
   .placeholder {
-    color: #666;
+    color: var(--board-text-secondary);
     font-size: 16px;
     user-select: none;
   }
@@ -237,32 +237,33 @@
     justify-content: center;
     gap: 16px;
     padding: 10px 16px;
-    background: #f7f7f7;
-    border-top: 1px solid #e0e0e0;
+    background: var(--board-bg-panel);
+    border-top: 1px solid var(--board-border-faint);
   }
 
   .step-btn {
     padding: 6px 16px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--board-border-mid);
     border-radius: 4px;
-    background: #fff;
+    background: var(--board-bg);
+    color: var(--board-text);
     cursor: pointer;
     font-size: 14px;
   }
 
   .step-btn:hover:not(:disabled) {
-    background: #f0f0f0;
+    background: var(--board-bg-hover);
   }
 
   .step-btn:disabled {
-    color: #bbb;
-    border-color: #e0e0e0;
+    color: var(--board-text-subtlest);
+    border-color: var(--board-border-faint);
     cursor: default;
   }
 
   .step-label {
     font-size: 14px;
-    color: #444;
+    color: var(--board-text-secondary);
     flex: 1;
     text-align: center;
   }
@@ -276,22 +277,22 @@
     flex-direction: column;
     gap: 8px;
     padding: 10px 8px;
-    background: #fff;
-    border: 1px solid #d8d8d8;
+    background: var(--board-bg);
+    border: 1px solid var(--board-border);
     border-right: none;
     border-radius: 6px 0 0 6px;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
+    box-shadow: -2px 0 8px var(--board-shadow-controls);
     z-index: 50;
   }
 
   .panel-icon-btn {
     padding: 6px 8px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--board-border-mid);
     border-radius: 4px;
-    background: #fff;
+    background: var(--board-bg);
     cursor: pointer;
     font-size: 16px;
-    color: #555;
+    color: var(--board-text-secondary);
     transition: background 0.1s;
     line-height: 1;
     display: flex;
@@ -302,39 +303,39 @@
   }
 
   .panel-icon-btn:hover {
-    background: #f0f0f0;
+    background: var(--board-bg-hover);
   }
 
   .panel-icon-btn[aria-pressed="true"] {
-    background: #e8f4fd;
-    border-color: #2980b9;
-    color: #2980b9;
+    background: var(--board-accent-bg);
+    border-color: var(--board-accent);
+    color: var(--board-accent);
   }
 
   .panel-icon-btn.delete-btn:hover {
-    background: #fdf0f0;
-    border-color: #e74c3c;
-    color: #e74c3c;
+    background: var(--board-danger-bg);
+    border-color: var(--board-danger);
+    color: var(--board-danger);
   }
 
   .panel-icon-btn.export-btn:hover {
-    background: #e8f4fd;
-    border-color: #2980b9;
-    color: #2980b9;
+    background: var(--board-accent-bg);
+    border-color: var(--board-accent);
+    color: var(--board-accent);
   }
 
   .panel-sep {
     height: 1px;
-    background: #e8e8e8;
+    background: var(--board-border-light);
     margin: 2px 2px;
   }
 
   .done-btn {
     padding: 6px 8px;
-    border: 1px solid #27ae60;
+    border: 1px solid var(--board-success);
     border-radius: 4px;
-    background: #fff;
-    color: #27ae60;
+    background: var(--board-bg);
+    color: var(--board-success);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -347,21 +348,21 @@
   }
 
   .done-btn:hover:not(:disabled) {
-    background: #f0fff4;
+    background: var(--board-success-bg);
   }
 
   .done-btn:disabled {
-    border-color: #aaa;
-    color: #aaa;
+    border-color: var(--board-text-subtle);
+    color: var(--board-text-subtle);
     cursor: default;
   }
 
   .done-btn-error {
-    border-color: #e74c3c;
-    color: #e74c3c;
+    border-color: var(--board-danger);
+    color: var(--board-danger);
   }
 
   .done-btn-error:hover:not(:disabled) {
-    background: #fdf2f2;
+    background: var(--board-danger-bg);
   }
 </style>

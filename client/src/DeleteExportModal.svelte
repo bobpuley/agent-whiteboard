@@ -280,7 +280,7 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--board-overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -288,12 +288,12 @@
   }
 
   .modal {
-    background: #fff;
+    background: var(--board-bg);
     width: 420px;
     max-width: calc(100vw - 40px);
     max-height: 80vh;
     border-radius: 8px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 8px 30px var(--board-shadow-modal);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -304,23 +304,23 @@
     align-items: center;
     gap: 8px;
     padding: 14px 16px;
-    border-bottom: 1px solid #e8e8e8;
-    border-top: 3px solid #999;
+    border-bottom: 1px solid var(--board-border-light);
+    border-top: 3px solid var(--board-text-faint);
   }
 
   .modal.mode-delete .modal-header {
-    border-top-color: #e74c3c;
+    border-top-color: var(--board-danger);
   }
 
   .modal.mode-export .modal-header {
-    border-top-color: #2980b9;
+    border-top-color: var(--board-accent);
   }
 
   .modal-back-btn {
     background: none;
     border: none;
     cursor: pointer;
-    color: #888;
+    color: var(--board-text-muted);
     font-size: 16px;
     padding: 2px 4px;
     line-height: 1;
@@ -328,14 +328,14 @@
   }
 
   .modal-back-btn:hover {
-    background: #f0f0f0;
+    background: var(--board-bg-hover);
   }
 
   .modal-title {
     flex: 1;
     font-size: 14px;
     font-weight: 600;
-    color: #333;
+    color: var(--board-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -346,15 +346,15 @@
     border: none;
     cursor: pointer;
     font-size: 14px;
-    color: #888;
+    color: var(--board-text-muted);
     padding: 2px 6px;
     border-radius: 3px;
     line-height: 1;
   }
 
   .modal-close-btn:hover {
-    background: #f0f0f0;
-    color: #444;
+    background: var(--board-bg-hover);
+    color: var(--board-text);
   }
 
   .modal-body {
@@ -365,7 +365,7 @@
 
   .modal-step-hint {
     font-size: 12px;
-    color: #999;
+    color: var(--board-text-faint);
     margin: 0 0 10px;
   }
 
@@ -377,36 +377,36 @@
     width: 100%;
     box-sizing: border-box;
     padding: 10px 12px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--board-border-faint);
     border-radius: 6px;
     margin-bottom: 8px;
     cursor: pointer;
-    background: #fff;
+    background: var(--board-bg);
     font: inherit;
     text-align: left;
   }
 
   .workspace-pick-row:hover {
-    background: #f5f5f5;
-    border-color: #ccc;
+    background: var(--board-bg-row-hover);
+    border-color: var(--board-border-mid);
   }
 
   .workspace-pick-name {
     font-size: 13px;
     font-weight: 600;
-    color: #333;
+    color: var(--board-text);
   }
 
   .workspace-pick-meta {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: #999;
+    color: var(--board-text-faint);
     font-size: 12px;
   }
 
   .workspace-pick-chevron {
-    color: #bbb;
+    color: var(--board-text-subtlest);
   }
 
   .whole-workspace-action {
@@ -428,26 +428,26 @@
   }
 
   .mode-delete .whole-workspace-action {
-    background: #e74c3c;
+    background: var(--board-danger);
   }
 
   .mode-delete .whole-workspace-action:hover:not(:disabled) {
-    background: #c0392b;
+    background: var(--board-danger-dark);
   }
 
   .mode-export .whole-workspace-action {
-    background: #2980b9;
+    background: var(--board-accent);
   }
 
   .mode-export .whole-workspace-action:hover:not(:disabled) {
-    background: #1f6699;
+    background: var(--board-accent-hover);
   }
 
   .modal-divider {
     display: flex;
     align-items: center;
     gap: 10px;
-    color: #aaa;
+    color: var(--board-text-subtle);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.03em;
@@ -459,14 +459,14 @@
     content: "";
     flex: 1;
     height: 1px;
-    background: #eee;
+    background: var(--board-divider);
   }
 
   .modal-snapshot-list {
     list-style: none;
     margin: 0;
     padding: 0;
-    border: 1px solid #ececec;
+    border: 1px solid var(--board-border-light);
     border-radius: 6px;
     overflow: hidden;
   }
@@ -474,7 +474,7 @@
   .modal-snapshot-item {
     display: flex;
     align-items: center;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--board-bg-hover);
   }
 
   .modal-snapshot-item:last-child {
@@ -482,7 +482,7 @@
   }
 
   .modal-snapshot-item.selected {
-    background: #fff8e1;
+    background: var(--board-warn-bg);
   }
 
   .modal-snapshot-item label {
@@ -503,7 +503,7 @@
   }
 
   .modal-error {
-    color: #c0392b;
+    color: var(--board-danger-dark);
     font-size: 12px;
     margin: 10px 0 0;
   }
@@ -516,13 +516,13 @@
     justify-content: space-between;
     gap: 10px;
     padding: 12px 16px;
-    border-top: 1px solid #e8e8e8;
-    background: #fafafa;
+    border-top: 1px solid var(--board-border-light);
+    background: var(--board-bg-panel);
   }
 
   .modal-select-count {
     font-size: 12px;
-    color: #666;
+    color: var(--board-text-secondary);
   }
 
   .modal-footer-actions {
@@ -533,8 +533,8 @@
 
   .modal-cancel-btn {
     background: none;
-    color: #555;
-    border: 1px solid #ccc;
+    color: var(--board-text-secondary);
+    border: 1px solid var(--board-border-mid);
     border-radius: 4px;
     padding: 6px 14px;
     font-size: 13px;
@@ -542,7 +542,7 @@
   }
 
   .modal-cancel-btn:hover {
-    background: #f0f0f0;
+    background: var(--board-bg-hover);
   }
 
   .modal-selected-action {
@@ -556,24 +556,24 @@
   }
 
   .modal-selected-action:disabled {
-    background: #ddd !important;
+    background: var(--board-disabled-bg) !important;
     cursor: default;
   }
 
   .mode-delete .modal-selected-action {
-    background: #e74c3c;
+    background: var(--board-danger);
   }
 
   .mode-delete .modal-selected-action:hover:not(:disabled) {
-    background: #c0392b;
+    background: var(--board-danger-dark);
   }
 
   .mode-export .modal-selected-action {
-    background: #2980b9;
+    background: var(--board-accent);
   }
 
   .mode-export .modal-selected-action:hover:not(:disabled) {
-    background: #1f6699;
+    background: var(--board-accent-hover);
   }
 
   .modal-confirm {
@@ -583,7 +583,7 @@
     justify-content: center;
     gap: 10px;
     padding: 30px 16px;
-    color: #333;
+    color: var(--board-text);
     font-size: 14px;
     text-align: center;
   }
@@ -599,10 +599,10 @@
   }
 
   .mode-delete .check-circle {
-    background: #e74c3c;
+    background: var(--board-danger);
   }
 
   .mode-export .check-circle {
-    background: #2980b9;
+    background: var(--board-accent);
   }
 </style>
