@@ -41,7 +41,7 @@ Section flags (combinable, e.g. -ie runs Sections 9+11 only):
 Other options:
   -p, --port <port>     Server port (default: 3000)
   -d, --delay <ms>      Delay between slides in ms (default: 5000)
-  -t, --type <types>    Comma-separated renderer types to include in Section 1–5 slideshow
+  -t, --type <types>    Comma-separated renderer types to include in Section 1–6 slideshow
                         (mermaid, svg, html, katex, vega-lite). Omit for all.
   -h, --help            Show this help
 `);
@@ -86,7 +86,7 @@ const slides = [
   // 1. Mermaid — load-balanced architecture
   {
     type: "mermaid",
-    title: "1 / 5 — Mermaid",
+    title: "1 / 6 — Mermaid",
     payload: `graph TD
   Client -->|HTTP| LB[Load Balancer]
   LB --> A[App Server A]
@@ -101,7 +101,7 @@ const slides = [
   // 2. SVG — concentric circles geometry
   {
     type: "svg",
-    title: "2 / 5 — SVG",
+    title: "2 / 6 — SVG",
     payload: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
   <defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="50%">
@@ -132,7 +132,7 @@ const slides = [
   // 3. HTML — capability card (inline styles; DOMPurify strips <style> blocks)
   {
     type: "html",
-    title: "3 / 5 — HTML",
+    title: "3 / 6 — HTML",
     payload: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
   <h1 style="margin:0 0 4px;font-size:28px;color:#1a1a2e">HTML Renderer</h1>
   <p style="margin:0 0 24px;color:#666;font-size:14px">Sanitized via DOMPurify — inline styles only</p>
@@ -157,20 +157,51 @@ const slides = [
 </div>`,
   },
 
-  // 4. KaTeX — Bayes + Maxwell + Euler
+  // 4. HTML — Bootstrap house style (v0.31): component classes instead of
+  // hand-authored CSS. Scoped via @scope (Html.svelte) — never affects the
+  // app's own chrome. No Bootstrap JS: dropdowns/modals/tooltips/etc. would
+  // render static markup only, not interactive (none used here).
+  {
+    type: "html",
+    title: "4 / 6 — HTML (Bootstrap house style, v0.31)",
+    payload: `<div class="card" style="max-width:480px;margin:0 auto">
+  <div class="card-body">
+    <h5 class="card-title">Bootstrap House Style</h5>
+    <p class="card-text text-muted" style="font-size:13px">Bootstrap 5, CSS-only — no hand-authored CSS needed</p>
+    <div class="alert alert-info py-2" role="alert" style="font-size:13px">
+      Scoped via <code>@scope</code> — never leaks into the app's own UI.
+    </div>
+    <div class="mb-3">
+      <span class="badge bg-primary me-1">card</span>
+      <span class="badge bg-success me-1">alert</span>
+      <span class="badge bg-warning text-dark me-1">badge</span>
+      <span class="badge bg-secondary">table</span>
+    </div>
+    <table class="table table-striped table-sm mb-0">
+      <thead><tr><th>Surface</th><th>Module</th></tr></thead>
+      <tbody>
+        <tr><td>Live canvas</td><td>Html.svelte</td></tr>
+        <tr><td>HTML export</td><td>export-html.ts</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>`,
+  },
+
+  // 5. KaTeX — Bayes + Maxwell + Euler
   {
     type: "katex",
-    title: "4 / 5 — KaTeX",
+    title: "5 / 6 — KaTeX",
     payload: String.raw`P(A \mid B) = \frac{P(B \mid A)\, P(A)}{P(B)} \qquad \text{(Bayes' Theorem)}\\[18pt]
 \nabla \cdot \mathbf{E} = \frac{\rho}{\varepsilon_0} \qquad
 \nabla \times \mathbf{B} = \mu_0 \mathbf{J} + \mu_0\varepsilon_0\frac{\partial \mathbf{E}}{\partial t} \\[18pt]
 e^{i\pi} + 1 = 0`,
   },
 
-  // 5. Vega-Lite — request latency by percentile
+  // 6. Vega-Lite — request latency by percentile
   {
     type: "vega-lite",
-    title: "5 / 5 — Vega-Lite",
+    title: "6 / 6 — Vega-Lite",
     payload: JSON.stringify({
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
       width: 420,
