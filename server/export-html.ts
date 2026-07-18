@@ -237,12 +237,27 @@ function getKatexCss(): string {
 
 let cachedBootstrapCss: string | undefined;
 
+/**
+ * Bootstrap's color system (alert/badge/table variants, etc.) is defined
+ * almost entirely via CSS custom properties set on `:root`. `@scope` only
+ * matches elements within the scope root's own subtree — `:root` (the
+ * `<html>` element) is an ancestor of the scope root, never a descendant,
+ * so a bare `:root` rule inside `@scope (#anchor) { ... }` never matches
+ * and its custom properties are silently never set. `:scope`, inside an
+ * `@scope` block, refers to the scope root element itself — properties set
+ * there still inherit normally to every descendant. Without this rewrite,
+ * colors/backgrounds silently fall back to initial values while
+ * non-variable properties (padding, etc.) keep working, producing
+ * unstyled-looking Bootstrap components with no error. Found via manual
+ * browser verification, v0.31 Sprint 71/70.
+ */
 function getBootstrapCss(): string {
   if (cachedBootstrapCss !== undefined) return cachedBootstrapCss;
   try {
     const req = createRequire(import.meta.url);
     const cssPath = req.resolve("bootstrap/dist/css/bootstrap.min.css");
-    cachedBootstrapCss = readFileSync(cssPath, "utf-8");
+    const raw = readFileSync(cssPath, "utf-8");
+    cachedBootstrapCss = raw.replace(/:root/g, ":scope");
   } catch {
     cachedBootstrapCss = "";
   }
