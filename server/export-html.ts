@@ -92,6 +92,19 @@ function renderHtmlPayload(payload: string, purify: ReturnType<typeof DOMPurify>
 }
 
 /**
+ * Pure string-transform primitive: wraps a CSS string in `@scope (<selector-list>)
+ * { ... }`, limiting selector matching to the given anchor ids' subtrees. Has no
+ * knowledge of *why* it's being called — used both to contain a payload's own
+ * embedded <style> tag (scopeEmbeddedStyles(), single anchor) and to scope the
+ * shared Bootstrap stylesheet across every html-type item/frame anchor in one
+ * export (v0.31 Sprint 70, multi-anchor).
+ */
+export function scopeCss(css: string, anchorIds: string[]): string {
+  const selectorList = anchorIds.map((id) => `#${id}`).join(", ");
+  return `@scope (${selectorList}) {\n${css}\n}`;
+}
+
+/**
  * Contains any <style> tag embedded in rendered "html"/"svg" content to the
  * element it's meant to style, instead of leaking document-wide. A <style>
  * element is normally document-scoped regardless of DOM nesting — a payload
@@ -108,7 +121,7 @@ function renderHtmlPayload(payload: string, purify: ReturnType<typeof DOMPurify>
 function scopeEmbeddedStyles(html: string, anchorId: string): string {
   return html.replace(
     /<style>([\s\S]*?)<\/style>/gi,
-    (_, css: string) => `<style>@scope (#${anchorId}) {\n${css}\n}</style>`
+    (_, css: string) => `<style>${scopeCss(css, [anchorId])}</style>`
   );
 }
 

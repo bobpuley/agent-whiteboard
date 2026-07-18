@@ -23,6 +23,7 @@
     "@hono/node-server": "^1.13.7",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@types/dompurify": "^3.2.0",
+    "bootstrap": "^5.3.8",
     "dompurify": "^3.4.7",
     "happy-dom": "^20.10.6",
     "hono": "^4.7.11",

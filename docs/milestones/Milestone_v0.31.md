@@ -1,13 +1,13 @@
 # Milestone v0.31 — Bootstrap House Style for HTML Content (Sprints 69–72)
 
-**Status:** planned
+**Status:** in progress
 
 > Opened 2026-07-15 via `/doc-creator-driver:intake` (feature request, FR25 in `01`). Raw request: give an agent a small, meaningful, deterministic style set for `type: "html"` payloads instead of hand-authoring CSS per snapshot — prompted by a real export (`study-coach_algorithms-20260713-201859.html`) showing a bespoke mini design system (callouts, badges, legends, a calendar-heatmap grid) reinvented from scratch. Full design resolved via `/grill-me`: Bootstrap 5, CSS-only, scoped via the same `@scope`/`scopeEmbeddedStyles()` mechanism B20 shipped in v0.30, lazy-loaded live and conditionally included on export — see F20 in `03`, L7 in `02`, and the dependency/`Html.svelte` notes in `04`.
 
 ### Sprint 69 — `bootstrap` dependency + generalized `@scope`-wrap helper
-- [ ] Add `bootstrap` as an npm dependency (CSS-only usage — no JS import anywhere).
-- [ ] Generalize the existing `scopeEmbeddedStyles()` (or extract a shared helper it can call) so it can wrap an arbitrary CSS string — not just a payload's own extracted `<style>` content — in `@scope (<selector-list>) { ... }`. The export path needs one shared Bootstrap ruleset scoped to *every* `html`-type item/frame anchor in a single export in one pass (`@scope` accepts a comma-separated scope-root list), not a fresh copy per item.
-- [ ] Unit tests: helper produces valid `@scope` output for both a single anchor and a multi-anchor list; existing `scopeEmbeddedStyles()` behavior (B20 regression coverage) unchanged.
+- [x] Add `bootstrap` as an npm dependency (CSS-only usage — no JS import anywhere).
+- [x] Generalize the existing `scopeEmbeddedStyles()` (or extract a shared helper it can call) so it can wrap an arbitrary CSS string — not just a payload's own extracted `<style>` content — in `@scope (<selector-list>) { ... }`. The export path needs one shared Bootstrap ruleset scoped to *every* `html`-type item/frame anchor in a single export in one pass (`@scope` accepts a comma-separated scope-root list), not a fresh copy per item.
+- [x] Unit tests: helper produces valid `@scope` output for both a single anchor and a multi-anchor list; existing `scopeEmbeddedStyles()` behavior (B20 regression coverage) unchanged.
 
 > **Implementation note:** keep this a pure string-transform helper with no knowledge of *why* it's being called — export's per-payload `<style>` scoping and the new Bootstrap-stylesheet scoping are two callers of the same primitive, not two mechanisms.
 

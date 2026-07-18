@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateExportHtml } from "../../../server/export-html.js";
+import { generateExportHtml, scopeCss } from "../../../server/export-html.js";
 import type { ValidatedExportItem } from "../../../server/export-html.js";
 
 function vegaItem(workspace: string, marker: string, mark: string): ValidatedExportItem {
@@ -131,6 +131,18 @@ describe("generateExportHtml — table border alignment (B21)", () => {
 
     const result = await generateExportHtml(items);
     expect(result.html).toMatch(/table\s*\{[^}]*border-collapse:\s*collapse/);
+  });
+});
+
+describe("scopeCss — generalized @scope-wrap helper (v0.31 Sprint 69)", () => {
+  it("wraps a CSS string in @scope for a single anchor", () => {
+    const result = scopeCss("body { color: red; }", ["item-1"]);
+    expect(result).toBe("@scope (#item-1) {\nbody { color: red; }\n}");
+  });
+
+  it("wraps a CSS string in @scope for a comma-separated multi-anchor list", () => {
+    const result = scopeCss("body { color: red; }", ["item-1", "item-2", "frame-3"]);
+    expect(result).toBe("@scope (#item-1, #item-2, #frame-3) {\nbody { color: red; }\n}");
   });
 });
 
