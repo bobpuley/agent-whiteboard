@@ -165,6 +165,35 @@ describe("generateExportHtml — Bootstrap house style (v0.31 Sprint 70)", () =>
     expect(result.html).toContain(BOOTSTRAP_SIGNATURE);
   });
 
+  it("rewrites :root to :scope so Bootstrap's CSS-variable color system actually resolves inside @scope (found via manual verification)", async () => {
+    // @scope only matches elements within the scope root's own subtree —
+    // :root (the <html> element) is an ancestor of the scope root, never a
+    // descendant, so a bare `:root { --bs-blue: ... }` rule inside
+    // `@scope (#anchor) { ... }` never matches and every color/background
+    // that depends on those custom properties silently falls back to its
+    // initial value (transparent/black), while non-variable properties
+    // (padding, etc.) keep working with no error at all. Confirmed live in
+    // a real browser: without this rewrite .alert-info rendered with
+    // transparent background and black text instead of Bootstrap's blue.
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsH2",
+        filename: "html.json",
+        record: {
+          frames: [{ type: "html", payload: '<div class="alert alert-info">hi</div>' }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    const scopeMatch = result.html.match(/@scope \(([^)]*)\) \{\n@charset[\s\S]*?\n\}<\/style>/);
+    expect(scopeMatch).not.toBeNull();
+    const bootstrapBlock = scopeMatch![0];
+    expect(bootstrapBlock).toContain(':scope,[data-bs-theme=light]{');
+    expect(bootstrapBlock).not.toContain(":root");
+  });
+
   it("ships no Bootstrap CSS for an all-Mermaid export", async () => {
     const items: ValidatedExportItem[] = [
       {
