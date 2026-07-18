@@ -127,12 +127,12 @@ function scopeEmbeddedStyles(html: string, anchorId: string): string {
 
 // ── Rendered item types ────────────────────────────────────────────────────
 
-interface RenderedHtml { kind: "html"; html: string }
+interface RenderedHtml { kind: "html"; html: string; type: string }
 interface RenderedStepFrames { kind: "stepFrames"; frames: RenderedFrame[] }
 interface RenderedError { kind: "error"; message: string }
 type RenderedContent = RenderedHtml | RenderedStepFrames | RenderedError;
 
-interface RenderedFrame { label?: string; html: string }
+interface RenderedFrame { label?: string; html: string; type: string }
 
 interface RenderedItem {
   workspace: string;
@@ -179,10 +179,10 @@ async function renderFrames(
     for (const frame of frames) {
       try {
         const html = await renderByType(frame.type, frame.payload, purify);
-        rendered.push({ label: frame.label, html });
+        rendered.push({ label: frame.label, html, type: frame.type });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        rendered.push({ label: frame.label, html: `<p class="export-error">${escapeHtml(msg)}</p>` });
+        rendered.push({ label: frame.label, html: `<p class="export-error">${escapeHtml(msg)}</p>`, type: frame.type });
       }
     }
     return { kind: "stepFrames", frames: rendered };
@@ -190,7 +190,7 @@ async function renderFrames(
 
   try {
     const html = await renderByType(frames[0].type, frames[0].payload, purify);
-    return { kind: "html", html };
+    return { kind: "html", html, type: frames[0].type };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { kind: "error", message: msg };
@@ -233,6 +233,20 @@ function getKatexCss(): string {
     cachedKatexCss = "";
   }
   return cachedKatexCss;
+}
+
+let cachedBootstrapCss: string | undefined;
+
+function getBootstrapCss(): string {
+  if (cachedBootstrapCss !== undefined) return cachedBootstrapCss;
+  try {
+    const req = createRequire(import.meta.url);
+    const cssPath = req.resolve("bootstrap/dist/css/bootstrap.min.css");
+    cachedBootstrapCss = readFileSync(cssPath, "utf-8");
+  } catch {
+    cachedBootstrapCss = "";
+  }
+  return cachedBootstrapCss;
 }
 
 let cachedMermaidBundle: string | undefined;
@@ -295,6 +309,7 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: bool
 
   let tocHtml = "";
   let mainHtml = "";
+  const htmlAnchorIds: string[] = [];
 
   for (const [ws, wsList] of workspaces) {
     const wsAnchor = `ws-${ws.replace(/[^a-zA-Z0-9]/g, "-")}`;
@@ -330,12 +345,14 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: bool
         for (let i = 0; i < content.frames.length; i++) {
           const frame = content.frames[i];
           const frameId = `${itemId}-frame-${i}`;
+          if (frame.type === "html") htmlAnchorIds.push(frameId);
           mainHtml += `<section class="frame-section" id="${frameId}">`;
           mainHtml += `<h4 class="frame-heading">${escapeHtml(frame.label ?? `Frame ${i + 1}`)}</h4>`;
           mainHtml += scopeEmbeddedStyles(frame.html, frameId);
           mainHtml += `</section>`;
         }
       } else {
+        if (content.type === "html") htmlAnchorIds.push(itemId);
         mainHtml += scopeEmbeddedStyles(content.html, itemId);
       }
 
@@ -347,6 +364,8 @@ function assembleHtml(items: RenderedItem[], hasKatex: boolean, hasMermaid: bool
   }
 
   const katexBlock = hasKatex ? `<style>${getKatexCss()}</style>\n` : "";
+  const bootstrapBlock =
+    htmlAnchorIds.length > 0 ? `<style>${scopeCss(getBootstrapCss(), htmlAnchorIds)}</style>\n` : "";
   const mermaidBlock = hasMermaid
     ? `<script>${getMermaidBundle()}</script>
 <script>
@@ -366,7 +385,7 @@ document.addEventListener("DOMContentLoaded", function () {
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'">
 <title>Whiteboard Export</title>
 <style>${LAYOUT_CSS}</style>
-${katexBlock}</head>
+${katexBlock}${bootstrapBlock}</head>
 <body>
 <nav>
 <h2>Contents</h2>

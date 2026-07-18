@@ -146,6 +146,97 @@ describe("scopeCss — generalized @scope-wrap helper (v0.31 Sprint 69)", () => 
   });
 });
 
+describe("generateExportHtml — Bootstrap house style (v0.31 Sprint 70)", () => {
+  const BOOTSTRAP_SIGNATURE = ".alert{--bs-alert-bg";
+
+  it("includes the Bootstrap stylesheet when the export has >=1 html-type item", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsH",
+        filename: "html.json",
+        record: {
+          frames: [{ type: "html", payload: '<div class="alert alert-info">hi</div>' }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    expect(result.html).toContain(BOOTSTRAP_SIGNATURE);
+  });
+
+  it("ships no Bootstrap CSS for an all-Mermaid export", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsI",
+        filename: "mermaid.json",
+        record: {
+          frames: [{ type: "mermaid", payload: "graph TD; A-->B" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    expect(result.html).not.toContain(BOOTSTRAP_SIGNATURE);
+  });
+
+  it("scopes the Bootstrap stylesheet to every html-type item anchor across a multi-item, multi-workspace export, excluding non-html anchors", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsA",
+        filename: "a-html.json",
+        record: {
+          frames: [{ type: "html", payload: '<div class="card">a</div>' }],
+          timestamp: "2026-01-01T00:00:00.000Z",
+        },
+      },
+      {
+        workspace: "wsA",
+        filename: "a-mermaid.json",
+        record: {
+          frames: [{ type: "mermaid", payload: "graph TD; A-->B" }],
+          timestamp: "2026-01-01T00:01:00.000Z",
+        },
+      },
+      {
+        workspace: "wsB",
+        filename: "b-html.json",
+        record: {
+          frames: [{ type: "html", payload: '<div class="badge">b</div>' }],
+          timestamp: "2026-01-01T00:02:00.000Z",
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    const match = result.html.match(/@scope \(([^)]*)\) \{\n@charset/);
+    expect(match).not.toBeNull();
+    const selectorList = match![1];
+    expect(selectorList).toBe("#item-1, #item-3");
+  });
+
+  it("does not let Bootstrap's bare-element rules leak into the export's own nav/heading chrome", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsJ",
+        filename: "html.json",
+        record: {
+          title: "Bootstrap demo",
+          frames: [{ type: "html", payload: '<table class="table"><tr><td>x</td></tr></table>' }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items);
+    // The Bootstrap block is wrapped in @scope to #item-1 only — the export's
+    // own <nav>/<h2>/<h3> chrome sits outside that scope root entirely.
+    const scopeMatch = result.html.match(/@scope \(([^)]*)\) \{\n@charset/);
+    expect(scopeMatch![1]).toBe("#item-1");
+  });
+});
+
 describe("generateExportHtml — per-frame nav submenu for step-frames items (B22)", () => {
   it("gives a step-frames item one nav submenu entry per frame, with the parent link pointing at frame 0", async () => {
     const items: ValidatedExportItem[] = [
