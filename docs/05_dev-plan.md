@@ -36,7 +36,7 @@
 | v0.29      | Client Component Responsibility Cleanup                          | 62–65    | released                             | [Milestone_v0.29.md](./milestones/Milestone_v0.29.md) |
 | v0.30      | Export HTML Layout & Navigation Fixes                            | 66–68    | released                             | [Milestone_v0.30.md](./milestones/Milestone_v0.30.md) |
 | v0.31      | Bootstrap House Style for HTML Content                           | 69–72    | released — archived in `docs/v0.31/` | [Milestone_v0.31.md](./milestones/Milestone_v0.31.md) |
-| v0.32      | Export Delivery Model — CDN Default & Filesystem Boundary        | 73       | in progress                          | [Milestone_v0.32.md](./milestones/Milestone_v0.32.md) |
+| v0.32      | Export Delivery Model — CDN Default & Filesystem Boundary        | 73       | released                             | [Milestone_v0.32.md](./milestones/Milestone_v0.32.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
 > v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`, `02` §N, `04` §9) — sequenced one slice per milestone; v0.26 must complete before any public release.

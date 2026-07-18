@@ -1,6 +1,6 @@
 # Milestone v0.32 — Export Delivery Model: CDN Default & Filesystem Boundary (Sprint 73)
 
-**Status:** pending
+**Status:** released
 
 ### Sprint 73 — CDN-default export + MCP filesystem-boundary fix
 - [x] Add a CDN-mode HTML assembly path in `server/export-html.ts`: emit `<script src>`/`<link href>` tags for Mermaid, Bootstrap, KaTeX pointing at jsdelivr, pinned to the exact versions in `package.json` (currently `mermaid@11.15.0`, `bootstrap@5.3.8`, `katex@0.17.0`), each with a computed SRI hash.

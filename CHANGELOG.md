@@ -1,3 +1,13 @@
+## 0.27.5 — 2026-07-18
+
+**Milestone v0.32 — Export Delivery Model: CDN Default & Filesystem Boundary (Sprint 73) complete.** HTML export switches its default dependency-loading from fully embedded to CDN-linked, and the MCP `export_html` tool drops its `output_path` parameter entirely — closing a way for the agent to write to an arbitrary filesystem path that could bypass a write-only-within-project-folders guardrail (FR26 in `01`, O1–O4 in `02`, F21–F23 in `03`).
+
+- **CDN mode (`server/export-html.ts`):** Mermaid, Bootstrap, and KaTeX are now referenced via pinned-version, SRI-hashed jsdelivr `<script>`/`<link>` tags instead of being embedded — `generateExportHtml()` takes an explicit `mode: "cdn" | "offline"`. The SRI hash is computed at runtime from the locally installed dist file (same version jsdelivr serves), so it can never drift out of sync on a dependency bump — no manual regeneration step needed. `offline` mode reproduces the pre-v0.32 fully-embedded behavior byte-for-byte. The export's CSP is widened to allow `cdn.jsdelivr.net` for `script-src`/`style-src` only in `cdn` mode.
+- **MCP `export_html(workspace, ids)`:** always runs in `cdn` mode and returns the assembled HTML inline as a string in the tool response — no filesystem access, no `output_path` parameter, never writes to disk. `writeExportHtmlToDisk()` is removed (no other caller).
+- **REST `POST /export-html`:** gains an optional `mode: "cdn" | "offline"` body field (default `"cdn"`, any unrecognized value also falls back to `"cdn"`); response streaming (`Content-Disposition: attachment`, no server-side write) is unchanged in either mode.
+- **Accepted trade-off (O4 in `02`):** Bootstrap's `@scope`-based leak fix (bug B20, v0.31) only works when its CSS is inlined — a CDN `<link>` can't be scope-wrapped. `cdn` mode links Bootstrap unscoped anyway rather than keeping it inlined; `offline` mode is unaffected.
+- Full suite: 507 unit tests passing, `tsc --noEmit`, `svelte-check`, `npm run build`, and `npm run lint` clean throughout.
+
 ## 0.27.4 — 2026-07-18
 
 **Milestone v0.31 — Bootstrap House Style for HTML Content (Sprints 69–72) complete.** `type: "html"` payloads can now use Bootstrap 5 (CSS-only) component classes instead of hand-authored CSS, in both the live canvas and HTML exports (FR25 in `01`, F20 in `03`).
