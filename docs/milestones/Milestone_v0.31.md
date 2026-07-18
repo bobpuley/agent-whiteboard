@@ -12,10 +12,10 @@
 > **Implementation note:** keep this a pure string-transform helper with no knowledge of *why* it's being called — export's per-payload `<style>` scoping and the new Bootstrap-stylesheet scoping are two callers of the same primitive, not two mechanisms.
 
 ### Sprint 70 — Export-side integration (`server/export-html.ts`)
-- [ ] Read `bootstrap/dist/css/bootstrap.min.css` at export-assembly time (same "read from `node_modules` at call time" pattern as the `mermaid.js` embedding, L1/L6 in `02`).
-- [ ] In `assembleHtml()`, when the export contains ≥1 `html`-type item (expanded through step-frames, same detection already used for the KaTeX-CSS conditional), append the Bootstrap stylesheet to the `<style>` block wrapped via Sprint 69's helper, scoped to the full set of `html`-type item/frame anchor ids in this export.
-- [ ] Confirm scoping holds: a payload's own `alert alert-info` class renders Bootstrap's alert styling; the export's own `<nav>`/`<h1>`/`<h2>`/`<h3>` chrome is visually unaffected; a non-`html` item (e.g. a lone Mermaid export) produces no Bootstrap CSS in the output at all.
-- [ ] Unit tests in `tests/unit/server/export-html.test.ts`: Bootstrap CSS present iff ≥1 html item; scoped correctly for a multi-item, multi-workspace export; absent for an all-Mermaid export.
+- [x] Read `bootstrap/dist/css/bootstrap.min.css` at export-assembly time (same "read from `node_modules` at call time" pattern as the `mermaid.js` embedding, L1/L6 in `02`).
+- [x] In `assembleHtml()`, when the export contains ≥1 `html`-type item (expanded through step-frames, same detection already used for the KaTeX-CSS conditional), append the Bootstrap stylesheet to the `<style>` block wrapped via Sprint 69's helper, scoped to the full set of `html`-type item/frame anchor ids in this export.
+- [x] Confirm scoping holds: a payload's own `alert alert-info` class renders Bootstrap's alert styling; the export's own `<nav>`/`<h1>`/`<h2>`/`<h3>` chrome is visually unaffected; a non-`html` item (e.g. a lone Mermaid export) produces no Bootstrap CSS in the output at all.
+- [x] Unit tests in `tests/unit/server/export-html.test.ts`: Bootstrap CSS present iff ≥1 html item; scoped correctly for a multi-item, multi-workspace export; absent for an all-Mermaid export.
 
 ### Sprint 71 — Live-view integration (`client/src/renderers/Html.svelte`)
 - [ ] Lazy-load Bootstrap's CSS-only bundle only when `type === "html"` actually mounts (never for `type === "svg"`, matching the `registry.ts` precedent and its documented bundle-size-regression history for Mermaid/KaTeX/Vega-Embed).
