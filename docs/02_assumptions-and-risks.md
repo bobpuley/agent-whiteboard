@@ -342,6 +342,11 @@ Risks from moving the three test roots:
 > - **Relative `output_path` values resolve against the server process's working directory**, not the agent's — since the server is typically a long-lived background process, its cwd may differ from the agent's session cwd. The MCP tool description must tell the agent to pass an absolute path if a specific location is required.
 > - No REST endpoint is added purely for "write to disk" — a curl-based caller already gets this behavior for free via `curl ... -o file.html` against the (now `id`-aware) `POST /export-html`. Only the MCP tool wraps the disk-write + default-path convenience.
 
+**L7 — Bootstrap house style for `type: "html"` payloads: agent's class-name reliability, and extending `@scope`'s browser-support risk (2026-07-15, via `/grill-me` — see FR25 in `01`)**
+> ✅ DECISION: full design (framework choice, scoping mechanism, loading strategy) resolved via `/grill-me` — see FR25 in `01`, F20 in `03`, and the dependency/`Html.svelte` notes in `04`.
+> ⚠️ ASSUMPTION: the agent's Bootstrap 5 class-name knowledge (learned from training data, not fed via any in-repo reference doc) is reliable enough to produce correct markup without hallucination or version drift (e.g. Bootstrap 4's `ml-2` vs. 5's `ms-2`). Mitigation: the `render` MCP tool's `"html"` description names "Bootstrap 5" explicitly and gives concrete class examples (`alert alert-info`, `card`, `badge`, `table table-striped`) to anchor the agent to the intended version/subset, rather than relying on the bare framework name alone.
+> ⚠️ ASSUMPTION (risk accepted 2026-07-15): the scoping mechanism (`@scope`) already carried an unlogged browser-support risk from its original B20 use (v0.30, real but not universal support — Chrome/Edge 118+, Safari 17.4+, Firefox 128+). This proposal meaningfully raises that risk's blast radius, scoping the full ~160–200KB Bootstrap stylesheet the same way, not just a small per-payload `<style>` block. In an unsupported browser, the whole `@scope` block is dropped by the CSS parser — Bootstrap and payload styling both silently no-op; content still renders as unstyled semantic HTML (graceful degrade, not corruption/leak). Accepted as-is, consistent with the existing (if previously unstated) B20 precedent; no fallback/feature-detection built.
+
 ---
 
 ## M. Design Debt Remediation (v0.20/v0.21)
