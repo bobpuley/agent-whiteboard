@@ -19,7 +19,7 @@
 <style>
   .snapshot-title {
     font-size: 13px;
-    color: #222;
+    color: var(--board-text-strong);
     font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
@@ -34,8 +34,8 @@
 
   .type-badge {
     font-size: 11px;
-    background: #e8f4fd;
-    color: #2980b9;
+    background: var(--board-accent-bg);
+    color: var(--board-accent);
     padding: 1px 6px;
     border-radius: 10px;
     font-weight: 500;
@@ -44,6 +44,6 @@
 
   .snapshot-time {
     font-size: 11px;
-    color: #999;
+    color: var(--board-text-faint);
   }
 </style>

@@ -6,6 +6,7 @@
   import { canvasStore } from "./stores/canvasStore.js";
   import { doneStore } from "./stores/doneStore.js";
   import { modalStore } from "./stores/modalStore.js";
+  import { themeStore } from "./stores/themeStore.js";
   import { stepNav } from "./stores/stepNav.js";
   import { disconnected, initRouter } from "./stores/wsRouter.js";
   import { rendererRegistry } from "./renderers/registry.js";
@@ -129,6 +130,26 @@
   {/if}
 
   <div class="controls-panel">
+    <button
+      class="panel-icon-btn"
+      on:click={themeStore.toggle}
+      aria-label={$themeStore === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      aria-pressed={$themeStore === "dark"}
+      title={$themeStore === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+    >
+      {#if $themeStore === "dark"}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/>
+        </svg>
+      {:else}
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      {/if}
+    </button>
+
+    <div class="panel-sep"></div>
+
     <button class="panel-icon-btn" on:click={() => { historyOpen = !historyOpen; }} aria-label="Toggle history panel" aria-pressed={historyOpen} title="History">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
@@ -168,7 +189,7 @@
 <style>
   :global(body) {
     margin: 0;
-    background: #fff;
+    background: var(--board-bg);
     font-family: sans-serif;
   }
 
@@ -200,7 +221,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    border: 1px solid #d8d8d8;
+    border: 1px solid var(--board-border);
     border-radius: 6px;
     overflow: hidden;
     min-height: 0;
@@ -210,9 +231,9 @@
     padding: 10px 20px;
     font-size: 15px;
     font-weight: 600;
-    color: #333;
-    border-bottom: 1px solid #e8e8e8;
-    background: #fafafa;
+    color: var(--board-text);
+    border-bottom: 1px solid var(--board-border-light);
+    background: var(--board-bg-panel);
     user-select: none;
   }
 
@@ -223,10 +244,11 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
+    background: var(--board-canvas-bg);
   }
 
   .placeholder {
-    color: #666;
+    color: var(--board-text-secondary);
     font-size: 16px;
     user-select: none;
   }
@@ -237,32 +259,33 @@
     justify-content: center;
     gap: 16px;
     padding: 10px 16px;
-    background: #f7f7f7;
-    border-top: 1px solid #e0e0e0;
+    background: var(--board-bg-panel);
+    border-top: 1px solid var(--board-border-faint);
   }
 
   .step-btn {
     padding: 6px 16px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--board-border-mid);
     border-radius: 4px;
-    background: #fff;
+    background: var(--board-bg);
+    color: var(--board-text);
     cursor: pointer;
     font-size: 14px;
   }
 
   .step-btn:hover:not(:disabled) {
-    background: #f0f0f0;
+    background: var(--board-bg-hover);
   }
 
   .step-btn:disabled {
-    color: #bbb;
-    border-color: #e0e0e0;
+    color: var(--board-text-subtlest);
+    border-color: var(--board-border-faint);
     cursor: default;
   }
 
   .step-label {
     font-size: 14px;
-    color: #444;
+    color: var(--board-text-secondary);
     flex: 1;
     text-align: center;
   }
@@ -276,22 +299,22 @@
     flex-direction: column;
     gap: 8px;
     padding: 10px 8px;
-    background: #fff;
-    border: 1px solid #d8d8d8;
+    background: var(--board-bg);
+    border: 1px solid var(--board-border);
     border-right: none;
     border-radius: 6px 0 0 6px;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.06);
+    box-shadow: -2px 0 8px var(--board-shadow-controls);
     z-index: 50;
   }
 
   .panel-icon-btn {
     padding: 6px 8px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--board-border-mid);
     border-radius: 4px;
-    background: #fff;
+    background: var(--board-bg);
     cursor: pointer;
     font-size: 16px;
-    color: #555;
+    color: var(--board-text-secondary);
     transition: background 0.1s;
     line-height: 1;
     display: flex;
@@ -302,39 +325,39 @@
   }
 
   .panel-icon-btn:hover {
-    background: #f0f0f0;
+    background: var(--board-bg-hover);
   }
 
   .panel-icon-btn[aria-pressed="true"] {
-    background: #e8f4fd;
-    border-color: #2980b9;
-    color: #2980b9;
+    background: var(--board-accent-bg);
+    border-color: var(--board-accent);
+    color: var(--board-accent);
   }
 
   .panel-icon-btn.delete-btn:hover {
-    background: #fdf0f0;
-    border-color: #e74c3c;
-    color: #e74c3c;
+    background: var(--board-danger-bg);
+    border-color: var(--board-danger);
+    color: var(--board-danger);
   }
 
   .panel-icon-btn.export-btn:hover {
-    background: #e8f4fd;
-    border-color: #2980b9;
-    color: #2980b9;
+    background: var(--board-accent-bg);
+    border-color: var(--board-accent);
+    color: var(--board-accent);
   }
 
   .panel-sep {
     height: 1px;
-    background: #e8e8e8;
+    background: var(--board-border-light);
     margin: 2px 2px;
   }
 
   .done-btn {
     padding: 6px 8px;
-    border: 1px solid #27ae60;
+    border: 1px solid var(--board-success);
     border-radius: 4px;
-    background: #fff;
-    color: #27ae60;
+    background: var(--board-bg);
+    color: var(--board-success);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -347,21 +370,21 @@
   }
 
   .done-btn:hover:not(:disabled) {
-    background: #f0fff4;
+    background: var(--board-success-bg);
   }
 
   .done-btn:disabled {
-    border-color: #aaa;
-    color: #aaa;
+    border-color: var(--board-text-subtle);
+    color: var(--board-text-subtle);
     cursor: default;
   }
 
   .done-btn-error {
-    border-color: #e74c3c;
-    color: #e74c3c;
+    border-color: var(--board-danger);
+    color: var(--board-danger);
   }
 
   .done-btn-error:hover:not(:disabled) {
-    background: #fdf2f2;
+    background: var(--board-danger-bg);
   }
 </style>

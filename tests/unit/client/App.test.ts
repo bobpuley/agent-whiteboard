@@ -27,4 +27,17 @@ describe("App.svelte", () => {
 
     await waitFor(() => expect(container.querySelector(".html-renderer circle")).toBeTruthy());
   });
+
+  it("theme toggle switches data-theme and its own label between light and dark", async () => {
+    const { getByRole } = render(App);
+    const before = document.documentElement.getAttribute("data-theme");
+    const toggle = getByRole("button", { name: /switch to (dark|light) theme/i });
+
+    await toggle.click();
+
+    const after = document.documentElement.getAttribute("data-theme");
+    expect(after).not.toBe(before);
+    expect(["light", "dark"]).toContain(after);
+    expect(getByRole("button", { name: after === "dark" ? /switch to light theme/i : /switch to dark theme/i })).toBeTruthy();
+  });
 });
