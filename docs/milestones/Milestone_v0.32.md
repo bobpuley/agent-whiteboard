@@ -3,14 +3,15 @@
 **Status:** pending
 
 ### Sprint 73 — CDN-default export + MCP filesystem-boundary fix
-- [ ] Add a CDN-mode HTML assembly path in `server/export-html.ts`: emit `<script src>`/`<link href>` tags for Mermaid, Bootstrap, KaTeX pointing at jsdelivr, pinned to the exact versions in `package.json` (currently `mermaid@11.15.0`, `bootstrap@5.3.8`, `katex@0.17.0`), each with a computed SRI hash.
-- [ ] Add a `mode: "cdn" | "offline"` parameter threaded through `generateExportHtml()`/`assembleHtml()`; `cdn` is the default and uses the new CDN path; `offline` reproduces today's fully-embedded output (no behavior change to that path).
-- [ ] Remove the `output_path` parameter — and all filesystem-write code — from the MCP `export_html` tool definition (`server/mcp.ts`). New signature: `export_html(workspace, ids)`. The tool always runs in `cdn` mode and returns the assembled HTML as inline string content in the tool response.
-- [ ] Add a `mode` field to the REST `POST /export-html` JSON body (default `"cdn"`, optional `"offline"`); wire to the corresponding assembly path. No change to response streaming (`Content-Type: text/html`, `Content-Disposition: attachment`, no server-side write) for either mode.
-- [ ] Document the SRI-hash regeneration step as part of the dependency-upgrade process (whenever `mermaid`/`bootstrap`/`katex` are version-bumped).
-- [ ] Update/add tests: both export modes produce correct output; MCP tool schema no longer exposes any path/output_path/mode-selection parameter; REST endpoint defaults to `cdn` when `mode` is omitted and honors `offline` when requested.
+- [x] Add a CDN-mode HTML assembly path in `server/export-html.ts`: emit `<script src>`/`<link href>` tags for Mermaid, Bootstrap, KaTeX pointing at jsdelivr, pinned to the exact versions in `package.json` (currently `mermaid@11.15.0`, `bootstrap@5.3.8`, `katex@0.17.0`), each with a computed SRI hash.
+- [x] Add a `mode: "cdn" | "offline"` parameter threaded through `generateExportHtml()`/`assembleHtml()`; `cdn` is the default and uses the new CDN path; `offline` reproduces today's fully-embedded output (no behavior change to that path).
+- [x] Remove the `output_path` parameter — and all filesystem-write code — from the MCP `export_html` tool definition (`server/mcp.ts`). New signature: `export_html(workspace, ids)`. The tool always runs in `cdn` mode and returns the assembled HTML as inline string content in the tool response.
+- [x] Add a `mode` field to the REST `POST /export-html` JSON body (default `"cdn"`, optional `"offline"`); wire to the corresponding assembly path. No change to response streaming (`Content-Type: text/html`, `Content-Disposition: attachment`, no server-side write) for either mode.
+- [x] ~~Document the SRI-hash regeneration step as part of the dependency-upgrade process~~ — superseded by a better fix: `getCdnAsset()` computes the SRI hash at runtime from the locally installed dist file (same bytes jsdelivr's npm mirror serves for that version), cached per process. There is no manual step — the hash can never drift out of sync with a version bump.
+- [x] Update/add tests: both export modes produce correct output; MCP tool schema no longer exposes any path/output_path/mode-selection parameter; REST endpoint defaults to `cdn` when `mode` is omitted and honors `offline` when requested.
 
 > **Implementation note:** this does not change *where* Mermaid renders (still client-side in the browser that opens the export — `happy-dom` still cannot do real text-layout, see `02` L1 in the `v0.31` archive). It only changes where the library source comes from (CDN vs. embedded) and removes the MCP tool's ability to write to an arbitrary filesystem path.
+> **Deviation from plan (O4 in `02`):** Bootstrap's `@scope` leak-prevention (B20) requires inlining the CSS, which is incompatible with a CDN `<link>`. Per user decision mid-implementation, `cdn` mode CDN-links Bootstrap anyway and accepts the reopened leak risk, rather than keeping Bootstrap inlined+scoped while only Mermaid/KaTeX move to CDN.
 
 ---
 
