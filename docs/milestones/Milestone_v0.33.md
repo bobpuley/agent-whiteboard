@@ -3,12 +3,12 @@
 **Status:** in progress
 
 ### Sprint 74 — Board dark theme + toolbar toggle
-- [ ] Define CSS custom properties for board-chrome colors (`--bg`, `--fg`, `--panel-bg`, `--border`, etc.) for `:root[data-theme="light"]` and `:root[data-theme="dark"]`.
-- [ ] Sweep board-chrome components (`App.svelte`, `HistoryPanel.svelte`, `DeleteExportModal.svelte`, and any others with hardcoded hex colors) to reference the new CSS variables instead of literals.
-- [ ] Add `client/src/stores/themeStore.ts`: a Svelte writable store that reads/writes theme choice to `localStorage` (default `"light"` when unset) and sets `data-theme` on `<html>` as a side effect.
-- [ ] Add a theme toggle control to the existing board toolbar in `App.svelte`, bound to `themeStore`.
-- [ ] Verify isolation: confirm rendered content (`Html.svelte`/`Mermaid.svelte` on canvas, and `export-html` output in both `cdn` and `offline` modes) is visually and byte-for-byte unaffected by the board theme in either Light or Dark.
-- [ ] Add/update tests: theme toggle switches `data-theme` and persists across reload; fresh profile (no localStorage entry) defaults to Light; export-html output is identical regardless of board theme.
+- [x] Define CSS custom properties for board-chrome colors (`--bg`, `--fg`, `--panel-bg`, `--border`, etc.) for `:root[data-theme="light"]` and `:root[data-theme="dark"]`.
+- [x] Sweep board-chrome components (`App.svelte`, `HistoryPanel.svelte`, `DeleteExportModal.svelte`, and any others with hardcoded hex colors) to reference the new CSS variables instead of literals.
+- [x] Add `client/src/stores/themeStore.ts`: a Svelte writable store that reads/writes theme choice to `localStorage` (default `"light"` when unset) and sets `data-theme` on `<html>` as a side effect.
+- [x] Add a theme toggle control to the existing board toolbar in `App.svelte`, bound to `themeStore`.
+- [x] Verify isolation: confirm rendered content (`Html.svelte`/`Mermaid.svelte` on canvas, and `export-html` output in both `cdn` and `offline` modes) is visually and byte-for-byte unaffected by the board theme in either Light or Dark.
+- [x] Add/update tests: theme toggle switches `data-theme` and persists across reload; fresh profile (no localStorage entry) defaults to Light; export-html output is identical regardless of board theme.
 
 > **Implementation note:** rendered-content isolation relies on the existing `@scope (#html-renderer-root) { ... }` wrapping in `Html.svelte` (`client/src/lib/scopeCss.ts`) — new theme variable names must not collide with any Bootstrap/rendered-content custom property names.
 
