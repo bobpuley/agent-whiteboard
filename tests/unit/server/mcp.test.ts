@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -188,36 +188,47 @@ describe("MCP tool: export_html (v0.15)", () => {
     });
 
     expect(result).toMatchObject({ ok: true });
-    const path = (result as { path: string }).path;
-    expect(existsSync(path)).toBe(true);
+    expect((result as { html: string }).html).toContain("<!DOCTYPE html>");
   });
 
-  it("writes to the default path <root>/<workspace>/exports/<name>-*.html when output_path is omitted", async () => {
+  it("returns the assembled HTML inline in the tool response — no filesystem access, no output_path param (v0.32, O1 in `02`)", async () => {
     vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
 
     const result = await callTool(server, "export_html", { workspace: "my-course", ids: ["uuid-1"] });
 
     expect(result).toMatchObject({ ok: true });
-    const path = (result as { path: string }).path;
-    expect(path).toContain(join(tmpRoot, "my-course", "exports"));
-    expect(path.endsWith(".html")).toBe(true);
-    expect(existsSync(path)).toBe(true);
-    expect(readFileSync(path, "utf-8")).toContain("<!DOCTYPE html>");
+    expect((result as { html: string }).html).toContain("<!DOCTYPE html>");
+    expect(result).not.toHaveProperty("path");
   });
 
-  it("writes to a custom output_path, creating parent directories as needed", async () => {
+  it("ignores an output_path argument if one is passed — the schema no longer declares it (v0.32)", async () => {
     vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue(VALID_KATEX_RECORD);
-    const customPath = join(tmpRoot, "nested", "dir", "custom-export.html");
 
     const result = await callTool(server, "export_html", {
       workspace: "my-course",
       ids: ["uuid-1"],
-      output_path: customPath,
+      output_path: join(tmpRoot, "nested", "dir", "custom-export.html"),
     });
 
-    expect(result).toEqual({ ok: true, path: customPath });
-    expect(existsSync(customPath)).toBe(true);
-    expect(readFileSync(customPath, "utf-8")).toContain("<!DOCTYPE html>");
+    expect(result).toMatchObject({ ok: true });
+    expect((result as { html: string }).html).toContain("<!DOCTYPE html>");
+  });
+
+  it("always exports in cdn mode — links Mermaid/Bootstrap/KaTeX from jsdelivr, never embeds them", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotByIdInWorkspace).mockReturnValue({
+      frames: [
+        { type: "mermaid", payload: "graph TD; A-->B" },
+        { type: "html", payload: '<div class="alert alert-info">hi</div>' },
+      ],
+      timestamp: "2026-01-01T00:00:00.000Z",
+    });
+
+    const result = await callTool(server, "export_html", { workspace: "my-course", ids: ["uuid-1"] });
+
+    const html = (result as { html: string }).html;
+    expect(html).toMatch(/<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/mermaid@/);
+    expect(html).toMatch(/<link rel="stylesheet" href="https:\/\/cdn\.jsdelivr\.net\/npm\/bootstrap@/);
+    expect(html.length).toBeLessThan(50_000);
   });
 });
 

@@ -10,7 +10,7 @@ import { getSnapshotsRoot } from "./paths.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
-import { generateExportHtml, writeExportHtmlToDisk } from "./export-html.js";
+import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
 import {
   appendFrameAndBroadcast,
@@ -470,20 +470,22 @@ export function createMcpServer(): McpServer {
     }
   );
 
-  // export_html(workspace, ids, output_path?) — agent-facing HTML export, written to disk.
+  // export_html(workspace, ids) — agent-facing HTML export, returned inline.
   server.registerTool(
     "export_html",
     {
       description:
-        "Export 1..N snapshots from a workspace to a single self-contained HTML file " +
+        "Export 1..N snapshots from a workspace to a single self-contained HTML document " +
         "(agent-facing equivalent of the browser HistoryPanel's 'Export selected'). " +
         "Discover snapshot ids first with list_snapshots(workspace).\n" +
-        "The assembled HTML is NOT returned inline (it can be several MB once the mermaid.js bundle is embedded) " +
-        "— the server writes it to disk and returns the file path.\n" +
-        "output_path (optional): if provided, parent directories are created as needed and the file is written there. " +
-        "Relative paths resolve against the server process's working directory, not yours — pass an absolute path for a specific location.\n" +
-        "If omitted, defaults to <snapshots_dir>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html.\n" +
-        'Returns { "ok": true, "path": "<absolute path>" }.\n' +
+        "Returns the assembled HTML as a string, inline in this response — this tool has no " +
+        "filesystem access and never writes to disk. Dependencies (Mermaid, Bootstrap, KaTeX) " +
+        "are linked from a CDN rather than embedded, which is what keeps the response small enough " +
+        "to return inline; the resulting file requires network access to render correctly when opened. " +
+        "If you need a fully offline-capable export (or to save the file to a specific path), use the " +
+        "REST endpoint POST /export-html with { items, mode: \"offline\" } instead — it streams the " +
+        "response for the caller to save wherever it likes.\n" +
+        'Returns { "ok": true, "html": "<!DOCTYPE html>..." }.\n' +
         'Example: export_html({ workspace: "my-course", ids: ["<uuid-1>", "<uuid-2>"] })',
       inputSchema: z.object({
         workspace: z
@@ -496,16 +498,9 @@ export function createMcpServer(): McpServer {
           .array(z.string())
           .min(1)
           .describe("Non-empty array of snapshot UUIDs (from list_snapshots()), all scoped to workspace."),
-        output_path: z
-          .string()
-          .optional()
-          .describe(
-            "Optional absolute path to write the HTML file to (parent directories created as needed). " +
-            "Defaults to <snapshots_dir>/<workspace>/exports/<name>-YYYYMMDD-HHmmss.html."
-          ),
       }),
     },
-    async ({ workspace, ids, output_path }) => {
+    async ({ workspace, ids }) => {
       const workspaceResult = validateWorkspaceInput(workspace);
       if (!workspaceResult.ok) {
         return {
@@ -534,24 +529,11 @@ export function createMcpServer(): McpServer {
         };
       }
 
-      const { html, downloadFilename } = await generateExportHtml(validItems);
+      const { html } = await generateExportHtml(validItems, "cdn");
 
-      try {
-        const path = writeExportHtmlToDisk(validatedWorkspace, html, downloadFilename, output_path, root);
-        return {
-          content: [{ type: "text", text: JSON.stringify({ ok: true, path }) }],
-        };
-      } catch (err) {
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: false,
-              error: `failed to write export file: ${err instanceof Error ? err.message : String(err)}`,
-            }),
-          }],
-        };
-      }
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: true, html }) }],
+      };
     }
   );
 
