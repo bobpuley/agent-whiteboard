@@ -2,6 +2,8 @@
 // Exported so tests can import it without spinning up a real server.
 
 import { Hono } from "hono";
+import { serveStatic } from "@hono/node-server/serve-static";
+import { existsSync } from "node:fs";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./interaction.js";
 import type { ClickEvent } from "./interaction.js";
 import { clearCanvas, exportCanvas, getLastWorkspace, setLastWorkspace } from "./session.js";
@@ -45,7 +47,16 @@ const CSP_HEADER =
   "img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; " +
   "frame-ancestors 'none'";
 
-export function createApp(): Hono {
+export interface CreateAppOptions {
+  // Absolute path to the built client (dist/client). When provided and it
+  // exists on disk, the server serves it directly — the npx/production run
+  // path, with no Vite dev server involved. Omitted in dev mode (npm run dev
+  // uses Vite's own dev server on :5173 and proxies API calls here), so this
+  // stays undefined for every existing caller of createApp().
+  staticRoot?: string;
+}
+
+export function createApp(options: CreateAppOptions = {}): Hono {
   const app = new Hono();
 
   app.use("*", async (c, next) => {
@@ -505,6 +516,13 @@ export function createApp(): Hono {
       },
     });
   });
+
+  // ── Static client (v1.0 — NF33) ──────────────────────────────────────────
+  // Mounted last so it never shadows an API route above; only serves GET
+  // requests that didn't match anything else (assets, and "/" -> index.html).
+  if (options.staticRoot !== undefined && existsSync(options.staticRoot)) {
+    app.get("*", serveStatic({ root: options.staticRoot }));
+  }
 
   return app;
 }
