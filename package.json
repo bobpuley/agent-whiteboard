@@ -1,8 +1,39 @@
 {
   "name": "agent-whiteboard",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "description": "A domain-agnostic interactive whiteboard for AI teacher agents — render diagrams, math, charts, and HTML to a local browser tab via MCP tools.",
   "type": "module",
+  "bin": {
+    "agent-whiteboard": "bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bobpuley/agent-whiteboard.git"
+  },
+  "homepage": "https://github.com/bobpuley/agent-whiteboard#readme",
+  "bugs": {
+    "url": "https://github.com/bobpuley/agent-whiteboard/issues"
+  },
+  "author": "Marco Pugliese",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "whiteboard",
+    "ai-agent",
+    "teaching",
+    "visualization",
+    "mermaid"
+  ],
   "engines": {
     "node": ">=18"
   },
