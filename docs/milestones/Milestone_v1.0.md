@@ -15,12 +15,12 @@
 - [x] Fix `NodeActionPopup.svelte`: add `Escape`-to-dismiss (reuse `client/src/lib/trapFocus.ts`'s existing `Escape` handling rather than a bespoke handler), and extend `popup-item`'s `keydown` handler to also fire on `" "` (Space).
 - [x] Add/update tests confirming `Escape` dismisses the popup without selecting an action, and `Space` activates a focused action item.
 
-### Sprint 77 — package.json publish readiness
-- [ ] Add `license: "MIT"`, `description`, `repository`, `homepage`, `bugs`, `author`, `keywords` to `package.json`.
-- [ ] Remove `private: true`; add a `bin` field (`"agent-whiteboard": "bin/cli.js"`); add a `files` allowlist (`["bin", "dist", "README.md", "LICENSE", "CHANGELOG.md"]`).
-- [ ] Bump `version` to `1.0.0`.
-- [ ] Verify: `npm pack --dry-run` produces a tarball containing only the allowlisted paths; `npm publish --dry-run` succeeds locally.
-- [ ] Update `README.md` with an `npx agent-whiteboard` quickstart section and an explicit statement of the local-only/single-user trust model (per `02_assumptions-and-risks.md`).
+### Sprint 77 — package.json publish readiness ✅
+- [x] Add `license: "MIT"`, `description`, `repository`, `homepage`, `bugs`, `author`, `keywords` to `package.json`.
+- [x] Remove `private: true`; add a `bin` field (`"agent-whiteboard": "bin/cli.js"`); add a `files` allowlist (`["bin", "dist", "README.md", "LICENSE", "CHANGELOG.md"]`).
+- [x] Bump `version` to `1.0.0`.
+- [x] Verify: `npm pack --dry-run` produces a tarball containing only the allowlisted paths; `npm publish --dry-run` succeeds locally.
+- [x] Update `README.md` with an `npx agent-whiteboard` quickstart section and an explicit statement of the local-only/single-user trust model (per `02_assumptions-and-risks.md`).
 
 ### Sprint 78 — CI pipeline
 - [ ] Add `.github/workflows/ci.yml`: on `push`/`pull_request` to `master`, run `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
