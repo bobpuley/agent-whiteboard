@@ -20,9 +20,25 @@ export interface StartServerOptions {
   onReady?: () => void;
 }
 
+// F27 (v1.0) — the server has no authentication on any endpoint (accepted
+// trade-off, see docs/02_assumptions-and-risks.md), so single-user/local-only
+// is enforced here rather than left as a documentation-only claim.
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+function assertLoopbackHost(host: string): void {
+  if (LOOPBACK_HOSTS.has(host)) return;
+  if (process.env.ALLOW_NON_LOOPBACK === "1") return;
+  throw new Error(
+    `Refusing to bind to non-loopback HOST "${host}": this server has no authentication on any ` +
+      "endpoint and is designed for single-user, local-only use (see docs/02_assumptions-and-risks.md). " +
+      "Set ALLOW_NON_LOOPBACK=1 if you understand the risk and want to override this."
+  );
+}
+
 export function startServer(options: StartServerOptions = {}): Server {
   const PORT = parseInt(process.env.PORT ?? "3000", 10);
   const HOST = process.env.HOST ?? "localhost";
+  assertLoopbackHost(HOST);
 
   const app = createApp({ staticRoot: options.staticRoot });
 
