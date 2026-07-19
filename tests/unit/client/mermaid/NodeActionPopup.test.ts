@@ -48,6 +48,31 @@ describe("NodeActionPopup.svelte", () => {
     expect(onSelect).toHaveBeenCalledWith("Explain");
   });
 
+  it("dispatches 'select' on Space keydown for an item (F28)", async () => {
+    const { getByText, component } = render(NodeActionPopup, {
+      props: { popup: { x: 0, y: 0, nodeId: "A", nodeLabel: "Node A", actions: ["Explain"] } },
+    });
+    const onSelect = vi.fn();
+    component.$on("select", (e: CustomEvent<string>) => onSelect(e.detail));
+
+    await fireEvent.keyDown(getByText("Explain"), { key: " " });
+    expect(onSelect).toHaveBeenCalledWith("Explain");
+  });
+
+  it("dispatches 'dismiss' on Escape keydown without selecting an action (F28 — closes the keyboard trap)", async () => {
+    const { container, component } = render(NodeActionPopup, {
+      props: { popup: { x: 0, y: 0, nodeId: "A", nodeLabel: "Node A", actions: ["Explain"] } },
+    });
+    const onSelect = vi.fn();
+    const onDismiss = vi.fn();
+    component.$on("select", onSelect);
+    component.$on("dismiss", onDismiss);
+
+    await fireEvent.keyDown(container.querySelector(".node-action-popup")!, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it("dispatches 'dismiss' when the backdrop is clicked", async () => {
     const { container, component } = render(NodeActionPopup, {
       props: { popup: { x: 0, y: 0, nodeId: "A", nodeLabel: "Node A", actions: ["Explain"] } },

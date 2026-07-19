@@ -18,12 +18,18 @@ const { startServer } = await import("../../../server/index.js");
 
 describe("startServer()", () => {
   let server: Server | undefined;
+  const originalHost = process.env.HOST;
+  const originalAllow = process.env.ALLOW_NON_LOOPBACK;
 
   afterEach(async () => {
     if (server) {
       await new Promise<void>((resolve) => server?.close(() => resolve()));
       server = undefined;
     }
+    if (originalHost === undefined) delete process.env.HOST;
+    else process.env.HOST = originalHost;
+    if (originalAllow === undefined) delete process.env.ALLOW_NON_LOOPBACK;
+    else process.env.ALLOW_NON_LOOPBACK = originalAllow;
   });
 
   it("starts an HTTP server and calls onReady once listening", async () => {
@@ -39,6 +45,41 @@ describe("startServer()", () => {
     expect(address).not.toBeNull();
     if (address !== null && typeof address === "object") {
       expect(address.port).toBeGreaterThan(0);
+    }
+  });
+
+  // F27 (v1.0) — loopback-only guardrail.
+  it("refuses to bind a non-loopback HOST without an opt-in", () => {
+    process.env.PORT = "0";
+    process.env.HOST = "0.0.0.0";
+    delete process.env.ALLOW_NON_LOOPBACK;
+
+    expect(() => startServer()).toThrow(/Refusing to bind to non-loopback HOST/);
+  });
+
+  it("allows a non-loopback HOST when ALLOW_NON_LOOPBACK=1 is set", async () => {
+    process.env.PORT = "0";
+    process.env.HOST = "0.0.0.0";
+    process.env.ALLOW_NON_LOOPBACK = "1";
+
+    await new Promise<void>((resolve) => {
+      server = startServer({ onReady: resolve });
+    });
+
+    expect(server).toBeDefined();
+  });
+
+  it("allows 127.0.0.1 and ::1 without an opt-in", async () => {
+    process.env.PORT = "0";
+    delete process.env.ALLOW_NON_LOOPBACK;
+
+    for (const host of ["127.0.0.1", "::1"]) {
+      process.env.HOST = host;
+      await new Promise<void>((resolve) => {
+        server = startServer({ onReady: resolve });
+      });
+      await new Promise<void>((resolve) => server?.close(() => resolve()));
+      server = undefined;
     }
   });
 });

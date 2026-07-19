@@ -9,11 +9,11 @@
 
 > **Implementation note:** see `04_architecture.md` §1 for the mode-detection approach (presence of `dist/client/index.html` vs. an explicit flag/env var) — pick one during implementation, not a product-level decision.
 
-### Sprint 76 — Loopback guardrail & Mermaid popup accessibility fix
-- [ ] In `server/index.ts`, validate `HOST` against a loopback allowlist (`localhost`, `127.0.0.1`, `::1`) before calling `serve()`; fail fast with a clear error if it doesn't match and no explicit opt-in env var (e.g. `ALLOW_NON_LOOPBACK=1`) is set.
-- [ ] Add tests covering: default `HOST` binds fine, an invalid `HOST` without opt-in fails fast with a clear message, opt-in env var allows a non-loopback `HOST`.
-- [ ] Fix `NodeActionPopup.svelte`: add `Escape`-to-dismiss (reuse `client/src/lib/trapFocus.ts`'s existing `Escape` handling rather than a bespoke handler), and extend `popup-item`'s `keydown` handler to also fire on `" "` (Space).
-- [ ] Add/update tests confirming `Escape` dismisses the popup without selecting an action, and `Space` activates a focused action item.
+### Sprint 76 — Loopback guardrail & Mermaid popup accessibility fix ✅
+- [x] In `server/index.ts`, validate `HOST` against a loopback allowlist (`localhost`, `127.0.0.1`, `::1`) before calling `serve()`; fail fast with a clear error if it doesn't match and no explicit opt-in env var (e.g. `ALLOW_NON_LOOPBACK=1`) is set.
+- [x] Add tests covering: default `HOST` binds fine, an invalid `HOST` without opt-in fails fast with a clear message, opt-in env var allows a non-loopback `HOST`.
+- [x] Fix `NodeActionPopup.svelte`: add `Escape`-to-dismiss (reuse `client/src/lib/trapFocus.ts`'s existing `Escape` handling rather than a bespoke handler), and extend `popup-item`'s `keydown` handler to also fire on `" "` (Space).
+- [x] Add/update tests confirming `Escape` dismisses the popup without selecting an action, and `Space` activates a focused action item.
 
 ### Sprint 77 — package.json publish readiness
 - [ ] Add `license: "MIT"`, `description`, `repository`, `homepage`, `bugs`, `author`, `keywords` to `package.json`.
