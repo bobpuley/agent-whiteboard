@@ -2,10 +2,10 @@
 
 **Status:** in progress
 
-### Sprint 75 — Production entrypoint & static serving
-- [ ] Add `bin/cli.js` (`#!/usr/bin/env node`) that starts the compiled server (`dist/server/index.js`) and opens the default browser, matching today's `npm run dev` UX. Must not import `tsx`, `vite`, `concurrently`, or `wait-on`.
-- [ ] Add a static-file middleware to `createApp()` (`server/app.ts`) serving `dist/client` in production mode, leaving dev mode (`npm run dev`, Vite dev server + proxy) unchanged.
-- [ ] Verify: `npm run build`, then run `bin/cli.js` directly (no dev script) and confirm the whiteboard loads and MCP/REST/WS all work against the static build.
+### Sprint 75 — Production entrypoint & static serving ✅
+- [x] Add `bin/cli.js` (`#!/usr/bin/env node`) that starts the compiled server (`dist/server/index.js`) and opens the default browser, matching today's `npm run dev` UX. Must not import `tsx`, `vite`, `concurrently`, or `wait-on`.
+- [x] Add a static-file middleware to `createApp()` (`server/app.ts`) serving `dist/client` in production mode, leaving dev mode (`npm run dev`, Vite dev server + proxy) unchanged.
+- [x] Verify: `npm run build`, then run `bin/cli.js` directly (no dev script) and confirm the whiteboard loads and MCP/REST/WS all work against the static build.
 
 > **Implementation note:** see `04_architecture.md` §1 for the mode-detection approach (presence of `dist/client/index.html` vs. an explicit flag/env var) — pick one during implementation, not a product-level decision.
 
