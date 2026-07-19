@@ -64,6 +64,20 @@ Enable the MCP server in Claude Code the first time:
 
 Select `agent-whiteboard` and enable it. The tools will be available immediately.
 
+## Environment variables
+
+| Variable                  | Default              | Description |
+|----------------------------|-----------------------|-------------|
+| `PORT`                     | `3000`                | Server port — serves the REST/MCP/WebSocket API, and (via `npx agent-whiteboard`) the built client too. |
+| `HOST`                     | `localhost`           | Bind address. Must resolve to a loopback address (`localhost`, `127.0.0.1`, `::1`) — the server refuses to start otherwise unless `ALLOW_NON_LOOPBACK` is set. See [Trust model](#trust-model). |
+| `ALLOW_NON_LOOPBACK`       | unset                 | Set to `1` to allow binding a non-loopback `HOST`. Not recommended — there is no authentication on any endpoint. |
+| `WHITEBOARD_SNAPSHOTS_DIR` | `~/.agent-whiteboard` | Snapshot storage location. |
+| `CHANNEL_PORT`             | `3001`                | Port for the stdio-channel HTTP relay used by Claude Code's channel forwarding (only relevant if Claude Code was started with channels enabled). |
+
+**Port conflicts:** if `:3000` (or `:3001`/`:5173`, see below) is already in use on your machine, set `PORT` (and `CHANNEL_PORT` if needed) to a free port before starting.
+
+> Dev-only (`npm run dev`, not `npx agent-whiteboard`): the Vite client dev server always runs on `:5173`, hardcoded in `client/vite.config.ts` — not currently configurable via an environment variable.
+
 ## MCP tools
 
 ### `render(type, payload[, options])`
@@ -310,4 +324,4 @@ npm run test:e2e  # Playwright end-to-end tests (requires npm run dev:test first
 }
 ```
 
-The server must be running before Claude Code connects. The port is overridable via the `PORT` environment variable, and the bind address via `HOST` (both default to `localhost`/`3000`). Snapshot storage location is overridable via `WHITEBOARD_SNAPSHOTS_DIR` (defaults to `~/.agent-whiteboard`).
+The server must be running before Claude Code connects. If you override `PORT`, update the URL above to match. See [Environment variables](#environment-variables) for the full list of overridable settings.
