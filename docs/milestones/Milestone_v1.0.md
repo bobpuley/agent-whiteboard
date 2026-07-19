@@ -1,6 +1,6 @@
 # Milestone v1.0 — 1.0 Release Readiness & npx Distribution (Sprints 75–78)
 
-**Status:** in progress
+**Status:** released
 
 ### Sprint 75 — Production entrypoint & static serving ✅
 - [x] Add `bin/cli.js` (`#!/usr/bin/env node`) that starts the compiled server (`dist/server/index.js`) and opens the default browser, matching today's `npm run dev` UX. Must not import `tsx`, `vite`, `concurrently`, or `wait-on`.
@@ -22,9 +22,9 @@
 - [x] Verify: `npm pack --dry-run` produces a tarball containing only the allowlisted paths; `npm publish --dry-run` succeeds locally.
 - [x] Update `README.md` with an `npx agent-whiteboard` quickstart section and an explicit statement of the local-only/single-user trust model (per `02_assumptions-and-risks.md`).
 
-### Sprint 78 — CI pipeline
+### Sprint 78 — CI pipeline ✅
 - [x] Add `.github/workflows/ci.yml`: on `push`/`pull_request` to `master`, run `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. All four commands verified green locally, matching exactly what CI will run.
-- [ ] Verify green run on a real PR against `master` — pending push to `origin` (this repo doesn't push automatically; happens at the milestone-close gate).
+- [x] Verify green run on a real PR against `master` — confirmed green on the `master` push itself (GitHub Actions run [29680052959](https://github.com/bobpuley/agent-whiteboard/actions/runs/29680052959), 1m44s, all steps passed).
 
 > **Implementation note:** no deploy/publish automation in this milestone — publishing stays a manual, deliberate step per `CLAUDE.md` rule 7 (sprint-close protocol).
 
