@@ -1,3 +1,11 @@
+## 1.0.1 — 2026-07-19
+
+**License change: MIT → PolyForm Noncommercial 1.0.0.** Free to use, modify, and redistribute for any non-commercial purpose; commercial use requires a separate agreement (contact bobpuley@gmail.com). This takes effect from `1.0.1` onward — `1.0.0` remains available under its original MIT terms, since that grant isn't retroactively revocable.
+
+- `LICENSE` replaced with the PolyForm Noncommercial License 1.0.0 text, plus a `Required Notice:` copyright line and a commercial-licensing contact line.
+- `package.json`: `"license"` updated to the SPDX id `PolyForm-Noncommercial-1.0.0`.
+- `README.md`: new "License" section explaining the terms and commercial-licensing contact path.
+
 ## 1.0.0 — 2026-07-19
 
 **Milestone v1.0 — 1.0 Release Readiness & npx Distribution (Sprints 75–78) complete.** The first public release: installable and runnable via `npx agent-whiteboard`, with a self-contained production entrypoint, publish-ready package metadata, an enforced local-only trust model, a CI pipeline, and a fix for the one HIGH-severity accessibility finding from the pre-1.0 review pass (FR28 in `01`, F27–F28/NF33–NF37 in `03`).

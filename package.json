@@ -1,6 +1,6 @@
 {
   "name": "agent-whiteboard",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A domain-agnostic interactive whiteboard for AI teacher agents — render diagrams, math, charts, and HTML to a local browser tab via MCP tools.",
   "type": "module",
   "bin": {
@@ -22,7 +22,7 @@
     "url": "https://github.com/bobpuley/agent-whiteboard/issues"
   },
   "author": "Marco Pugliese",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "keywords": [
     "mcp",
     "model-context-protocol",

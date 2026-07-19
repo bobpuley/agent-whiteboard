@@ -325,3 +325,7 @@ npm run test:e2e  # Playwright end-to-end tests (requires npm run dev:test first
 ```
 
 The server must be running before Claude Code connects. If you override `PORT`, update the URL above to match. See [Environment variables](#environment-variables) for the full list of overridable settings.
+
+## License
+
+[PolyForm Noncommercial License 1.0.0](LICENSE) — free to use, modify, and redistribute for any non-commercial purpose. Commercial use isn't covered by this license; if you want to use this commercially, reach out at bobpuley@gmail.com to discuss a license.
