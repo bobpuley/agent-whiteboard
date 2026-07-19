@@ -23,8 +23,8 @@
 - [x] Update `README.md` with an `npx agent-whiteboard` quickstart section and an explicit statement of the local-only/single-user trust model (per `02_assumptions-and-risks.md`).
 
 ### Sprint 78 — CI pipeline
-- [ ] Add `.github/workflows/ci.yml`: on `push`/`pull_request` to `master`, run `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
-- [ ] Verify green run on a real PR against `master`.
+- [x] Add `.github/workflows/ci.yml`: on `push`/`pull_request` to `master`, run `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. All four commands verified green locally, matching exactly what CI will run.
+- [ ] Verify green run on a real PR against `master` — pending push to `origin` (this repo doesn't push automatically; happens at the milestone-close gate).
 
 > **Implementation note:** no deploy/publish automation in this milestone — publishing stays a manual, deliberate step per `CLAUDE.md` rule 7 (sprint-close protocol).
 
