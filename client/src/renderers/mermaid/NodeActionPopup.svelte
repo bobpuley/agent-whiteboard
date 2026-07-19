@@ -1,10 +1,17 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
+  import { trapFocus } from "../../lib/trapFocus";
   import type { PopupRequest } from "./nodeInteractions";
 
   export let popup: PopupRequest | null = null;
 
   const dispatch = createEventDispatcher<{ select: string; dismiss: void }>();
+
+  function activateOnKey(e: KeyboardEvent, action: string) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault(); // Space would otherwise scroll the page.
+    dispatch("select", action);
+  }
 </script>
 
 {#if popup}
@@ -15,6 +22,7 @@
     class="node-action-popup"
     style="position: fixed; left: {popup.x}px; top: {popup.y}px;"
     on:click|stopPropagation={() => {}}
+    use:trapFocus={{ onEscape: () => dispatch("dismiss") }}
   >
     {#each popup.actions as action, i (i)}
       <div
@@ -22,7 +30,7 @@
         role="button"
         tabindex="0"
         on:click={() => dispatch("select", action)}
-        on:keydown={(e) => e.key === "Enter" && dispatch("select", action)}
+        on:keydown={(e) => activateOnKey(e, action)}
       >
         {action}
       </div>
