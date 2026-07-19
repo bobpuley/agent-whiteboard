@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/logo.png" width="96" alt="Agent Whiteboard logo">
-</p>
-
 # Agent Whiteboard
 
 A domain-agnostic interactive whiteboard for AI teacher agents. An AI agent renders diagrams, math, charts, and HTML to a local browser tab via MCP tools — and can pause to wait for the user to signal they're ready to continue.
