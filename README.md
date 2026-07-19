@@ -31,15 +31,26 @@ Every `render()`/commit call is persisted as a snapshot on disk (`~/.agent-white
 - Node.js ≥ 18
 - Claude Code (CLI or IDE extension)
 
-## Setup
+## Quickstart
+
+```bash
+npx agent-whiteboard
+```
+
+This starts the server on `:3000` (serving the pre-built client — no separate dev server) and opens a browser tab automatically. Add `.mcp.json` (see [MCP registration](#mcp-registration)) so Claude Code connects to it.
+
+By default the server only binds to loopback addresses (`localhost`/`127.0.0.1`/`::1`) — see [Trust model](#trust-model) below.
+
+### Trust model
+
+This is a **single-user, local-only** tool: there is no authentication on any endpoint. That's an accepted trade-off, not an oversight — the server refuses to start if `HOST` is set to anything other than a loopback address, unless you explicitly set `ALLOW_NON_LOOPBACK=1` (not recommended; anyone who can reach the port can render arbitrary content, read/delete your snapshot history, and exfiltrate exported data). Don't expose this server beyond your own machine.
+
+## Development
+
+Running from source (contributing, or testing an unreleased change) instead of `npx agent-whiteboard`:
 
 ```bash
 npm install
-```
-
-## Start
-
-```bash
 npm run dev
 ```
 
