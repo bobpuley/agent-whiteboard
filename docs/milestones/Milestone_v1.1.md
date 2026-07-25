@@ -1,6 +1,6 @@
 # Milestone v1.1 — Modal Default Workspace & Social Preview Refresh (Sprint 79)
 
-**Status:** in progress
+**Status:** released
 
 ### Sprint 79 — Default workspace selection + social preview redesign
 - [x] Extend `resetState()` in `client/src/DeleteExportModal.svelte`: when `workspaces.length > 1`, find the workspace with `isCurrent === true` and, if found, auto-select it and set `step = 2` (same treatment as the existing `workspaces.length === 1` branch). Fall back to today's picker (`step = 1`, `selectedWorkspace = null`) if no workspace is flagged current.
