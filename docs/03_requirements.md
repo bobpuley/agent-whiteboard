@@ -25,3 +25,18 @@
 - Opening a Mermaid node-action popup and pressing `Escape` closes it without selecting an action; `Space` activates a focused action item.
 - `npm publish --dry-run` succeeds and the resulting tarball contains only the allowlisted paths.
 - A fresh PR shows a green CI run (typecheck, lint, test, build all pass).
+
+---
+
+## 2. Delete/Export Modal Default Workspace & Social Preview Refresh (FR29–FR30 in `01`)
+
+| ID  | Requirement | Priority |
+|-----|-------------|----------|
+| F29 | When the delete/export modal (`DeleteExportModal.svelte`) opens with more than one workspace, the workspace flagged `isCurrent` is selected automatically and the modal opens directly on step 2 (snapshot list) for that workspace — matching the existing single-workspace auto-select behavior. The user can still reach the picker via the existing "back" control (`goBack()`) to choose a different workspace. | v1.1 |
+| F30 | `docs/social-preview.png` is replaced with a redesigned image that better conveys user/agent interactivity (the agent driving a rendered graph, the user acting on it) rather than the bare app icon mark. A design-selection step precedes the final asset: 3 concepts × 3 styles (stylized, handmade, pro) are produced as SVG mockups with a written brief each; the user picks one to finalize. | v1.1 |
+
+**Acceptance criteria (draft):**
+- With 2+ workspaces present, opening the delete modal or the export modal lands on the current workspace's snapshot list (step 2), not the step-1 picker.
+- With exactly 1 workspace, behavior is unchanged (already auto-selects).
+- The step-1 picker and `goBack()` still work for switching to a non-current workspace.
+- 9 SVG mockups (3 concepts × 3 styles) plus 9 short written briefs are delivered for review; final `docs/social-preview.png` is produced only after the user selects a concept — final-image production is a follow-up task, not blocking this milestone's SVG/brief deliverable (see `02_assumptions-and-risks.md`, v1.1 section).

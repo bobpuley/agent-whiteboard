@@ -6,6 +6,14 @@
 
 *v1.0 planning not yet started. Use `/doc-creator-driver:intake` or `/doc-creator-driver:start` to begin.*
 
+**FR29 — Delete/Export modal default workspace selection (2026-07-25)**
+
+- Feature request: when opening the delete/export modals, the current workspace should be selected by default.
+
+**FR30 — Social preview image redesign (2026-07-25)**
+
+- Feature request: produce 3 alternative concepts for `docs/social-preview.png`, each in 3 styles (stylized, handmade, pro), that better reflect the app (e.g. user/agent interactivity, the agent controlling what actions the user can perform starting from a rendered graph). Image is larger than the icon assets, so more detail is acceptable. Deliverable format (per user decision): SVG mockups plus a written design brief for each concept.
+
 **FR28 — 1.0 Release Readiness & npx Distribution (2026-07-19)**
 
 - Feature request: prep the project for a public 1.0 release, installable/runnable via `npx`. A codebase audit found: `package.json` missing `license`/`description`/`repository`/`homepage`/`bugs`/`author`/`keywords` and has `private: true` (blocks publish); no `bin` entry and no production static-file-serving path in `server/app.ts` (server only runs via dev-mode vite+tsx, never serves `dist/client`), so `npx` has nothing self-contained to execute; devDependencies (`tsx`, `vite`, `concurrently`, `wait-on`) are required by the only existing run path (`npm run dev`) but won't be present in a consumer `npx`/`npm install`; no `files` allowlist/`.npmignore` (`npm pack --dry-run` ships 213 files / 2.6MB including tests, docs, mockup, raw source); version frozen at `0.1.0` while `CHANGELOG.md` independently tracks 33 shipped milestones up to `0.28.0`; no CI/CD (`.github/workflows`) for build/lint/test on push/PR or release automation.

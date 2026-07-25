@@ -16,3 +16,9 @@
 - **Package/publish shape (NF33–NF36):** `package.json` gains `license: "MIT"`, `description`, `repository`/`homepage`/`bugs` pointing at `github.com/bobpuley/agent-whiteboard`, `author`, `keywords`, and a `files: ["bin", "dist", "README.md", "LICENSE", "CHANGELOG.md"]` allowlist; `private: true` is removed; `version` becomes `1.0.0`. The `build` script (already `tsc -p tsconfig.json && ... && vite build`) is the one producing everything `files` references — no new build step, just ensuring `bin/cli.js` is either plain JS (no compile step needed) or included in the `tsc` project's output.
 - **CI (NF37):** new `.github/workflows/ci.yml` running on `push`/`pull_request` to `master`: `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`. No deploy/publish automation in this milestone — publishing stays a manual, deliberate step per the project's existing sprint-close protocol (`CLAUDE.md` rule 7).
 - No MCP tool contract changes, no snapshot/persistence format changes — this milestone is packaging/runtime/CI/one a11y fix only, isolated from the render pipeline.
+
+---
+
+## 2. Delete/Export Modal Default Workspace & Social Preview Refresh (F29–F30 in `03`)
+
+No architecture impact. F29 is a localized change to `resetState()` in `client/src/DeleteExportModal.svelte` (extend the existing `workspaces.length === 1` auto-select branch to also match `workspaces.find(w => w.isCurrent)` when there are multiple workspaces); no new state, store, or API surface. F30 is a static asset replacement (`docs/social-preview.png`) plus design-review artifacts (SVG mockups, written briefs) — no app code touched.

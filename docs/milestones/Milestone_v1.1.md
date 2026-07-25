@@ -1,0 +1,18 @@
+# Milestone v1.1 — Modal Default Workspace & Social Preview Refresh (Sprint 79)
+
+**Status:** in progress
+
+### Sprint 79 — Default workspace selection + social preview redesign
+- [ ] Extend `resetState()` in `client/src/DeleteExportModal.svelte`: when `workspaces.length > 1`, find the workspace with `isCurrent === true` and, if found, auto-select it and set `step = 2` (same treatment as the existing `workspaces.length === 1` branch). Fall back to today's picker (`step = 1`, `selectedWorkspace = null`) if no workspace is flagged current.
+- [ ] Verify the existing `goBack()` / `canGoBack` control still lets the user reach the step-1 picker to choose a different workspace.
+- [ ] Add/update a test covering: 2+ workspaces present, one flagged `isCurrent` → modal opens on step 2 for that workspace, for both `mode="delete"` and `mode="export"`.
+- [ ] Produce 3 concepts × 3 styles (stylized, handmade, pro) for the social preview redesign as SVG mockups, each with a short written brief, reflecting user/agent interactivity (agent driving a rendered graph, user acting on it) rather than the bare app icon mark.
+- [ ] Present the 9 mockups to the user for selection.
+- [ ] Once a concept/style is picked, produce the final `docs/social-preview.png` (1280×640) from it — tracked as a follow-up task once a selection is made, per `02_assumptions-and-risks.md` v1.1 assumption.
+
+---
+
+## Definition of Done — v1.1
+- Opening the delete or export modal with 2+ workspaces lands directly on the current workspace's snapshot list; single-workspace behavior is unchanged; the picker remains reachable via "back".
+- 9 SVG mockups + 9 written briefs delivered for the social preview redesign; user has selected a concept/style (or explicitly deferred selection).
+- All existing tests pass; new test covers the default-selection behavior.

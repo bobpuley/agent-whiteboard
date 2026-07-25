@@ -16,3 +16,7 @@
 - **Risk — version numbering discontinuity.** `package.json` has been frozen at `0.1.0` since the start while `CHANGELOG.md` has independently tracked 33 shipped milestones up to `0.28.0`. A decision is needed on what "1.0.0" means here (continue the existing numbering vs. a deliberate reset) before the first tagged publish — see `03_requirements.md`.
 - **Risk — known HIGH-severity accessibility defect.** `docs/06_frontend_review.md` documents a keyboard trap in the Mermaid node-action popup (no `Escape`/keyboard dismiss path). Shipping a public 1.0 with a known HIGH a11y defect undermines any claim of broad usability; treated as a release blocker for this milestone.
 - **Risk — package tarball bloat.** No `files` allowlist/`.npmignore` exists; `npm pack --dry-run` currently ships 213 files / 2.6MB (full test suite, docs, mockup, raw TS source) to every installer. Needs an explicit allowlist before first publish.
+
+## v1.1 (planning)
+
+> ⚠️ ASSUMPTION: The social preview redesign (FR30 in `01`) delivers SVG mockups + written briefs, not a finished production PNG. Selecting one concept/style and producing the final `docs/social-preview.png` (and updating any GitHub social-preview settings) is a separate, later step — not automatically in scope of this milestone's DoD unless the user picks a winner and asks for it.
