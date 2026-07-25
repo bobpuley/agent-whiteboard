@@ -1,0 +1,62 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive">
+  <rect width="1280" height="640" fill="#f6f1e4"/>
+  <!-- faint paper fibers -->
+  <g stroke="#e7dfc8" stroke-width="1">
+    <path d="M 0 90 L 1280 70" /><path d="M 0 330 L 1280 345" /><path d="M 0 560 L 1280 548" />
+  </g>
+
+  <!-- Terminal panel, hand-drawn double stroke -->
+  <path d="M 98,160 C 90,152 104,148 130,150 L 430,146 C 480,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
+        fill="#2b2b2b" stroke="#2b2b2b" stroke-width="3"/>
+  <path d="M 98,160 C 90,152 104,148 130,150 L 430,146 C 480,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
+        fill="none" stroke="#000000" stroke-width="2" stroke-opacity="0.3" transform="translate(3,2)"/>
+
+  <ellipse cx="122" cy="173" rx="8" ry="7" fill="#e74c3c" transform="rotate(-6 122 173)"/>
+  <ellipse cx="150" cy="171" rx="8" ry="7" fill="#f5a623" transform="rotate(4 150 171)"/>
+  <ellipse cx="178" cy="173" rx="8" ry="7" fill="#8bc98f" transform="rotate(-3 178 173)"/>
+
+  <text x="118" y="245" font-size="21" fill="#8fe0cf" transform="rotate(-1 118 245)">$ npx agent-whiteboard</text>
+  <text x="118" y="285" font-size="17" fill="#bdbdbd" transform="rotate(1 118 285)">...running at :3000</text>
+  <text x="118" y="335" font-size="21" fill="#ffffff" transform="rotate(-1 118 335)">&gt; render(diagram, "Step B")</text>
+
+  <!-- wavy hand-drawn arrow, terminal -> canvas -->
+  <path d="M 580 335 C 605 310, 600 275, 630 255 C 645 245, 650 240, 662 233" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 662 233 l -16 -2 l 6 15 z" fill="#2b2b2b"/>
+
+  <!-- Canvas panel -->
+  <path d="M 668,120 C 660,112 700,108 760,110 L 1140,106 C 1178,104 1190,112 1188,124 L 1184,420 C 1186,460 1180,522 1170,530 C 1160,536 1000,530 900,532 L 700,528 C 672,530 660,522 662,510 L 658,220 C 656,170 662,132 668,120 Z"
+        fill="none" stroke="#2b2b2b" stroke-width="3"/>
+  <path d="M 668,120 C 660,112 700,108 760,110 L 1140,106 C 1178,104 1190,112 1188,124 L 1184,420 C 1186,460 1180,522 1170,530 C 1160,536 1000,530 900,532 L 700,528 C 672,530 660,522 662,510 L 658,220 C 656,170 662,132 668,120 Z"
+        fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-opacity="0.35" transform="translate(3,3)"/>
+
+  <!-- flowchart, sketchy nodes -->
+  <g font-size="18" fill="#2b2b2b" font-weight="700">
+    <path d="M 712,168 C 780,160 850,164 858,172 C 862,190 860,215 854,224 C 800,230 730,228 706,222 C 700,205 704,178 712,168 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="782" y="202" text-anchor="middle" transform="rotate(-1 782 202)">Start</text>
+
+    <path d="M 712,283 C 780,276 850,280 858,288 C 862,304 860,328 854,336 C 800,342 730,340 706,335 C 700,318 704,293 712,283 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="782" y="316" text-anchor="middle" transform="rotate(1 782 316)">Step A</text>
+
+    <path d="M 930,283 C 1010,274 1090,280 1098,290 C 1104,308 1100,335 1092,344 C 1030,352 950,348 924,340 C 916,320 920,294 930,283 Z" fill="#2980b9" stroke="#1a1a1a" stroke-width="2.5"/>
+    <text x="1012" y="320" text-anchor="middle" fill="#ffffff" transform="rotate(-1 1012 320)">Step B</text>
+
+    <path d="M 806,412 C 870,404 935,410 942,418 C 946,435 944,460 938,468 C 884,474 820,470 796,464 C 790,446 796,422 806,412 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="872" y="446" text-anchor="middle" transform="rotate(1 872 446)">Step C</text>
+  </g>
+
+  <g stroke="#8a8a8a" stroke-width="2.5" fill="none" stroke-linecap="round">
+    <path d="M 780 226 C 776 245, 784 262, 780 281"/>
+    <path d="M 858 308 C 885 306, 900 308, 928 310"/>
+    <path d="M 975 346 C 955 375, 925 396, 900 412"/>
+  </g>
+  <path d="M 778 278 l -6 -13 l 13 3 z" fill="#8a8a8a"/>
+  <path d="M 923 306 l -13 -6 l 2 13 z" fill="#8a8a8a"/>
+  <path d="M 902 407 l -15 7 l 14 7 z" fill="#8a8a8a"/>
+
+  <!-- doodled cursor on Step B -->
+  <path d="M 1060 352 C 1058 368, 1062 382, 1064 396 C 1072 388, 1076 386, 1080 390 C 1086 402, 1090 410, 1094 416 C 1100 412, 1102 410, 1098 402 C 1094 394, 1090 386, 1088 380 C 1096 378, 1100 376, 1096 372 C 1084 364, 1070 358, 1060 352 Z"
+        fill="#2b2b2b" stroke="#f6f1e4" stroke-width="2"/>
+
+  <text x="640" y="580" text-anchor="middle" font-size="40" font-weight="700" fill="#2b2b2b" transform="rotate(-1 640 580)">agent-whiteboard</text>
+  <text x="640" y="612" text-anchor="middle" font-size="19" fill="#7a7365" transform="rotate(1 640 612)">AI teacher agents, on a second screen</text>
+</svg>

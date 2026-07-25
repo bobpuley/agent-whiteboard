@@ -1,0 +1,53 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="1280" height="640" fill="#ffffff"/>
+
+  <!-- Terminal panel (agent side) -->
+  <rect x="90" y="150" width="480" height="360" rx="16" fill="#1a1a1a"/>
+  <rect x="90" y="150" width="480" height="42" rx="16" fill="#262626"/>
+  <rect x="90" y="176" width="480" height="16" fill="#262626"/>
+  <circle cx="122" cy="171" r="7" fill="#e74c3c"/>
+  <circle cx="148" cy="171" r="7" fill="#f5a623"/>
+  <circle cx="174" cy="171" r="7" fill="#27ae60"/>
+
+  <text x="120" y="240" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="19" fill="#7fdbca">$ npx agent-whiteboard</text>
+  <text x="120" y="280" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="17" fill="#9a9a9a">agent-whiteboard running at :3000</text>
+  <text x="120" y="330" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="19" fill="#ffffff">&gt; render(mermaid, "Step B")</text>
+  <rect x="120" y="345" width="12" height="22" fill="#7fdbca"/>
+
+  <!-- dashed control-flow arrow, terminal -> canvas -->
+  <path d="M 575 330 C 620 300, 640 260, 660 235" fill="none" stroke="#2980b9" stroke-width="3" stroke-dasharray="2 10" stroke-linecap="round"/>
+  <path d="M 660 235 l -14 -4 l 4 14 z" fill="#2980b9"/>
+
+  <!-- Canvas panel (render surface) -->
+  <rect x="660" y="110" width="530" height="420" rx="16" fill="#ffffff" stroke="#e0e0e0" stroke-width="2"/>
+  <rect x="660" y="110" width="530" height="4" rx="2" fill="#2980b9"/>
+
+  <!-- flowchart -->
+  <rect x="705" y="165" width="150" height="58" rx="10" fill="#e8f4fd" stroke="#2980b9" stroke-width="2"/>
+  <text x="780" y="200" text-anchor="middle" font-size="18" fill="#1a1a1a" font-weight="600">Start</text>
+
+  <rect x="705" y="280" width="150" height="58" rx="10" fill="#e8f4fd" stroke="#2980b9" stroke-width="2"/>
+  <text x="780" y="315" text-anchor="middle" font-size="18" fill="#1a1a1a" font-weight="600">Step A</text>
+
+  <rect x="925" y="280" width="170" height="62" rx="10" fill="#2980b9"/>
+  <text x="1010" y="317" text-anchor="middle" font-size="18" fill="#ffffff" font-weight="700">Step B</text>
+
+  <rect x="800" y="410" width="150" height="58" rx="10" fill="#e8f4fd" stroke="#2980b9" stroke-width="2"/>
+  <text x="875" y="445" text-anchor="middle" font-size="18" fill="#1a1a1a" font-weight="600">Step C</text>
+
+  <path d="M 780 223 L 780 280" fill="none" stroke="#aaaaaa" stroke-width="2.5"/>
+  <path d="M 780 275 l -6 -12 l 12 0 z" fill="#aaaaaa"/>
+
+  <path d="M 855 309 L 925 309" fill="none" stroke="#aaaaaa" stroke-width="2.5"/>
+  <path d="M 920 309 l -12 -6 l 0 12 z" fill="#aaaaaa"/>
+
+  <path d="M 970 342 C 950 375, 920 395, 900 410" fill="none" stroke="#aaaaaa" stroke-width="2.5"/>
+  <path d="M 902 405 l -14 8 l 14 6 z" fill="#aaaaaa"/>
+
+  <!-- click cursor on the highlighted node -->
+  <path d="M 1055 350 l 0 42 l 11 -10 l 8 18 l 10 -5 l -8 -18 l 15 -2 z" fill="#1a1a1a" stroke="#ffffff" stroke-width="2"/>
+
+  <!-- wordmark -->
+  <text x="640" y="580" text-anchor="middle" font-size="36" font-weight="700" fill="#1a1a1a">agent-whiteboard</text>
+  <text x="640" y="610" text-anchor="middle" font-size="18" fill="#999999">AI teacher agents, on a second screen</text>
+</svg>

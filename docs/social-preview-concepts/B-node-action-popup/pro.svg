@@ -1,0 +1,65 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgB" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7fafc"/>
+      <stop offset="1" stop-color="#eef3f7"/>
+    </linearGradient>
+    <linearGradient id="nodeGradB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3a9bd8"/>
+      <stop offset="1" stop-color="#1f6699"/>
+    </linearGradient>
+    <linearGradient id="sparkGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd166"/>
+      <stop offset="1" stop-color="#f5a623"/>
+    </linearGradient>
+    <filter id="shB1" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#0a2540" flood-opacity="0.20"/>
+    </filter>
+    <filter id="shB2" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#0a2540" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bgB)"/>
+
+  <g opacity="0.4">
+    <rect x="140" y="80" width="180" height="60" rx="12" fill="#ffffff" stroke="#cfe6f5" stroke-width="1.5"/>
+    <text x="230" y="116" text-anchor="middle" font-size="17" fill="#33454f" font-weight="600">Overview</text>
+    <rect x="190" y="500" width="180" height="60" rx="12" fill="#ffffff" stroke="#cfe6f5" stroke-width="1.5"/>
+    <text x="280" y="536" text-anchor="middle" font-size="17" fill="#33454f" font-weight="600">Failover</text>
+    <path d="M 260 140 L 300 260" stroke="#c3ccd3" stroke-width="2"/>
+    <path d="M 320 380 L 300 500" stroke="#c3ccd3" stroke-width="2"/>
+  </g>
+
+  <g filter="url(#shB1)">
+    <rect x="150" y="255" width="340" height="120" rx="18" fill="url(#nodeGradB)"/>
+  </g>
+  <text x="320" y="325" text-anchor="middle" font-size="29" font-weight="700" fill="#ffffff">Leader Election</text>
+
+  <path d="M 490 300 C 520 290, 545 284, 566 278" fill="none" stroke="#2980b9" stroke-width="3" stroke-dasharray="1 8" stroke-linecap="round" opacity="0.85"/>
+  <circle cx="566" cy="278" r="5" fill="#2980b9"/>
+
+  <g filter="url(#shB2)">
+    <rect x="566" y="176" width="360" height="228" rx="18" fill="#ffffff"/>
+  </g>
+  <text x="596" y="216" font-size="13" fill="#8a97a1" letter-spacing="1" font-weight="600">AVAILABLE ACTIONS</text>
+  <line x1="590" y1="230" x2="902" y2="230" stroke="#eef1f4" stroke-width="2"/>
+
+  <text x="596" y="266" font-size="18" fill="#26333c">Explain this step</text>
+
+  <rect x="580" y="284" width="326" height="52" rx="10" fill="#eaf4fc"/>
+  <text x="596" y="317" font-size="19" fill="#12455f" font-weight="700">Zoom in</text>
+
+  <text x="596" y="378" font-size="18" fill="#26333c">Quiz me</text>
+
+  <g filter="url(#shB2)" transform="translate(902,196)">
+    <path d="M 0 -17 C 3 -5 5 -3 17 0 C 5 3 3 5 0 17 C -3 5 -5 3 -17 0 C -5 -3 -3 -5 0 -17 Z" fill="url(#sparkGrad)"/>
+  </g>
+
+  <g filter="url(#shB2)">
+    <path d="M 812 300 l 0 46 l 12 -11 l 9 20 l 11 -5 l -9 -20 l 16 -2 z" fill="#ffffff" stroke="#1a1a1a" stroke-width="1.5"/>
+  </g>
+
+  <text x="640" y="560" text-anchor="middle" font-size="38" font-weight="700" fill="#12212e">agent-whiteboard</text>
+  <text x="640" y="591" text-anchor="middle" font-size="18" fill="#5b6b78">The agent decides what you can do next</text>
+</svg>
