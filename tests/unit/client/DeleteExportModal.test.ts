@@ -20,6 +20,11 @@ const TWO_WORKSPACES = [
   { name: "ws-2", isCurrent: false, snapshots: [{ filename: "b.json", timestamp: "2026-01-02T00:00:00.000Z", type: "svg", title: "Second" }] },
 ];
 
+const TWO_WORKSPACES_NO_CURRENT = [
+  { name: "ws-1", isCurrent: false, snapshots: [{ filename: "a.json", timestamp: "2026-01-01T00:00:00.000Z", type: "mermaid", title: "First" }] },
+  { name: "ws-2", isCurrent: false, snapshots: [{ filename: "b.json", timestamp: "2026-01-02T00:00:00.000Z", type: "svg", title: "Second" }] },
+];
+
 describe("DeleteExportModal.svelte", () => {
   afterEach(() => {
     cleanup();
@@ -35,18 +40,44 @@ describe("DeleteExportModal.svelte", () => {
     expect(getByText("ws-1")).toBeTruthy();
   });
 
-  it("opens on step 1 (workspace picker) when there are multiple workspaces, and back-navigates from step 2", async () => {
+  it("skips step 1 and opens directly on step 2 for the current workspace when there are multiple workspaces (FR29)", async () => {
+    const { getByText, queryByText, queryByLabelText } = render(DeleteExportModal, {
+      props: { mode: "delete", open: true, workspaces: TWO_WORKSPACES, loadError: null },
+    });
+    expect(queryByText("Delete — choose a workspace")).toBeNull();
+    expect(getByText("ws-1")).toBeTruthy(); // step-2 title, auto-selected because ws-1.isCurrent
+
+    expect(queryByLabelText("Back")).toBeTruthy();
+  });
+
+  it("still reaches the picker via Back and can switch to a non-current workspace (FR29)", async () => {
     const { getByText, queryByLabelText } = render(DeleteExportModal, {
       props: { mode: "delete", open: true, workspaces: TWO_WORKSPACES, loadError: null },
+    });
+
+    await fireEvent.click(queryByLabelText("Back")!);
+    expect(getByText("Delete — choose a workspace")).toBeTruthy();
+
+    await fireEvent.click(getByText(/^ws-2/));
+    expect(getByText("ws-2")).toBeTruthy(); // now the step-2 title
+  });
+
+  it("opens on step 1 (workspace picker) when no workspace is flagged current", async () => {
+    const { getByText } = render(DeleteExportModal, {
+      props: { mode: "delete", open: true, workspaces: TWO_WORKSPACES_NO_CURRENT, loadError: null },
     });
     expect(getByText("Delete — choose a workspace")).toBeTruthy();
 
     await fireEvent.click(getByText(/^ws-1/));
     expect(getByText("ws-1")).toBeTruthy(); // now the step-2 title
-    expect(queryByLabelText("Back")).toBeTruthy();
+  });
 
-    await fireEvent.click(queryByLabelText("Back")!);
-    expect(getByText("Delete — choose a workspace")).toBeTruthy();
+  it("skips step 1 and opens directly on step 2 for the current workspace in export mode too (FR29)", () => {
+    const { getByText, queryByText } = render(DeleteExportModal, {
+      props: { mode: "export", open: true, workspaces: TWO_WORKSPACES, loadError: null },
+    });
+    expect(queryByText("Export — choose a workspace")).toBeNull();
+    expect(getByText("ws-1")).toBeTruthy();
   });
 
   it("exports the whole workspace using snapshot ids, not filenames (F4/NF21)", async () => {
