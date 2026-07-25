@@ -7,8 +7,8 @@
 - [x] Verify the existing `goBack()` / `canGoBack` control still lets the user reach the step-1 picker to choose a different workspace. (Fixed a latent reactive-ordering bug this change exposed: `canGoBack`'s `$:` declaration read `step` before the block that sets it via `resetState()` — moved it after, per the existing ordering comment in the file.)
 - [x] Add/update a test covering: 2+ workspaces present, one flagged `isCurrent` → modal opens on step 2 for that workspace, for both `mode="delete"` and `mode="export"`.
 - [x] Produce 3 concepts × 3 styles (stylized, handmade, pro) for the social preview redesign as SVG mockups, each with a short written brief, reflecting user/agent interactivity (agent driving a rendered graph, user acting on it) rather than the bare app icon mark. Delivered at `docs/social-preview-concepts/{A-terminal-canvas-duo,B-node-action-popup,C-conversation-loop}/{stylized,handmade,pro}.svg` + `docs/social-preview-concepts/BRIEFS.md`.
-- [ ] Present the 9 mockups to the user for selection.
-- [ ] Once a concept/style is picked, produce the final `docs/social-preview.png` (1280×640) from it — tracked as a follow-up task once a selection is made, per `02_assumptions-and-risks.md` v1.1 assumption.
+- [x] Present the 9 mockups to the user for selection. User picked concept A (terminal/canvas duo), handmade style, with the action-popup mechanic from concept B merged in per follow-up feedback.
+- [x] Once a concept/style is picked, produce the final `docs/social-preview.png` (1280×640) from it. Rendered from the finalized `docs/social-preview-concepts/A-terminal-canvas-duo/handmade.svg`.
 
 ---
 
