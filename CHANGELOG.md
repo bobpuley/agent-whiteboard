@@ -1,3 +1,11 @@
+## 1.0.2 — 2026-07-25
+
+**Milestone v1.1 — Modal Default Workspace & Social Preview Refresh (Sprint 79) complete.** The delete/export modal now defaults to the current workspace, and the GitHub social preview image is redesigned to depict the actual product mechanic instead of the bare app icon (FR29–FR30 in `01`, F29–F30 in `03`).
+
+- **`client/src/DeleteExportModal.svelte` (F29):** `resetState()` now auto-selects the workspace flagged `isCurrent` (in addition to the existing single-workspace auto-select) and opens directly on the step-2 snapshot list, instead of always landing on the step-1 picker when 2+ workspaces exist. The existing "Back" control still reaches the picker to switch workspaces. Also fixes a latent reactive-ordering bug this exposed: `canGoBack`'s `$:` declaration read `step` before the block that sets it via `resetState()`, so on the very first render it computed off the stale initial value — reordered per the file's existing dependency-ordering convention.
+- **`docs/social-preview.png` (F30):** replaced the bare app-icon image with a new design — a terminal pane (the agent's CLI) driving a rendered flowchart, with an agent-generated action popup open beside the clicked node, depicting both the terminal/canvas duo and the "agent controls what you can do next" mechanic. Nine concept/style alternatives (3 concepts × 3 styles) were produced as SVG mockups with written briefs under `docs/social-preview-concepts/` for reference.
+- Full suite: 528 unit tests passing, `tsc --noEmit`/`svelte-check`/`eslint` clean throughout.
+
 ## 1.0.1 — 2026-07-19
 
 **License change: MIT → PolyForm Noncommercial 1.0.0.** Free to use, modify, and redistribute for any non-commercial purpose; commercial use requires a separate agreement (contact bobpuley@gmail.com). This takes effect from `1.0.1` onward — `1.0.0` remains available under its original MIT terms, since that grant isn't retroactively revocable.
