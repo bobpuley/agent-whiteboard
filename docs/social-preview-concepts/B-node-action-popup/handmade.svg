@@ -1,0 +1,48 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive">
+  <rect width="1280" height="640" fill="#f6f1e4"/>
+  <g stroke="#e7dfc8" stroke-width="1">
+    <path d="M 0 60 L 1280 50"/><path d="M 0 300 L 1280 312"/><path d="M 0 560 L 1280 548"/>
+  </g>
+
+  <g opacity="0.4">
+    <path d="M 146,86 C 220,78 300,82 316,92 C 320,110 318,132 312,140 C 250,146 180,144 148,138 C 140,120 140,98 146,86 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2"/>
+    <text x="230" y="118" text-anchor="middle" font-size="17" fill="#2b2b2b">Overview</text>
+    <path d="M 196,506 C 270,498 350,502 368,512 C 372,528 370,552 364,560 C 300,566 230,564 198,558 C 190,540 190,518 196,506 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2"/>
+    <text x="280" y="538" text-anchor="middle" font-size="17" fill="#2b2b2b">Failover</text>
+    <path d="M 264 144 C 280 190, 296 230, 302 258" stroke="#8a8a8a" stroke-width="2" fill="none"/>
+    <path d="M 316 384 C 306 420, 300 460, 300 502" stroke="#8a8a8a" stroke-width="2" fill="none"/>
+  </g>
+
+  <!-- main node, hand drawn -->
+  <path d="M 158,262 C 260,250 400,254 484,264 C 494,286 492,340 486,362 C 400,374 250,372 160,364 C 150,340 150,286 158,262 Z"
+        fill="#2980b9" stroke="#1a1a1a" stroke-width="3"/>
+  <text x="320" y="322" text-anchor="middle" font-size="30" font-weight="700" fill="#ffffff" transform="rotate(-1 320 322)">Leader Election</text>
+
+  <path d="M 492 298 C 520 292, 545 286, 566 278" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 566 278 l -16 2 l 8 -14 z" fill="#2b2b2b"/>
+
+  <!-- popup card, hand drawn -->
+  <path d="M 574,182 C 660,172 850,176 918,186 C 928,220 926,340 920,392 C 850,402 660,398 578,388 C 566,340 566,220 574,182 Z"
+        fill="#fffdf6" stroke="#2b2b2b" stroke-width="3"/>
+  <text x="604" y="222" font-size="16" fill="#8a8266">available actions</text>
+  <path d="M 578 236 C 660 234, 840 236, 918 238" stroke="#e2d9bd" stroke-width="2"/>
+
+  <text x="622" y="270" font-size="20" fill="#2b2b2b" transform="rotate(-1 622 270)">Explain this step</text>
+
+  <path d="M 578 288 C 660 284, 840 288, 918 292 L 918 340 C 840 344, 660 342, 578 338 Z" fill="#fbe7c4" opacity="0.7"/>
+  <text x="622" y="322" font-size="21" font-weight="700" fill="#2b2b2b" transform="rotate(1 622 322)">Zoom in</text>
+
+  <text x="622" y="374" font-size="20" fill="#2b2b2b" transform="rotate(-1 622 374)">Quiz me</text>
+
+  <!-- sparkle badge -->
+  <g transform="translate(892,204) rotate(8)">
+    <path d="M 0 -18 C 4 -6 6 -4 18 0 C 6 4 4 6 0 18 C -4 6 -6 4 -18 0 C -6 -4 -4 -6 0 -18 Z" fill="#f0a83a" stroke="#2b2b2b" stroke-width="1.5"/>
+  </g>
+
+  <!-- doodled cursor over the highlighted row -->
+  <path d="M 800 296 C 798 314, 802 328, 804 342 C 812 334, 816 332, 820 336 C 826 348, 830 356, 834 362 C 840 358, 842 356, 838 348 C 834 340, 830 332, 828 326 C 836 324, 840 322, 836 318 C 824 310, 810 302, 800 296 Z"
+        fill="#2b2b2b" stroke="#f6f1e4" stroke-width="2"/>
+
+  <text x="640" y="560" text-anchor="middle" font-size="40" font-weight="700" fill="#2b2b2b" transform="rotate(-1 640 560)">agent-whiteboard</text>
+  <text x="640" y="592" text-anchor="middle" font-size="19" fill="#7a7365" transform="rotate(1 640 592)">the agent decides what you can do next</text>
+</svg>

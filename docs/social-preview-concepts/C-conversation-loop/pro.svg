@@ -1,0 +1,55 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgC" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f7fafc"/>
+      <stop offset="1" stop-color="#eef3f7"/>
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4ea3d8"/>
+      <stop offset="0.5" stop-color="#2980b9"/>
+      <stop offset="1" stop-color="#1f6699"/>
+    </linearGradient>
+    <linearGradient id="chipGradDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232323"/>
+      <stop offset="1" stop-color="#141414"/>
+    </linearGradient>
+    <linearGradient id="sparkGradC" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd166"/>
+      <stop offset="1" stop-color="#f5a623"/>
+    </linearGradient>
+    <filter id="shC1" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#0a2540" flood-opacity="0.20"/>
+    </filter>
+    <filter id="shC2" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0a2540" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bgC)"/>
+
+  <circle cx="640" cy="320" r="200" fill="none" stroke="url(#ringGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="14 16" filter="url(#shC1)"/>
+
+  <g filter="url(#shC2)" transform="translate(400,320)">
+    <rect x="-70" y="-46" width="140" height="92" rx="18" fill="url(#chipGradDark)"/>
+    <text x="-38" y="10" font-family="'Cascadia Code', Consolas, monospace" font-size="30" fill="#6ee7d0">&gt;_</text>
+  </g>
+
+  <g filter="url(#shC2)" transform="translate(880,320)">
+    <rect x="-70" y="-46" width="140" height="92" rx="18" fill="#ffffff"/>
+    <circle cx="-30" cy="-12" r="9" fill="#2980b9"/>
+    <circle cx="20" cy="10" r="9" fill="#2980b9"/>
+    <circle cx="-8" cy="26" r="9" fill="#2980b9"/>
+    <path d="M -30 -12 L 20 10 L -8 26" fill="none" stroke="#2980b9" stroke-width="3"/>
+  </g>
+
+  <g filter="url(#shC2)" transform="translate(640,120)">
+    <circle r="36" fill="url(#sparkGradC)"/>
+    <path d="M -10 -12 l 0 26 l 7 -6 l 5 11 l 6 -3 l -5 -11 l 9 -1 z" fill="#1a1a1a"/>
+  </g>
+
+  <path d="M 784 168 l 15 -5 l -3 16 z" fill="#2980b9"/>
+  <path d="M 498 470 l -15 5 l 3 -16 z" fill="#2980b9"/>
+
+  <text x="640" y="560" text-anchor="middle" font-size="40" font-weight="700" fill="#12212e">agent-whiteboard</text>
+  <text x="640" y="592" text-anchor="middle" font-size="19" fill="#5b6b78">Renders. You click. It adapts.</text>
+</svg>

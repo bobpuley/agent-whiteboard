@@ -25,7 +25,6 @@
   let doneTimer: ReturnType<typeof setTimeout> | null = null;
 
   $: verb = mode === "delete" ? "Delete" : "Export";
-  $: canGoBack = step === 2 && workspaces.length > 1;
 
   // Combined into a single reactive block so the order is guaranteed:
   // Svelte does not guarantee source-order execution across *separate*
@@ -37,6 +36,13 @@
     wasOpen = open;
   }
 
+  // Declared after the block above: canGoBack reads `step`, which that block
+  // sets indirectly via resetState() (a plain function call, not a direct
+  // assignment) — the compiler can't infer that dependency, so on the very
+  // first synchronous render pass, source order is what makes this compute
+  // *after* resetState() has run rather than off the stale initial `step`.
+  $: canGoBack = step === 2 && workspaces.length > 1;
+
   function resetState() {
     errorMessage = null;
     doneMessage = null;
@@ -44,8 +50,9 @@
     confirmingWhole = false;
     confirmingSubset = false;
     selectedFilenames = new Set();
-    if (workspaces.length === 1) {
-      selectedWorkspace = workspaces[0];
+    const defaultWorkspace = workspaces.length === 1 ? workspaces[0] : workspaces.find((w) => w.isCurrent);
+    if (defaultWorkspace) {
+      selectedWorkspace = defaultWorkspace;
       step = 2;
     } else {
       selectedWorkspace = null;

@@ -1,0 +1,84 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive">
+  <rect width="1280" height="640" fill="#f6f1e4"/>
+  <!-- faint paper fibers -->
+  <g stroke="#e7dfc8" stroke-width="1">
+    <path d="M 0 90 L 1280 70" /><path d="M 0 330 L 1280 345" /><path d="M 0 560 L 1280 548" />
+  </g>
+
+  <!-- Terminal panel, hand-drawn double stroke -->
+  <path d="M 98,160 C 90,152 104,148 130,150 L 420,146 C 466,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
+        fill="#2b2b2b" stroke="#2b2b2b" stroke-width="3"/>
+  <path d="M 98,160 C 90,152 104,148 130,150 L 420,146 C 466,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
+        fill="none" stroke="#000000" stroke-width="2" stroke-opacity="0.3" transform="translate(3,2)"/>
+
+  <ellipse cx="122" cy="173" rx="8" ry="7" fill="#e74c3c" transform="rotate(-6 122 173)"/>
+  <ellipse cx="150" cy="171" rx="8" ry="7" fill="#f5a623" transform="rotate(4 150 171)"/>
+  <ellipse cx="178" cy="173" rx="8" ry="7" fill="#8bc98f" transform="rotate(-3 178 173)"/>
+
+  <text x="118" y="245" font-size="21" fill="#8fe0cf" transform="rotate(-1 118 245)">$ npx agent-whiteboard</text>
+  <text x="118" y="285" font-size="17" fill="#bdbdbd" transform="rotate(1 118 285)">...running at :3000</text>
+  <text x="118" y="335" font-size="21" fill="#ffffff" transform="rotate(-1 118 335)">&gt; render(diagram, "Step B")</text>
+
+  <!-- wavy hand-drawn arrow, terminal -> canvas (single smooth curve, touches the panel border) -->
+  <path d="M 578,330 C 588,300 583,266 598,235" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 598,235 L 596,252 L 586,247 Z" fill="#2b2b2b"/>
+
+  <!-- Canvas panel (widened to make room for the action popup) -->
+  <path d="M 608,114 C 600,106 640,102 700,104 L 1150,100 C 1185,98 1197,106 1195,118 L 1191,426 C 1193,466 1187,528 1177,536 C 1167,542 1000,536 900,538 L 640,534 C 612,536 600,528 602,516 L 598,214 C 596,164 602,126 608,114 Z"
+        fill="none" stroke="#2b2b2b" stroke-width="3"/>
+  <path d="M 608,114 C 600,106 640,102 700,104 L 1150,100 C 1185,98 1197,106 1195,118 L 1191,426 C 1193,466 1187,528 1177,536 C 1167,542 1000,536 900,538 L 640,534 C 612,536 600,528 602,516 L 598,214 C 596,164 602,126 608,114 Z"
+        fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-opacity="0.35" transform="translate(3,3)"/>
+
+  <!-- flowchart, sketchy nodes (kept to the left half of the canvas panel) -->
+  <g font-size="17" fill="#2b2b2b" font-weight="700">
+    <path d="M 650,166 C 700,158 760,160 780,168 C 786,182 784,202 778,210 C 730,216 668,214 646,206 C 640,192 642,174 650,166 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="715" y="193" text-anchor="middle" transform="rotate(-1 715 193)">Start</text>
+
+    <path d="M 650,276 C 700,268 760,270 780,278 C 786,292 784,312 778,320 C 730,326 668,324 646,316 C 640,302 642,284 650,276 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="715" y="303" text-anchor="middle" transform="rotate(1 715 303)">Step A</text>
+
+    <path d="M 812,272 C 866,262 930,266 950,276 C 958,292 956,314 948,324 C 896,332 828,330 802,320 C 794,304 798,282 812,272 Z" fill="#2980b9" stroke="#1a1a1a" stroke-width="2.5"/>
+    <text x="876" y="303" text-anchor="middle" fill="#ffffff" transform="rotate(-1 876 303)">Step B</text>
+
+    <path d="M 720,406 C 770,398 830,400 850,408 C 856,422 854,442 848,450 C 800,456 738,454 716,446 C 710,432 712,414 720,406 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="785" y="433" text-anchor="middle" transform="rotate(1 785 433)">Step C</text>
+  </g>
+
+  <g stroke="#8a8a8a" stroke-width="2.5" fill="none" stroke-linecap="round">
+    <path d="M 715 212 C 712 232, 717 252, 715 274"/>
+    <path d="M 786 298 C 793 299, 797 300, 802 300"/>
+    <path d="M 860 326 C 845 355, 830 380, 822 404"/>
+  </g>
+  <path d="M 713 271 l -6 -13 l 13 3 z" fill="#8a8a8a"/>
+  <path d="M 798 297 l -13 -5 l 3 12 z" fill="#8a8a8a"/>
+  <path d="M 824 401 l -15 8 l 14 6 z" fill="#8a8a8a"/>
+
+  <!-- hand-drawn connector: the clicked node -> the agent-generated action menu -->
+  <path d="M 950 288 C 958 282, 964 278, 972 272" fill="none" stroke="#2b2b2b" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 972 272 l -15 1 l 8 -13 z" fill="#2b2b2b"/>
+
+  <!-- available-actions popup, sketchy card -->
+  <path d="M 972,198 C 1030,190 1130,192 1168,200 C 1176,230 1174,340 1170,378 C 1130,386 1030,384 976,376 C 968,340 968,230 972,198 Z"
+        fill="#fffdf6" stroke="#2b2b2b" stroke-width="2.5"/>
+  <text x="990" y="222" font-size="14" fill="#8a8266">actions</text>
+  <path d="M 976 234 C 1030 232, 1120 234, 1168 236" stroke="#e2d9bd" stroke-width="2"/>
+
+  <text x="1000" y="266" font-size="19" fill="#2b2b2b" transform="rotate(-1 1000 266)">Explain</text>
+
+  <path d="M 976 282 C 1030 278, 1120 282, 1168 286 L 1168 336 C 1120 340, 1030 338, 976 334 Z" fill="#fbe7c4" opacity="0.75"/>
+  <text x="1000" y="316" font-size="20" font-weight="700" fill="#2b2b2b" transform="rotate(1 1000 316)">Zoom in</text>
+
+  <text x="1000" y="360" font-size="19" fill="#2b2b2b" transform="rotate(-1 1000 360)">Quiz me</text>
+
+  <!-- sparkle badge: the agent decided what's in this menu -->
+  <g transform="translate(1152,208) rotate(8)">
+    <path d="M 0 -14 C 3 -5 5 -3 14 0 C 5 3 3 5 0 14 C -3 5 -5 3 -14 0 C -5 -3 -3 -5 0 -14 Z" fill="#f0a83a" stroke="#2b2b2b" stroke-width="1.5"/>
+  </g>
+
+  <!-- doodled cursor, now hovering the highlighted action row -->
+  <path d="M 1080,275 C 1078,291 1082,305 1084,319 C 1092,311 1096,309 1100,313 C 1106,325 1110,333 1114,339 C 1120,335 1122,333 1118,325 C 1114,317 1110,309 1108,303 C 1116,301 1120,299 1116,295 C 1104,287 1090,281 1080,275 Z"
+        fill="#2b2b2b" stroke="#fbe7c4" stroke-width="2"/>
+
+  <text x="640" y="580" text-anchor="middle" font-size="40" font-weight="700" fill="#2b2b2b" transform="rotate(-1 640 580)">agent-whiteboard</text>
+  <text x="640" y="612" text-anchor="middle" font-size="19" fill="#7a7365" transform="rotate(1 640 612)">AI teacher agents, on a second screen</text>
+</svg>
