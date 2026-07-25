@@ -6,9 +6,9 @@
   </g>
 
   <!-- Terminal panel, hand-drawn double stroke -->
-  <path d="M 98,160 C 90,152 104,148 130,150 L 430,146 C 480,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
+  <path d="M 98,160 C 90,152 104,148 130,150 L 420,146 C 466,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
         fill="#2b2b2b" stroke="#2b2b2b" stroke-width="3"/>
-  <path d="M 98,160 C 90,152 104,148 130,150 L 430,146 C 480,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
+  <path d="M 98,160 C 90,152 104,148 130,150 L 420,146 C 466,144 566,150 570,162 L 574,300 C 578,380 570,468 566,500 C 560,512 500,506 450,510 L 138,514 C 108,516 90,506 88,496 L 84,220 C 82,188 90,168 98,160 Z"
         fill="none" stroke="#000000" stroke-width="2" stroke-opacity="0.3" transform="translate(3,2)"/>
 
   <ellipse cx="122" cy="173" rx="8" ry="7" fill="#e74c3c" transform="rotate(-6 122 173)"/>
@@ -19,43 +19,65 @@
   <text x="118" y="285" font-size="17" fill="#bdbdbd" transform="rotate(1 118 285)">...running at :3000</text>
   <text x="118" y="335" font-size="21" fill="#ffffff" transform="rotate(-1 118 335)">&gt; render(diagram, "Step B")</text>
 
-  <!-- wavy hand-drawn arrow, terminal -> canvas -->
-  <path d="M 580 335 C 605 310, 600 275, 630 255 C 645 245, 650 240, 662 233" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/>
-  <path d="M 662 233 l -16 -2 l 6 15 z" fill="#2b2b2b"/>
+  <!-- wavy hand-drawn arrow, terminal -> canvas (single smooth curve, touches the panel border) -->
+  <path d="M 578,330 C 588,300 583,266 598,235" fill="none" stroke="#2b2b2b" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 598,235 L 596,252 L 586,247 Z" fill="#2b2b2b"/>
 
-  <!-- Canvas panel -->
-  <path d="M 668,120 C 660,112 700,108 760,110 L 1140,106 C 1178,104 1190,112 1188,124 L 1184,420 C 1186,460 1180,522 1170,530 C 1160,536 1000,530 900,532 L 700,528 C 672,530 660,522 662,510 L 658,220 C 656,170 662,132 668,120 Z"
+  <!-- Canvas panel (widened to make room for the action popup) -->
+  <path d="M 608,114 C 600,106 640,102 700,104 L 1150,100 C 1185,98 1197,106 1195,118 L 1191,426 C 1193,466 1187,528 1177,536 C 1167,542 1000,536 900,538 L 640,534 C 612,536 600,528 602,516 L 598,214 C 596,164 602,126 608,114 Z"
         fill="none" stroke="#2b2b2b" stroke-width="3"/>
-  <path d="M 668,120 C 660,112 700,108 760,110 L 1140,106 C 1178,104 1190,112 1188,124 L 1184,420 C 1186,460 1180,522 1170,530 C 1160,536 1000,530 900,532 L 700,528 C 672,530 660,522 662,510 L 658,220 C 656,170 662,132 668,120 Z"
+  <path d="M 608,114 C 600,106 640,102 700,104 L 1150,100 C 1185,98 1197,106 1195,118 L 1191,426 C 1193,466 1187,528 1177,536 C 1167,542 1000,536 900,538 L 640,534 C 612,536 600,528 602,516 L 598,214 C 596,164 602,126 608,114 Z"
         fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-opacity="0.35" transform="translate(3,3)"/>
 
-  <!-- flowchart, sketchy nodes -->
-  <g font-size="18" fill="#2b2b2b" font-weight="700">
-    <path d="M 712,168 C 780,160 850,164 858,172 C 862,190 860,215 854,224 C 800,230 730,228 706,222 C 700,205 704,178 712,168 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
-    <text x="782" y="202" text-anchor="middle" transform="rotate(-1 782 202)">Start</text>
+  <!-- flowchart, sketchy nodes (kept to the left half of the canvas panel) -->
+  <g font-size="17" fill="#2b2b2b" font-weight="700">
+    <path d="M 650,166 C 700,158 760,160 780,168 C 786,182 784,202 778,210 C 730,216 668,214 646,206 C 640,192 642,174 650,166 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="715" y="193" text-anchor="middle" transform="rotate(-1 715 193)">Start</text>
 
-    <path d="M 712,283 C 780,276 850,280 858,288 C 862,304 860,328 854,336 C 800,342 730,340 706,335 C 700,318 704,293 712,283 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
-    <text x="782" y="316" text-anchor="middle" transform="rotate(1 782 316)">Step A</text>
+    <path d="M 650,276 C 700,268 760,270 780,278 C 786,292 784,312 778,320 C 730,326 668,324 646,316 C 640,302 642,284 650,276 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="715" y="303" text-anchor="middle" transform="rotate(1 715 303)">Step A</text>
 
-    <path d="M 930,283 C 1010,274 1090,280 1098,290 C 1104,308 1100,335 1092,344 C 1030,352 950,348 924,340 C 916,320 920,294 930,283 Z" fill="#2980b9" stroke="#1a1a1a" stroke-width="2.5"/>
-    <text x="1012" y="320" text-anchor="middle" fill="#ffffff" transform="rotate(-1 1012 320)">Step B</text>
+    <path d="M 812,272 C 866,262 930,266 950,276 C 958,292 956,314 948,324 C 896,332 828,330 802,320 C 794,304 798,282 812,272 Z" fill="#2980b9" stroke="#1a1a1a" stroke-width="2.5"/>
+    <text x="876" y="303" text-anchor="middle" fill="#ffffff" transform="rotate(-1 876 303)">Step B</text>
 
-    <path d="M 806,412 C 870,404 935,410 942,418 C 946,435 944,460 938,468 C 884,474 820,470 796,464 C 790,446 796,422 806,412 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
-    <text x="872" y="446" text-anchor="middle" transform="rotate(1 872 446)">Step C</text>
+    <path d="M 720,406 C 770,398 830,400 850,408 C 856,422 854,442 848,450 C 800,456 738,454 716,446 C 710,432 712,414 720,406 Z" fill="#fbf3d8" stroke="#2b2b2b" stroke-width="2.5"/>
+    <text x="785" y="433" text-anchor="middle" transform="rotate(1 785 433)">Step C</text>
   </g>
 
   <g stroke="#8a8a8a" stroke-width="2.5" fill="none" stroke-linecap="round">
-    <path d="M 780 226 C 776 245, 784 262, 780 281"/>
-    <path d="M 858 308 C 885 306, 900 308, 928 310"/>
-    <path d="M 975 346 C 955 375, 925 396, 900 412"/>
+    <path d="M 715 212 C 712 232, 717 252, 715 274"/>
+    <path d="M 786 298 C 793 299, 797 300, 802 300"/>
+    <path d="M 860 326 C 845 355, 830 380, 822 404"/>
   </g>
-  <path d="M 778 278 l -6 -13 l 13 3 z" fill="#8a8a8a"/>
-  <path d="M 923 306 l -13 -6 l 2 13 z" fill="#8a8a8a"/>
-  <path d="M 902 407 l -15 7 l 14 7 z" fill="#8a8a8a"/>
+  <path d="M 713 271 l -6 -13 l 13 3 z" fill="#8a8a8a"/>
+  <path d="M 798 297 l -13 -5 l 3 12 z" fill="#8a8a8a"/>
+  <path d="M 824 401 l -15 8 l 14 6 z" fill="#8a8a8a"/>
 
-  <!-- doodled cursor on Step B -->
-  <path d="M 1060 352 C 1058 368, 1062 382, 1064 396 C 1072 388, 1076 386, 1080 390 C 1086 402, 1090 410, 1094 416 C 1100 412, 1102 410, 1098 402 C 1094 394, 1090 386, 1088 380 C 1096 378, 1100 376, 1096 372 C 1084 364, 1070 358, 1060 352 Z"
-        fill="#2b2b2b" stroke="#f6f1e4" stroke-width="2"/>
+  <!-- hand-drawn connector: the clicked node -> the agent-generated action menu -->
+  <path d="M 950 288 C 958 282, 964 278, 972 272" fill="none" stroke="#2b2b2b" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 972 272 l -15 1 l 8 -13 z" fill="#2b2b2b"/>
+
+  <!-- available-actions popup, sketchy card -->
+  <path d="M 972,198 C 1030,190 1130,192 1168,200 C 1176,230 1174,340 1170,378 C 1130,386 1030,384 976,376 C 968,340 968,230 972,198 Z"
+        fill="#fffdf6" stroke="#2b2b2b" stroke-width="2.5"/>
+  <text x="990" y="222" font-size="14" fill="#8a8266">actions</text>
+  <path d="M 976 234 C 1030 232, 1120 234, 1168 236" stroke="#e2d9bd" stroke-width="2"/>
+
+  <text x="1000" y="266" font-size="19" fill="#2b2b2b" transform="rotate(-1 1000 266)">Explain</text>
+
+  <path d="M 976 282 C 1030 278, 1120 282, 1168 286 L 1168 336 C 1120 340, 1030 338, 976 334 Z" fill="#fbe7c4" opacity="0.75"/>
+  <text x="1000" y="316" font-size="20" font-weight="700" fill="#2b2b2b" transform="rotate(1 1000 316)">Zoom in</text>
+
+  <text x="1000" y="360" font-size="19" fill="#2b2b2b" transform="rotate(-1 1000 360)">Quiz me</text>
+
+  <!-- sparkle badge: the agent decided what's in this menu -->
+  <g transform="translate(1152,208) rotate(8)">
+    <path d="M 0 -14 C 3 -5 5 -3 14 0 C 5 3 3 5 0 14 C -3 5 -5 3 -14 0 C -5 -3 -3 -5 0 -14 Z" fill="#f0a83a" stroke="#2b2b2b" stroke-width="1.5"/>
+  </g>
+
+  <!-- doodled cursor, now hovering the highlighted action row -->
+  <path d="M 1080,275 C 1078,291 1082,305 1084,319 C 1092,311 1096,309 1100,313 C 1106,325 1110,333 1114,339 C 1120,335 1122,333 1118,325 C 1114,317 1110,309 1108,303 C 1116,301 1120,299 1116,295 C 1104,287 1090,281 1080,275 Z"
+        fill="#2b2b2b" stroke="#fbe7c4" stroke-width="2"/>
 
   <text x="640" y="580" text-anchor="middle" font-size="40" font-weight="700" fill="#2b2b2b" transform="rotate(-1 640 580)">agent-whiteboard</text>
   <text x="640" y="612" text-anchor="middle" font-size="19" fill="#7a7365" transform="rotate(1 640 612)">AI teacher agents, on a second screen</text>
