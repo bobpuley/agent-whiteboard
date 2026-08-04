@@ -40,3 +40,16 @@
 - With exactly 1 workspace, behavior is unchanged (already auto-selects).
 - The step-1 picker and `goBack()` still work for switching to a non-current workspace.
 - 9 SVG mockups (3 concepts × 3 styles) plus 9 short written briefs are delivered for review; final `docs/social-preview.png` is produced only after the user selects a concept — final-image production is a follow-up task, not blocking this milestone's SVG/brief deliverable (see `02_assumptions-and-risks.md`, v1.1 section).
+
+---
+
+## 3. Vega-Lite CSP `unsafe-eval` Fix (B23 in `01`)
+
+| ID  | Requirement | Priority |
+|-----|-------------|----------|
+| F31 | The live browser rendering path's Content-Security-Policy (`CSP_HEADER` in `server/app.ts`) permits Vega-Lite's client-side expression compiler to run — every renderer type supported by `POST /render` (`vega-lite` included) must render without triggering a CSP violation in the browser console. This clarifies a gap in **the "Multi-format rendering (SVG, HTML, KaTeX, Vega-Lite)" MVP requirement** (`docs/00_north-star.md`), which never specified the CSP had to accommodate each renderer's actual runtime needs. | v1.1.1 |
+
+**Acceptance criteria (draft):**
+- Running the showcase's client-managed slideshow section (`tests/human_driven/showcase.js`, slide "7b — Vega-Lite (6 s)") in a real browser renders the chart with no CSP-related error in the console.
+- `server/app.ts`'s `CSP_HEADER` is the only production code path that needs to change — `server/export-html.ts`'s two CSP strings render Vega-Lite to static SVG server-side and are not exercising the eval path (see `01`); confirmed unaffected, not fixed as a no-op.
+- No unrelated `script-src` capability is added — the fix is scoped to enabling Vega-Lite's expression compilation only.
