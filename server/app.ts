@@ -42,8 +42,10 @@ export function isValidMermaid(payload: string): boolean {
 // because the self-contained HTML export embeds the full mermaid.js bundle
 // and generated CSS inline (F17 in docs/03) — a nonce/hash scheme would be
 // more restrictive but isn't worth the complexity for a backstop control.
+// 'unsafe-eval' is required for Vega-Lite's client-side expression compiler
+// (new Function(...) for scales/signals — B23/F31 in docs/01/03).
 const CSP_HEADER =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; " +
   "frame-ancestors 'none'";
 

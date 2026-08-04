@@ -212,6 +212,22 @@ describe("POST /render", () => {
   });
 });
 
+// ── Content-Security-Policy (B23 / F31) ─────────────────────────────────────────
+
+describe("Content-Security-Policy header", () => {
+  it("grants 'unsafe-eval' in script-src so Vega-Lite's client-side expression compiler can run", async () => {
+    const res = await app.request("/export");
+    const csp = res.headers.get("Content-Security-Policy");
+
+    expect(csp).toBeTruthy();
+    const scriptSrc = csp!.split(";").find((directive) => directive.trim().startsWith("script-src"));
+    expect(scriptSrc).toBeDefined();
+    expect(scriptSrc).toContain("'self'");
+    expect(scriptSrc).toContain("'unsafe-inline'");
+    expect(scriptSrc).toContain("'unsafe-eval'");
+  });
+});
+
 // ── GET /export ───────────────────────────────────────────────────────────────
 
 describe("GET /export", () => {
