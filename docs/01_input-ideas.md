@@ -10,6 +10,13 @@
 
 - Feature request: when opening the delete/export modals, the current workspace should be selected by default.
 
+**B23 — Vega-Lite slide throws a CSP `unsafe-eval` violation in the browser (found 2026-08-04, user report)**
+
+- Observed: opening slide "7b — Vega-Lite (6 s)" (`tests/human_driven/showcase.js`, client-managed slideshow section) logs a browser console error: `Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self' 'unsafe-inline'`.
+- Expected: the Vega-Lite chart renders live in the browser (`client/src/renderers/VegaLite.svelte`, via `vega-embed`) without a CSP violation, same as every other renderer type in the showcase.
+- Root cause: `server/app.ts`'s `CSP_HEADER` sets `script-src 'self' 'unsafe-inline'` with no `'unsafe-eval'`. Vega/Vega-Lite's client-side expression compiler (used for scales, signals, and interactive encodings) compiles expression strings via `new Function(...)` at render time, which the CSP's `script-src` blocks. `server/export-html.ts`'s two CSP strings (`cdn` and `offline` export modes) have the identical gap, but those exports render Vega-Lite to static SVG server-side (`vl.compile` → `vega.parse` → `View.toSVG()`, no client-side `new Function` call) — so only the live browser rendering path (`server/app.ts`) is actually broken; the export path is a latent same-shape gap, not a live symptom.
+- `CSP_HEADER` was added in v0.20 (Sprint 33, "CSP hardening") — before this live client-managed Vega-Lite slide existed in the showcase — so the interaction was never exercised until now.
+
 **FR30 — Social preview image redesign (2026-07-25)**
 
 - Feature request: produce 3 alternative concepts for `docs/social-preview.png`, each in 3 styles (stylized, handmade, pro), that better reflect the app (e.g. user/agent interactivity, the agent controlling what actions the user can perform starting from a rendered graph). Image is larger than the icon assets, so more detail is acceptable. Deliverable format (per user decision): SVG mockups plus a written design brief for each concept.

@@ -22,3 +22,11 @@
 ## 2. Delete/Export Modal Default Workspace & Social Preview Refresh (F29–F30 in `03`)
 
 No architecture impact. F29 is a localized change to `resetState()` in `client/src/DeleteExportModal.svelte` (extend the existing `workspaces.length === 1` auto-select branch to also match `workspaces.find(w => w.isCurrent)` when there are multiple workspaces); no new state, store, or API surface. F30 is a static asset replacement (`docs/social-preview.png`) plus design-review artifacts (SVG mockups, written briefs) — no app code touched.
+
+---
+
+## 3. Vega-Lite CSP `unsafe-eval` Fix (F31 in `03`)
+
+- **`server/app.ts`'s `CSP_HEADER`:** `script-src` gains `'unsafe-eval'` (`'self' 'unsafe-inline' 'unsafe-eval'`), so Vega/Vega-Lite's client-side expression compiler (`new Function(...)`, used by `vega-embed` for scales/signals/interactive encodings) is permitted to run. This is the one CSP the live browser render path (`POST /render` → `App.svelte` → `VegaLite.svelte`) is actually served under.
+- **`server/export-html.ts`'s two CSP strings (`cdn`/`offline` export modes) are explicitly left unchanged.** Vega-Lite in an exported HTML file is pre-rendered to static SVG server-side at export time (`vl.compile(spec).spec` → `vega.parse()` → `new vega.View().toSVG()`) — no client-side expression compilation happens when the exported file is opened, so there is no eval need to grant there. Widening that CSP too would be an unjustified capability increase for a self-contained offline artifact; if a future renderer needs client-side eval inside an export, that's a separate, deliberate decision.
+- No other module touched — no new dependency, no data-flow change, no MCP/REST contract change.

@@ -20,3 +20,7 @@
 ## v1.1 (planning)
 
 > ⚠️ ASSUMPTION: The social preview redesign (FR30 in `01`) delivers SVG mockups + written briefs, not a finished production PNG. Selecting one concept/style and producing the final `docs/social-preview.png` (and updating any GitHub social-preview settings) is a separate, later step — not automatically in scope of this milestone's DoD unless the user picks a winner and asks for it.
+
+## v1.1.1 — revealed gap
+
+> ⚠️ ASSUMPTION (now known false, being corrected in v1.1.1): the v0.20 "CSP hardening" pass (Sprint 33) assumed `script-src 'self' 'unsafe-inline'` was sufficient for every renderer type. It never accounted for Vega-Lite's client-side expression compiler, which needs `'unsafe-eval'` to run `new Function(...)`-based expressions at render time — the gap sat dormant because the live client-managed Vega-Lite slide (showcase "7b") didn't exist yet at the time. See B23 in `01`, F31 in `03`.
