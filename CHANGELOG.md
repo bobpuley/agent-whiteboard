@@ -1,3 +1,7 @@
+## 1.0.4 — 2026-08-04
+
+Republish of 1.0.3 with a rebuilt dist/ — the previous publish shipped a stale pre-fix build that didn't include the CSP unsafe-eval fix.
+
 ## 1.0.3 — 2026-08-04
 
 **Milestone v1.1.1 — Vega-Lite CSP `unsafe-eval` Fix (patch, Sprint 80) complete.** The live browser render path's Content-Security-Policy blocked Vega-Lite's client-side expression compiler, throwing a console error and breaking the "6 / 6 — Vega-Lite" and "7b — Vega-Lite (6 s)" showcase slides (B23 in `01`, F31 in `03`).

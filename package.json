@@ -1,6 +1,6 @@
 {
   "name": "agent-whiteboard",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A domain-agnostic interactive whiteboard for AI teacher agents — render diagrams, math, charts, and HTML to a local browser tab via MCP tools.",
   "type": "module",
   "bin": {
