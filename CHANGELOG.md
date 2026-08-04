@@ -1,3 +1,11 @@
+## 1.0.3 — 2026-08-04
+
+**Milestone v1.1.1 — Vega-Lite CSP `unsafe-eval` Fix (patch, Sprint 80) complete.** The live browser render path's Content-Security-Policy blocked Vega-Lite's client-side expression compiler, throwing a console error and breaking the "6 / 6 — Vega-Lite" and "7b — Vega-Lite (6 s)" showcase slides (B23 in `01`, F31 in `03`).
+
+- **`server/app.ts` (F31):** `CSP_HEADER`'s `script-src` gains `'unsafe-eval'` (`'self' 'unsafe-inline' 'unsafe-eval'`), permitting Vega/Vega-Lite's `new Function(...)`-based expression compiler (scales, signals, interactive encodings via `vega-embed`) to run. Every other CSP directive is unchanged. `server/export-html.ts`'s two CSP strings (`cdn`/`offline` export modes) are deliberately left untouched — exported Vega-Lite content is pre-rendered to static SVG server-side at export time, so no client-side eval need exists there.
+- New unit test (`tests/unit/server/app.test.ts`) asserts `script-src` contains `'self'`, `'unsafe-inline'`, and `'unsafe-eval'`.
+- Full suite: 529 unit tests passing (up from 528), `tsc --noEmit`/`svelte-check`/`eslint` clean.
+
 ## 1.0.2 — 2026-07-25
 
 **Milestone v1.1 — Modal Default Workspace & Social Preview Refresh (Sprint 79) complete.** The delete/export modal now defaults to the current workspace, and the GitHub social preview image is redesigned to depict the actual product mechanic instead of the bare app icon (FR29–FR30 in `01`, F29–F30 in `03`).

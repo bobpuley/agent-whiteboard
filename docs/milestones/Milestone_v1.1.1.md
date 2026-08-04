@@ -1,6 +1,6 @@
 # Milestone v1.1.1 — Vega-Lite CSP `unsafe-eval` Fix (patch)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-08-04 via `/doc-creator-driver:intake` (bug report). Single bugfix — the live browser render path's CSP blocks Vega-Lite's client-side expression compiler (B23 in `01`, F31 in `03`, `04` §3). No new feature, so it stays a `.1` patch of v1.1 rather than a new minor milestone.
 
