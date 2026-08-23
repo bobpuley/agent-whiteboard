@@ -29,7 +29,6 @@ Every `render()`/commit call is persisted as a snapshot on disk (`~/.agent-white
 ## Requirements
 
 - Node.js ≥ 18
-- Claude Code (CLI or IDE extension)
 
 ## Quickstart
 
