@@ -19,6 +19,9 @@ const { values } = parseArgs({
     incremental: { type: "boolean", short: "c", default: false   },
     nodetoframe: { type: "boolean", short: "n", default: false   },
     all:         { type: "boolean", short: "a", default: false   },
+    "no-intro":    { type: "boolean",            default: false   },
+    "intro-delay": { type: "string",             default: "3000" },
+    "skip-outro":  { type: "boolean",            default: false   },
     help:        { type: "boolean", short: "h", default: false   },
   },
   strict: true,
@@ -43,6 +46,9 @@ Other options:
   -d, --delay <ms>      Delay between slides in ms (default: 5000)
   -t, --type <types>    Comma-separated renderer types to include in Section 1–6 slideshow
                         (mermaid, svg, html, katex, vega-lite). Omit for all.
+  --no-intro            Skip the intro card shown before each use case (for quick smoke runs)
+  --intro-delay <ms>    How long each intro card stays up (default: 4000)
+  --skip-outro          Skip the closing outro slide shown at the very end
   -h, --help            Show this help
 `);
   process.exit(0);
@@ -69,7 +75,11 @@ const DELAY_MS  = parseInt(values.delay, 10);
 const BASE      = `http://localhost:${PORT}`;
 const WORKSPACE = "showcase";
 
-console.log(`\n🎬  Showcase — server: ${BASE}  delay: ${DELAY_MS}ms\n`);
+const SHOW_INTRO      = !values["no-intro"];
+const INTRO_DELAY_MS  = parseInt(values["intro-delay"], 10);
+const SHOW_OUTRO       = !values["skip-outro"];
+
+console.log(`\n🎬  Showcase — server: ${BASE}  delay: ${DELAY_MS}ms  intro: ${SHOW_INTRO ? `${INTRO_DELAY_MS}ms` : "off"}\n`);
 
 async function post(path, body) {
   const res = await fetch(`${BASE}${path}`, {
@@ -80,6 +90,56 @@ async function post(path, body) {
   return res.json();
 }
 
+// Renders a short "use case" title card before a demo, giving a video a beat
+// to cut to narration before the real content appears. Purely a presentation
+// aid — every demo below still works with --no-intro for quick smoke runs.
+function introPayload(title, description) {
+  return `<div style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:56px 40px;text-align:center">
+  <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px">Use case</div>
+  <h1 style="margin:0 0 16px;font-size:26px;color:#1a1a2e;line-height:1.3">${title}</h1>
+  <p style="margin:0;color:#555;font-size:15px;line-height:1.6">${description}</p>
+</div>`;
+}
+
+async function renderIntro(title, description) {
+  if (!SHOW_INTRO) return;
+  const r = await post("/render", {
+    type: "html",
+    payload: introPayload(title, description),
+    options: { workspace: WORKSPACE, title: `Intro — ${title}` },
+  });
+  if (!r.ok) {
+    console.error(`   ✗ intro render failed: ${r.error}`);
+    return;
+  }
+  console.log(`   ℹ intro: "${title}"`);
+  await new Promise((res) => setTimeout(res, INTRO_DELAY_MS));
+}
+
+// Closing slide shown at the very end of the showcase, no matter which
+// section flags were passed. Controlled by --skip-outro.
+function outroPayload() {
+  return `<div style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:80px 40px;text-align:center">
+  <h1 style="margin:0 0 20px;font-size:36px;font-weight:800;color:#1a1a2e;letter-spacing:-0.5px">Agent Whiteboard</h1>
+  <p style="margin:0 0 32px;font-size:18px;color:#444;line-height:1.5">Interactive visual explanations<br>for AI agents</p>
+  <p style="margin:0;font-size:15px;color:#888">github.com/bobpuley/agent-whiteboard</p>
+</div>`;
+}
+
+async function renderOutro() {
+  if (!SHOW_OUTRO) return;
+  const r = await post("/render", {
+    type: "html",
+    payload: outroPayload(),
+    options: { workspace: WORKSPACE, title: "Agent Whiteboard" },
+  });
+  if (!r.ok) {
+    console.error(`   ✗ outro render failed: ${r.error}`);
+    return;
+  }
+  console.log("   ✓ outro rendered");
+}
+
 // ── Slide definitions ─────────────────────────────────────────────────────────
 
 const slides = [
@@ -87,6 +147,7 @@ const slides = [
   {
     type: "mermaid",
     title: "1 / 6 — Mermaid",
+    description: "Diagrams as code &mdash; describe a flowchart in text and the agent renders it live. Good for architecture diagrams, decision trees, and anything you'd otherwise draw by hand.",
     payload: `graph TD
   Client -->|HTTP| LB[Load Balancer]
   LB --> A[App Server A]
@@ -102,6 +163,7 @@ const slides = [
   {
     type: "svg",
     title: "2 / 6 — SVG",
+    description: "Full-control vector graphics &mdash; when a diagram language doesn't fit, the agent can render hand-authored SVG directly: custom illustrations, layouts, or geometry.",
     payload: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
   <defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="50%">
@@ -133,6 +195,7 @@ const slides = [
   {
     type: "html",
     title: "3 / 6 — HTML",
+    description: "Rich formatted content &mdash; headings, cards, and tables with inline styles, sanitized on the way in so untrusted markup can't inject scripts or steal styling.",
     payload: `<div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
   <h1 style="margin:0 0 4px;font-size:28px;color:#1a1a2e">HTML Renderer</h1>
   <p style="margin:0 0 24px;color:#666;font-size:14px">Sanitized via DOMPurify — inline styles only</p>
@@ -164,6 +227,7 @@ const slides = [
   {
     type: "html",
     title: "4 / 6 — HTML (Bootstrap house style, v0.31)",
+    description: "The same sanitized HTML renderer, styled with a component library instead of hand-written CSS &mdash; cards, badges, and tables for free.",
     payload: `<div class="card" style="max-width:480px;margin:0 auto">
   <div class="card-body">
     <h5 class="card-title">Bootstrap House Style</h5>
@@ -192,6 +256,7 @@ const slides = [
   {
     type: "katex",
     title: "5 / 6 — KaTeX",
+    description: "Mathematical notation &mdash; equations and formulas rendered from LaTeX, for anything from a probability formula to Maxwell's equations.",
     payload: String.raw`P(A \mid B) = \frac{P(B \mid A)\, P(A)}{P(B)} \qquad \text{(Bayes' Theorem)}\\[18pt]
 \nabla \cdot \mathbf{E} = \frac{\rho}{\varepsilon_0} \qquad
 \nabla \times \mathbf{B} = \mu_0 \mathbf{J} + \mu_0\varepsilon_0\frac{\partial \mathbf{E}}{\partial t} \\[18pt]
@@ -202,6 +267,7 @@ e^{i\pi} + 1 = 0`,
   {
     type: "vega-lite",
     title: "6 / 6 — Vega-Lite",
+    description: "Data visualization &mdash; declarative charts driven by a JSON spec, for showing metrics, comparisons, or trends instead of raw numbers.",
     payload: JSON.stringify({
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
       width: 420,
@@ -246,18 +312,41 @@ if (RUN_STANDARD) {
   if (TYPE_FILTER) {
     console.log(`   Filter: ${[...TYPE_FILTER].join(", ")} (${activeSlides.length} of ${slides.length} slides)`);
   }
-  console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total)…`);
 
-  const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS, workspace: WORKSPACE });
-  if (!result.ok) {
-    console.error("✗ slideshow failed:", result.error);
-    process.exit(1);
+  if (SHOW_INTRO) {
+    // Client-driven so an intro card can be cut in before each renderer type.
+    // (The server-timed /slideshow endpoint used below has its own dedicated
+    // coverage in tests/unit/server/slideshow.test.ts.)
+    console.log(`▶  Starting ${activeSlides.length}-slide tour with intro cards (${totalMs / 1000}s content + intros)…`);
+    for (const slide of activeSlides) {
+      await renderIntro(slide.title, slide.description);
+      const r = await post("/render", {
+        type: slide.type,
+        payload: slide.payload,
+        options: { workspace: WORKSPACE, title: slide.title },
+      });
+      if (!r.ok) {
+        console.error(`   ✗ render failed: ${r.error}`);
+        process.exit(1);
+      }
+      console.log(`   ✓ rendered: ${slide.title}`);
+      await new Promise((r2) => setTimeout(r2, DELAY_MS));
+    }
+    console.log("   ✓ tour done");
+  } else {
+    console.log(`▶  Starting ${activeSlides.length}-slide tour (${totalMs / 1000}s total)…`);
+
+    const result = await post("/slideshow", { slides: activeSlides, delay_ms: DELAY_MS, workspace: WORKSPACE });
+    if (!result.ok) {
+      console.error("✗ slideshow failed:", result.error);
+      process.exit(1);
+    }
+    console.log(`   ✓ slideshow started — slides advance every ${DELAY_MS / 1000}s`);
+
+    await new Promise((r) => setTimeout(r, totalMs));
+    await post("/slideshow/stop", {});
+    console.log("   ✓ server slideshow done");
   }
-  console.log(`   ✓ slideshow started — slides advance every ${DELAY_MS / 1000}s`);
-
-  await new Promise((r) => setTimeout(r, totalMs));
-  await post("/slideshow/stop", {});
-  console.log("   ✓ server slideshow done");
 
 // ── Section 7 — Client-managed slideshow ──────────────────────────────────────
 //
@@ -433,6 +522,10 @@ async function runClientSlideshow(slideList) {
   }, 0);
 
   console.log(`\n── Section 7: client-managed slideshow (${totalClientMs / 1000}s total) ──`);
+  await renderIntro(
+    "The agent controls pacing",
+    "Instead of one fixed interval, each slide gets its own delay and its own content type &mdash; mixing renderers and stepping through a multi-frame sequence at will."
+  );
   await runClientSlideshow(clientSlides);
 
 // ── Section 8 — seek() random-access navigation ───────────────────────────────
@@ -535,6 +628,10 @@ async function runSeekDemo() {
 }
 
   console.log("\n── Section 8: seek() random-access frame navigation ──");
+  await renderIntro(
+    "Random-access navigation",
+    "Jump straight to any frame in a sequence instead of stepping through it one at a time."
+  );
   await runSeekDemo();
 } // end RUN_STANDARD
 
@@ -636,6 +733,10 @@ async function runInteractiveDemo() {
 
 if (RUN_INTERACTIVE) {
   console.log("\n── Section 9: interactive drill-down (wait_click + wait_done) ──");
+  await renderIntro(
+    "Click-to-explore",
+    "Clicking a node in the diagram asks the agent for more detail, which renders a deeper view live."
+  );
   await runInteractiveDemo();
 }
 
@@ -696,6 +797,10 @@ async function runPopupDemo() {
 
 if (RUN_POPUP) {
   console.log("\n── Section 10: node_actions popup menu ──");
+  await renderIntro(
+    "Per-node action menus",
+    "Clicking a registered node offers a choice of actions, and the agent finds out which one was picked."
+  );
   await runPopupDemo();
 }
 
@@ -750,6 +855,10 @@ async function runEdgeDemo() {
 
 if (RUN_EDGE) {
   console.log("\n── Section 11: edge click demo (Sprint 14) ──");
+  await renderIntro(
+    "Clicking relationships, not just things",
+    "Edges &mdash; the arrows between nodes &mdash; are clickable too, for exploring how things are connected."
+  );
   await runEdgeDemo();
 }
 
@@ -775,7 +884,7 @@ async function runExportIdDemo() {
   const r1 = await post("/render", {
     type: "mermaid",
     payload: diagram1,
-    options: { workspace: WORKSPACE, title: "12 — First diagram (will be replaced)" },
+    options: { workspace: WORKSPACE, title: "12 — Diagram A (about to be replaced)" },
   });
   if (!r1.ok) { console.error(`   ✗ render failed: ${r1.error}`); return; }
 
@@ -795,7 +904,7 @@ async function runExportIdDemo() {
   const r2 = await post("/render", {
     type: "mermaid",
     payload: diagram2,
-    options: { workspace: WORKSPACE, title: "12 — Second diagram (current canvas)" },
+    options: { workspace: WORKSPACE, title: "12 — Diagram B (now on screen)" },
   });
   if (!r2.ok) { console.error(`   ✗ render 2 failed: ${r2.error}`); return; }
   const id2 = r2.id;
@@ -834,6 +943,10 @@ async function runExportIdDemo() {
 
 if (RUN_EXPORT_ID) {
   console.log("\n── Section 12: export by graph ID (v0.11) ──");
+  await renderIntro(
+    "Retrieving a past diagram, not just the current one",
+    "Every rendered diagram keeps its own identity &mdash; you can retrieve any past diagram by its ID, not just whatever's on screen right now."
+  );
   await runExportIdDemo();
 }
 
@@ -853,7 +966,7 @@ async function runIncrementalDemo() {
   const initRes = await post("/step-frames/init", {
     frame_type: "mermaid",
     workspace: WORKSPACE,
-    title: "13 — Incremental step-frames (init → append → commit)",
+    title: "13 — Building an animation frame by frame",
   });
   if (!initRes.ok) { console.error(`   ✗ init_step_frames failed: ${initRes.error}`); return; }
   const { id } = initRes;
@@ -880,6 +993,10 @@ async function runIncrementalDemo() {
 
 if (RUN_INCREMENTAL) {
   console.log("\n── Section 13: incremental step-frames creation (init/append/commit) ──");
+  await renderIntro(
+    "Building an animation live, frame by frame",
+    "Frames are added one at a time, with the browser updating after each one, instead of shipping the whole sequence in a single call."
+  );
   await runIncrementalDemo();
 }
 
@@ -906,7 +1023,7 @@ async function runNodeToFrameDemo() {
   const initRes = await post("/step-frames/init", {
     frame_type: "mermaid",
     workspace: WORKSPACE,
-    title: "14 — node_to_frame: click a node to jump",
+    title: "14 — Click a node to jump straight to its frame",
   });
   if (!initRes.ok) { console.error(`   ✗ init_step_frames failed: ${initRes.error}`); return; }
   const { id } = initRes;
@@ -926,7 +1043,18 @@ async function runNodeToFrameDemo() {
 
 if (RUN_NODE_TO_FRAME) {
   console.log("\n── Section 14: node_to_frame autonomous navigation ──");
+  await renderIntro(
+    "Self-guided navigation",
+    "Clicking a mapped node jumps straight to its frame in the browser, with no round-trip to the agent at all."
+  );
   await runNodeToFrameDemo();
+}
+
+// ── Outro — always shown last, regardless of section flags ──────────────────
+
+if (SHOW_OUTRO) {
+  console.log("\n── Outro ──");
+  await renderOutro();
 }
 
 console.log("\n✅  Showcase complete.\n");

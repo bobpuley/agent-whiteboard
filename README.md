@@ -2,6 +2,16 @@
 
 A domain-agnostic interactive whiteboard for AI teacher agents. An AI agent renders diagrams, math, charts, and HTML to a local browser tab via MCP tools — and can pause to wait for the user to signal they're ready to continue.
 
+Agent Whiteboard started as a tool for AI tutoring agents.
+
+The original goal was simple: instead of explaining everything through long text responses, let an AI agent teach visually. Diagrams, equations, charts, and animations are often a much more effective way to explain an idea than paragraphs of text, especially when the explanation can unfold step by step and pause whenever the learner needs time to think.
+
+As the project evolved, it became clear that the same interaction model is useful far beyond education. Whether an agent is explaining a software architecture, walking through a network protocol, debugging a problem, presenting data, or documenting a system, the ability to communicate visually is just as valuable. Agent Whiteboard is therefore intentionally domain-agnostic.
+
+Through a set of MCP tools, an AI agent can render Mermaid diagrams, SVG, HTML, LaTeX, and Vega-Lite charts, build incremental multi-step explanations, pause until the user is ready to continue, react to clicks on diagrams, and keep a persistent history of snapshots that can later be reloaded or exported.
+
+Unlike collaborative whiteboard applications, Agent Whiteboard is not a canvas that humans edit directly. The whiteboard is controlled by the AI agent, making it a lightweight visual communication surface between the agent and its user. Everything runs locally and integrates naturally with Claude Code through MCP.
+
 <img src="docs/screenshots/step-frames.gif" width="700" alt="Step-through sequence advancing through a TCP three-way handshake">
 
 The browser also has a History panel for browsing, reloading, deleting, and exporting past snapshots:
@@ -281,7 +291,7 @@ Every `render()` / `commit_step_frames()` call writes a JSON snapshot to `~/.age
 
 ## Manual showcase
 
-Exercises every renderer and interactive feature (requires `npm run dev` running):
+Exercises every renderer and interactive feature (requires `npm run dev` running). Each use case is preceded by a short intro card (title + description) — handy for recording a walkthrough video, one clip per use case:
 
 ```bash
 node tests/human_driven/showcase.js        # Sections 1–8: renderer slideshow + seek
@@ -300,6 +310,8 @@ Section flags (combinable):
 -a, --all             All sections
 -p, --port <port>     Server port (default: 3000)
 -d, --delay <ms>      Delay between slides (default: 5000)
+--no-intro            Skip the intro card shown before each use case (quick smoke run)
+--intro-delay <ms>    How long each intro card stays up (default: 4000)
 ```
 
 ## Tests
