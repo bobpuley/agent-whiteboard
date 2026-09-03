@@ -2,6 +2,7 @@
 // DeleteExportModal.svelte, which keeps only step/UI orchestration
 // (confirm-arming, step transitions, done/error display) and calls these.
 import { triggerDownload } from "./download";
+import type { ApiResult } from "./snapshotTypes";
 
 export async function deleteWorkspace(workspace: string): Promise<void> {
   const res = await fetch("/snapshots/delete-workspace", {
@@ -9,7 +10,7 @@ export async function deleteWorkspace(workspace: string): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workspace }),
   });
-  const data = await res.json();
+  const data = (await res.json()) as ApiResult;
   if (!data.ok) throw new Error(data.error ?? "Delete failed");
 }
 
@@ -19,7 +20,7 @@ export async function deleteFiles(workspace: string, filenames: string[]): Promi
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workspace, filenames }),
   });
-  const data = await res.json();
+  const data = (await res.json()) as ApiResult;
   if (!data.ok) throw new Error(data.error ?? "Delete failed");
 }
 
@@ -32,7 +33,7 @@ export async function exportItems(items: Array<{ workspace: string; id: string }
   if (!res.ok) {
     let message = "Export failed";
     try {
-      const data = await res.json();
+      const data = (await res.json()) as ApiResult;
       message = data.error ?? message;
     } catch {
       /* ignore — keep default message */
