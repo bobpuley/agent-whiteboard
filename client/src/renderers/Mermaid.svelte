@@ -1,4 +1,5 @@
 <script lang="ts">
+  import DOMPurify from "dompurify";
   import { afterUpdate, onDestroy, onMount } from "svelte";
   import { createPanZoom } from "./mermaid/panZoom";
   import { createNodeInteractions, type PopupRequest } from "./mermaid/nodeInteractions";
@@ -145,8 +146,12 @@
       if (token !== renderToken) return; // superseded while the library was loading
       const id = `mermaid-${Date.now()}`;
       const { svg } = await mermaid.render(id, src);
+      // Same DOMPurify pass Html.svelte already applies to svg/html payloads
+      // (F6) — mermaid's own securityLevel: "strict" is the only guard
+      // otherwise, and this closes that inconsistency (NF38).
+      const cleanSvg = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } });
       if (token !== renderToken) return; // superseded by a newer render
-      if (container) container.innerHTML = svg;
+      if (container) container.innerHTML = cleanSvg;
       const svgEl = container?.querySelector("svg");
       if (svgEl) {
         // Mermaid emits width="100%" with no explicit pixel size, and our CSS
