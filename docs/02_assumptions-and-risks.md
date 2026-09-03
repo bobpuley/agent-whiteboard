@@ -24,3 +24,12 @@
 ## v1.1.1 — revealed gap
 
 > ⚠️ ASSUMPTION (now known false, being corrected in v1.1.1): the v0.20 "CSP hardening" pass (Sprint 33) assumed `script-src 'self' 'unsafe-inline'` was sufficient for every renderer type. It never accounted for Vega-Lite's client-side expression compiler, which needs `'unsafe-eval'` to run `new Function(...)`-based expressions at render time — the gap sat dormant because the live client-managed Vega-Lite slide (showcase "7b") didn't exist yet at the time. See B23 in `01`, F31 in `03`.
+
+## v1.2 — Design Debt: Client Hardening
+
+> Promotes 9 of the MEDIUM/LOW findings logged in the Design Debt Log (`01_input-ideas.md`, from `docs/06_frontend_review.md`, 2026-07-18) into scheduled work. Excludes the `DeleteExportModal.svelte` size finding, which stays logged but unscheduled — the separate `docs/06_frontend-desing-review.md` design-responsibility audit already concluded its size reflects a parameterized shared shell, not extractable duplication, so there's no concrete refactor to schedule from it.
+
+> ⚠️ ASSUMPTION: Mermaid diagram source is driven by an AI teacher agent, not fully controlled by the end user viewing the board. This project treats that as untrusted-enough to warrant the same DOMPurify pass every other `svg`/`html` payload already gets (`Html.svelte`), even though no bypass of mermaid's own `securityLevel: "strict"` has been demonstrated — closing the inconsistency now is cheaper than waiting for a less-trusted agent/prompt source to make it load-bearing.
+
+- **Risk — session-ending WS disconnects.** `connectWebSocket()` never retries after `close`; today, recovery requires a manual page reload. For a tool meant to run during a live teaching session, a transient blip (dev server restart, laptop sleep/wake) currently converts into a full-session interruption rather than a momentary hiccup.
+- **Risk — silent client/server styling drift.** `scopeCss.ts` is hand-duplicated between `client/src/lib` and `server/export-html.ts` with no test enforcing parity; an edit to one copy without the other would silently diverge live-rendered vs. exported HTML styling, likely only caught by visual inspection.

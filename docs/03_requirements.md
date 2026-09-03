@@ -53,3 +53,27 @@
 - Running the showcase's client-managed slideshow section (`tests/human_driven/showcase.js`, slide "7b — Vega-Lite (6 s)") in a real browser renders the chart with no CSP-related error in the console.
 - `server/app.ts`'s `CSP_HEADER` is the only production code path that needs to change — `server/export-html.ts`'s two CSP strings render Vega-Lite to static SVG server-side and are not exercising the eval path (see `01`); confirmed unaffected, not fixed as a no-op.
 - No unrelated `script-src` capability is added — the fix is scoped to enabling Vega-Lite's expression compilation only.
+
+---
+
+## 4. Design Debt — Client Hardening (`docs/06_frontend_review.md` findings, promoted from the Design Debt Log in `01`)
+
+| ID   | Requirement | Priority |
+|------|-------------|----------|
+| F32  | On WebSocket disconnect, the client automatically attempts to reconnect with bounded exponential backoff; on successful reopen it re-dispatches `ws:connected` and relies on the server's next `replace`/`clear` command to repopulate state (no client-side replay). The "Server disconnected, restart `npm run dev`" banner only appears after N failed attempts, as a fallback. | v1.2 |
+| F33  | Renderer sub-component UI states (`Mermaid.svelte`, `Katex.svelte`, `VegaLite.svelte` error/hint styling; `NodeActionPopup.svelte`) use the existing `--board-*` theme tokens instead of hardcoded hex colors, so they respond to the dark-mode toggle like the rest of the app's chrome. | v1.2 |
+| NF38 | `Mermaid.svelte` runs `mermaid.render()`'s output through the same `DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })` call `Html.svelte` already applies to `svg`/`html` payloads, before assigning to `innerHTML`. | v1.2 |
+| NF39 | `snapshotActions.ts`'s three `res.json()` calls are typed/validated against a shared `ApiResult`-shaped interface, matching the pattern already used in `fetchSnapshots.ts`. | v1.2 |
+| NF40 | `RendererEntry.props()` in `client/src/renderers/registry.ts` accepts a context type where `presentation` is non-nullable, with the one call site (`App.svelte`) performing the null check when constructing that narrowed context — replacing the `presentation!` non-null assertions with a compiler-enforced invariant. | v1.2 |
+| NF41 | A unit test asserts `client/src/lib/scopeCss.ts` and `server/export-html.ts`'s `scopeCss()` produce identical output for a shared set of fixtures, so future drift between the two hand-duplicated copies fails CI instead of failing silently. | v1.2 |
+| NF42 | `client/src/lib/trapFocus.ts` gets a dedicated unit test covering initial focus placement, Tab/Shift+Tab wrap, `Escape` invoking `onEscape`, and focus restoration on `destroy()`. `download.ts` and the client's `scopeCss.ts` get basic dedicated unit tests as lower-priority additions in the same pass. | v1.2 |
+| NF43 | `App.svelte`'s five-plus hand-written inline `<svg>` icon blocks are replaced with a shared `Icon.svelte` (or `icons.ts` + generic `<Icon name={...} />`) component taking `name`/`size` props. | v1.2 |
+| NF44 | `Mermaid.svelte`'s diagram id passed to `mermaid.render(id, src)` is derived from the existing `renderToken` counter instead of `Date.now()`, removing the (very low likelihood) same-millisecond id collision. | v1.2 |
+
+**Acceptance criteria (draft):**
+- Killing and restarting the dev server (`npm run dev`) while the client is open causes the canvas to automatically recover once the server is back, with no manual page reload — the "Server disconnected" banner only shows after the configured retry budget is exhausted.
+- Toggling dark mode while a Mermaid render-error, Katex/VegaLite error, or the node-action popup is visible shows themed (not hardcoded) colors matching the rest of the app's dark-mode chrome.
+- Mermaid diagrams still render correctly after adding the DOMPurify pass (no regression on the existing Mermaid renderer test suite or showcase slides).
+- `snapshotActions.ts`, `registry.ts` changes pass `tsc --noEmit`/`svelte-check` with no new `any`/non-null-assertion suppressions in the touched code.
+- New `scopeCss` parity test and `trapFocus` unit test are added and pass; full unit suite stays green.
+- `App.svelte`'s icon markup is visually unchanged (same rendered icons, sizes, and stroke styling) after the `Icon.svelte` extraction.
