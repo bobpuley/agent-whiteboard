@@ -73,9 +73,9 @@
   }
 
   .render-error {
-    color: #c0392b;
-    background: #fdf2f2;
-    border: 1px solid #e74c3c;
+    color: var(--board-danger-dark);
+    background: var(--board-danger-bg);
+    border: 1px solid var(--board-danger);
     border-radius: 4px;
     padding: 12px 16px;
     font-family: monospace;
