@@ -15,7 +15,7 @@
 - [x] **NF39 — Type `snapshotActions.ts`'s JSON responses.** Add a shared `ApiResult`-shaped interface and cast/validate all three `res.json()` calls in `client/src/lib/snapshotActions.ts` against it, matching `fetchSnapshots.ts`'s existing convention.
 - [x] **NF40 — Remove non-null assertions from `registry.ts`.** Retype `RendererEntry.props` to accept a context where `presentation` is non-nullable; move the null check into `App.svelte`'s single call site when constructing that narrowed context.
 - [x] **NF41 — `scopeCss` parity test.** Add a unit test asserting `client/src/lib/scopeCss.ts` and `server/export-html.ts`'s `scopeCss()` produce identical output for a shared fixture set.
-- [ ] **NF42 — Missing unit tests.** Add `trapFocus.test.ts` (initial focus placement, Tab/Shift+Tab wrap, `Escape` → `onEscape`, focus restoration on `destroy()`). Add basic tests for `download.ts` and the client's `scopeCss.ts`.
+- [x] **NF42 — Missing unit tests.** Add `trapFocus.test.ts` (initial focus placement, Tab/Shift+Tab wrap, `Escape` → `onEscape`, focus restoration on `destroy()`). Add basic tests for `download.ts` and the client's `scopeCss.ts`.
 - [ ] **NF43 — Extract `Icon.svelte`.** Replace `App.svelte`'s five-plus inline `<svg>` icon blocks with a shared `Icon.svelte` (or `icons.ts` + generic `<Icon name={...} />>`) component.
   - *Acceptance:* rendered icons are visually unchanged.
 - [ ] **NF44 — Fix Mermaid diagram id.** In `Mermaid.svelte`, derive the id passed to `mermaid.render(id, src)` from the existing `renderToken` counter instead of `Date.now()`.
