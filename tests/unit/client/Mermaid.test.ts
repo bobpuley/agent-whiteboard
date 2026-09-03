@@ -28,6 +28,24 @@ describe("Mermaid.svelte", () => {
     await waitFor(() => expect(container.querySelector("svg")).toBeTruthy());
   });
 
+  it("initializes mermaid with htmlLabels: false (NF38 fix — see below)", async () => {
+    const mermaidModule = await import("mermaid");
+    render(Mermaid, { props: { source: "graph TD; A-->B" } });
+    await waitFor(() => expect(mermaidModule.default.initialize).toHaveBeenCalled());
+    expect(mermaidModule.default.initialize).toHaveBeenCalledWith(expect.objectContaining({ htmlLabels: false }));
+  });
+
+  it("preserves plain SVG text/tspan node labels through the DOMPurify pass (regression — foreignObject-based htmlLabels output used to have its label text stripped entirely by the svg/svgFilters profile)", async () => {
+    const mermaidModule = await import("mermaid");
+    vi.mocked(mermaidModule.default.render).mockResolvedValueOnce({
+      svg: '<svg viewBox="0 0 100 40"><g class="node"><rect width="80" height="30"/><text text-anchor="middle"><tspan class="text-inner-tspan">Load Balancer</tspan></text></g></svg>',
+    });
+
+    const { container } = render(Mermaid, { props: { source: "graph TD; A" } });
+    await waitFor(() => expect(container.querySelector("svg")).toBeTruthy());
+    expect(container.querySelector(".mermaid-container")?.textContent).toContain("Load Balancer");
+  });
+
   it("shows a popup listing the registered actions when a node with nodeActions is clicked", async () => {
     const { container, findByText } = render(Mermaid, {
       props: { source: "graph TD; A", clickable: true, nodeActions: { A: ["Explain", "Expand"] } },

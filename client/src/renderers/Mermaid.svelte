@@ -114,7 +114,14 @@
     if (!mermaidPromise) {
       mermaidPromise = import("mermaid").then((mod) => {
         const instance = mod.default;
-        instance.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict" });
+        // htmlLabels: false (NF38 fix) — mermaid's default label rendering wraps
+        // text in <foreignObject><div>...</div></foreignObject>, which DOMPurify's
+        // svg/svgFilters profile strips wholesale (foreignObject is deliberately
+        // excluded from that profile — re-allowing it is a known mXSS vector, not
+        // a safe option). Plain SVG <text>/<tspan> labels are fully compatible
+        // with sanitization and are what every diagram in this app's showcase
+        // (flowchart-only today) actually needs.
+        instance.initialize({ startOnLoad: false, theme: "default", securityLevel: "strict", htmlLabels: false });
         return instance;
       });
     }
