@@ -41,7 +41,7 @@
 | v1.0      | 1.0 Release Readiness & npx Distribution                          | 75–78    | released                             | [Milestone_v1.0.md](./milestones/Milestone_v1.0.md) |
 | v1.1      | Modal Default Workspace & Social Preview Refresh                  | 79       | released                             | [Milestone_v1.1.md](./milestones/Milestone_v1.1.md) |
 | v1.1.1    | Vega-Lite CSP `unsafe-eval` Fix (patch)                            | 80       | released                             | [Milestone_v1.1.1.md](./milestones/Milestone_v1.1.1.md) |
-| v1.2      | Design Debt — Client Hardening                                     | 81       | in progress                          | [Milestone_v1.2.md](./milestones/Milestone_v1.2.md) |
+| v1.2      | Design Debt — Client Hardening                                     | 81       | released                             | [Milestone_v1.2.md](./milestones/Milestone_v1.2.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
 > v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`, `02` §N, `04` §9) — sequenced one slice per milestone; v0.26 must complete before any public release.

@@ -1,6 +1,6 @@
 # Milestone v1.2 — Design Debt: Client Hardening (Sprint 81)
 
-**Status:** planned
+**Status:** released (1.0.5, 2026-09-03)
 
 > Opened 2026-09-03 via `/doc-creator-driver:intake` (bug report). Promotes 9 of the findings logged in the Design Debt Log (`01_input-ideas.md`, from `docs/06_frontend_review.md`, 2026-07-18) into scheduled work — see `02`/`03`/`04` §4 (v1.2 / F32–F33, NF38–NF44). Excludes the `DeleteExportModal.svelte` size finding, which stays logged but unscheduled (see `02`).
 
