@@ -70,6 +70,17 @@ describe("Mermaid.svelte", () => {
     });
   });
 
+  it("strips a dangerous onerror attribute from mermaid's rendered svg (NF38 — DOMPurify sanitization)", async () => {
+    const mermaidModule = await import("mermaid");
+    vi.mocked(mermaidModule.default.render).mockResolvedValueOnce({
+      svg: '<svg viewBox="0 0 10 10"><rect onerror="window.pwned = true" width="10" height="10"/></svg>',
+    });
+
+    const { container } = render(Mermaid, { props: { source: "graph TD; A" } });
+    await waitFor(() => expect(container.querySelector("svg")).toBeTruthy());
+    expect(container.querySelector("rect")?.hasAttribute("onerror")).toBe(false);
+  });
+
   it("reports the current frame index in the debounced /viewport POST body", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { container } = render(Mermaid, {
