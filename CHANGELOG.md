@@ -1,3 +1,16 @@
+## 1.0.5 — 2026-09-03
+
+**Milestone v1.2 — Design Debt: Client Hardening (Sprint 81) complete.** Promotes 9 findings from the frontend design-debt log (`docs/06_frontend_review.md`) into shipped work: reconnect resilience, dark-mode theming gaps, a sanitization gap, type-safety cleanup, and test-coverage gaps (F32–F33, NF38–NF44 in `03`).
+
+- **`client/src/ws.ts` (F32):** `connectWebSocket()` now retries the `/stream` connection with bounded exponential backoff (500ms–10s, 10 attempts) after a close, resetting on successful reopen. `App.svelte`'s disconnect banner distinguishes a retry-in-progress state from the exhausted-retry-budget fallback ("restart `npm run dev`").
+- **Theme tokens (F33):** `Mermaid.svelte`, `Katex.svelte`, `VegaLite.svelte` (error/hint styling) and `NodeActionPopup.svelte` swap hardcoded hex colors for existing `--board-*` tokens, so these app-chrome UI states follow the dark-mode toggle. The F26 rendered-content isolation guard test is narrowed to allowlist exactly these known app-chrome selectors — the actual agent-rendered payload styling stays untouched.
+- **Mermaid sanitization (NF38):** `Mermaid.svelte` now runs `mermaid.render()`'s SVG output through the same `DOMPurify.sanitize()` pass `Html.svelte` already applies. A regression surfaced during manual testing — mermaid's default `htmlLabels` mode wraps label text in `<foreignObject>`, which DOMPurify's `svg`/`svgFilters` profile strips wholesale (a deliberate DOMPurify safety exclusion, not a bug) — fixed by setting `htmlLabels: false` so labels render as plain, sanitize-safe SVG `<text>`/`<tspan>` instead.
+- **Type safety (NF39, NF40):** `snapshotActions.ts`'s three `res.json()` calls are now typed against a shared `ApiResult` interface. `registry.ts`'s `RendererContext.presentation` is non-nullable (mirroring canvasStore's presentation/placeholder mutual-exclusivity invariant); the step-frames-placeholder entry gets its own `PlaceholderContext`, and `App.svelte`'s single call site performs the null checks explicitly — removing all five `presentation!`/`placeholder!` assertions.
+- **Tests (NF41, NF42):** a `scopeCss` parity test guards the client/server hand-duplicated implementations against drift. `trapFocus.test.ts`, `download.test.ts`, and a client `scopeCss.test.ts` add coverage that was previously missing.
+- **`Icon.svelte` extraction (NF43):** `App.svelte`'s inline `<svg>` icon blocks (theme toggle, history, delete, export, done-checkmark) are replaced with a shared `Icon.svelte` + `icons.ts` shape-data module, rendered as real SVG elements (not `{@html}`, which the lint config forbids).
+- **Mermaid id fix (NF44):** `mermaid.render(id, src)`'s id is now derived from the existing `renderToken` counter instead of `Date.now()`.
+- Full suite: 563 unit tests passing (up from 529), `tsc --noEmit`/`svelte-check`/`eslint` clean.
+
 ## 1.0.4 — 2026-08-04
 
 Republish of 1.0.3 with a rebuilt dist/ — the previous publish shipped a stale pre-fix build that didn't include the CSP unsafe-eval fix.
