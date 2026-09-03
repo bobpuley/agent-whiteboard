@@ -81,6 +81,22 @@ describe("Mermaid.svelte", () => {
     expect(container.querySelector("rect")?.hasAttribute("onerror")).toBe(false);
   });
 
+  it("derives the mermaid.render() id from the renderToken counter, not Date.now() (NF44)", async () => {
+    const mermaidModule = await import("mermaid");
+    const { rerender, container } = render(Mermaid, { props: { source: "graph TD; A" } });
+    await waitFor(() => expect(container.querySelector("svg")).toBeTruthy());
+
+    const firstId = vi.mocked(mermaidModule.default.render).mock.calls[0][0];
+    expect(firstId).toMatch(/^mermaid-\d+$/);
+
+    await rerender({ source: "graph TD; B" });
+    await waitFor(() => expect(mermaidModule.default.render).toHaveBeenCalledTimes(2));
+
+    const secondId = vi.mocked(mermaidModule.default.render).mock.calls[1][0];
+    expect(secondId).toMatch(/^mermaid-\d+$/);
+    expect(secondId).not.toBe(firstId);
+  });
+
   it("reports the current frame index in the debounced /viewport POST body", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { container } = render(Mermaid, {

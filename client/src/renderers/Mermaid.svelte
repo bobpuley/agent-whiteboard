@@ -144,7 +144,7 @@
     try {
       const mermaid = await loadMermaid();
       if (token !== renderToken) return; // superseded while the library was loading
-      const id = `mermaid-${Date.now()}`;
+      const id = `mermaid-${token}`;
       const { svg } = await mermaid.render(id, src);
       // Same DOMPurify pass Html.svelte already applies to svg/html payloads
       // (F6) — mermaid's own securityLevel: "strict" is the only guard

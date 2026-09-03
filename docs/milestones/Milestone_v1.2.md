@@ -18,7 +18,7 @@
 - [x] **NF42 — Missing unit tests.** Add `trapFocus.test.ts` (initial focus placement, Tab/Shift+Tab wrap, `Escape` → `onEscape`, focus restoration on `destroy()`). Add basic tests for `download.ts` and the client's `scopeCss.ts`.
 - [x] **NF43 — Extract `Icon.svelte`.** Replace `App.svelte`'s five-plus inline `<svg>` icon blocks with a shared `Icon.svelte` (or `icons.ts` + generic `<Icon name={...} />>`) component.
   - *Acceptance:* rendered icons are visually unchanged.
-- [ ] **NF44 — Fix Mermaid diagram id.** In `Mermaid.svelte`, derive the id passed to `mermaid.render(id, src)` from the existing `renderToken` counter instead of `Date.now()`.
+- [x] **NF44 — Fix Mermaid diagram id.** In `Mermaid.svelte`, derive the id passed to `mermaid.render(id, src)` from the existing `renderToken` counter instead of `Date.now()`.
 
 > **Implementation note:** all 9 tasks are `client/src/**`-only; no server, MCP, or persistence-format changes. Independent of each other — implementable and testable in any order or in parallel.
 
