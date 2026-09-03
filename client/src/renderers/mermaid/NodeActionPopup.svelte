@@ -49,8 +49,8 @@
   /* Floating popup menu. */
   .node-action-popup {
     z-index: 100;
-    background: #fff;
-    border: 1px solid #d0d0d0;
+    background: var(--board-bg);
+    border: 1px solid var(--board-border-mid);
     border-radius: 6px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     min-width: 140px;
@@ -61,18 +61,18 @@
   .popup-item {
     padding: 9px 16px;
     font-size: 13px;
-    color: #222;
+    color: var(--board-text);
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
   }
 
   .popup-item:hover {
-    background: #f0f5ff;
-    color: #1a6ec7;
+    background: var(--board-accent-bg);
+    color: var(--board-accent);
   }
 
   .popup-item + .popup-item {
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--board-divider);
   }
 </style>

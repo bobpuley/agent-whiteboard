@@ -8,7 +8,7 @@
 
 - [x] **F32 — WebSocket auto-reconnect.** Add bounded exponential-backoff reconnect logic to `connectWebSocket()` in `client/src/ws.ts`. On successful reopen, re-dispatch `ws:connected`. Update `App.svelte`'s disconnect banner copy to reflect a retry-in-progress state, falling back to "restart `npm run dev`" only after the retry budget is exhausted.
   - *Acceptance:* restarting the dev server while the client is open causes automatic recovery with no manual reload.
-- [ ] **F33 — Theme tokens in renderer sub-components.** Replace hardcoded hex colors in `Mermaid.svelte`, `Katex.svelte`, `VegaLite.svelte` (error/hint styling) and `NodeActionPopup.svelte` with the existing `--board-*` custom properties from `theme.css`.
+- [x] **F33 — Theme tokens in renderer sub-components.** Replace hardcoded hex colors in `Mermaid.svelte`, `Katex.svelte`, `VegaLite.svelte` (error/hint styling) and `NodeActionPopup.svelte` with the existing `--board-*` custom properties from `theme.css`.
   - *Acceptance:* toggling dark mode while any of these UI states is visible shows themed, not hardcoded, colors.
 - [ ] **NF38 — Mermaid SVG DOMPurify pass.** In `Mermaid.svelte`, run `mermaid.render()`'s output through `DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })` before assigning to `container.innerHTML`, immediately after the render resolves and before the `token !== renderToken` staleness check.
   - *Acceptance:* existing Mermaid renderer tests and showcase slides render unchanged.
