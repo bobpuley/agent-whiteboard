@@ -13,7 +13,8 @@
 // page's own /stream WebSocket handshake completes) fail far more often in
 // the e2e suite.
 import type { ComponentType, SvelteComponent } from "svelte";
-import type { CanvasViewState } from "../stores/canvasStore.js";
+import type { Placeholder } from "../stores/canvasStore.js";
+import type { Presentation } from "../presentation.js";
 import type { RendererType, Viewport } from "../ws.js";
 import Mermaid from "./Mermaid.svelte";
 import Html from "./Html.svelte";
@@ -22,10 +23,16 @@ import VegaLite from "./VegaLite.svelte";
 import StepFramesPlaceholder from "./StepFramesPlaceholder.svelte";
 
 export type RendererKey = RendererType | "step-frames-placeholder";
+type ContentRendererKey = Exclude<RendererKey, "step-frames-placeholder">;
 
+// presentation is non-nullable here (NF40) — canvasStore's reducer guarantees
+// presentation and placeholder are mutually exclusive (see reduce() in
+// canvasStore.ts), so a content renderer's props() is only ever invoked once
+// its presentation actually exists. The one call site (App.svelte) performs
+// that null check when constructing this context, instead of every props()
+// implementation asserting it away with `!`.
 export interface RendererContext {
-  presentation: CanvasViewState["presentation"];
-  placeholder: CanvasViewState["placeholder"];
+  presentation: Presentation;
   clickable: boolean;
   nodeActions: Record<string, string[]> | undefined;
   nodeToFrameEnabled: boolean;
@@ -36,27 +43,38 @@ export interface RendererContext {
   currentFrame: number;
 }
 
+export interface PlaceholderContext {
+  placeholder: Placeholder;
+}
+
 export interface RendererEntry {
   load: () => Promise<ComponentType<SvelteComponent>>;
   props: (ctx: RendererContext) => Record<string, unknown>;
 }
 
+export interface PlaceholderRendererEntry {
+  load: () => Promise<ComponentType<SvelteComponent>>;
+  props: (ctx: PlaceholderContext) => Record<string, unknown>;
+}
+
 function htmlProps(type: "svg" | "html") {
   return ({ presentation }: RendererContext) => ({
-    source: presentation!.frames[0].payload,
+    source: presentation.frames[0].payload,
     type,
   });
 }
 
-export const rendererRegistry: Record<RendererKey, RendererEntry> = {
+export const rendererRegistry: Record<ContentRendererKey, RendererEntry> & {
+  "step-frames-placeholder": PlaceholderRendererEntry;
+} = {
   mermaid: {
     load: () => Promise.resolve(Mermaid as unknown as ComponentType<SvelteComponent>),
     props: ({ presentation, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport, currentFrame }) => ({
-      source: presentation!.frames[0].payload,
+      source: presentation.frames[0].payload,
       clickable,
       nodeActions,
       nodeToFrame: nodeToFrameEnabled ? nodeToFrame : undefined,
-      snapshotId: presentation!.id,
+      snapshotId: presentation.id,
       viewport,
       currentFrame,
     }),
@@ -71,14 +89,14 @@ export const rendererRegistry: Record<RendererKey, RendererEntry> = {
   },
   katex: {
     load: () => Promise.resolve(Katex as unknown as ComponentType<SvelteComponent>),
-    props: ({ presentation }) => ({ source: presentation!.frames[0].payload }),
+    props: ({ presentation }) => ({ source: presentation.frames[0].payload }),
   },
   "vega-lite": {
     load: () => Promise.resolve(VegaLite as unknown as ComponentType<SvelteComponent>),
-    props: ({ presentation }) => ({ source: presentation!.frames[0].payload }),
+    props: ({ presentation }) => ({ source: presentation.frames[0].payload }),
   },
   "step-frames-placeholder": {
     load: () => Promise.resolve(StepFramesPlaceholder as unknown as ComponentType<SvelteComponent>),
-    props: ({ placeholder }) => ({ frameCount: placeholder!.frameCount }),
+    props: ({ placeholder }) => ({ frameCount: placeholder.frameCount }),
   },
 };

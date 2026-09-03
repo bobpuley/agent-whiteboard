@@ -52,12 +52,27 @@
   // rendererKey — the same guard the template below uses to decide whether to
   // render at all. Without it, a stale-but-still-cached currentComponentType
   // (e.g. "mermaid" from before a clear()/WS-disconnect reset presentation to
-  // null) recomputes props eagerly against content that's no longer there,
-  // crashing on registry.ts's non-null assertions before the template ever
-  // gets a chance to fall back to the "Waiting for content…" branch.
-  $: rendererProps = currentComponentType && currentComponentType === rendererKey
-    ? rendererRegistry[currentComponentType].props({ presentation, placeholder, clickable, nodeActions, nodeToFrameEnabled, nodeToFrame, viewport, currentFrame: currentFrame ?? 0 })
-    : {};
+  // null) recomputes props eagerly against content that's no longer there.
+  // registry.ts's RendererContext requires a non-null presentation (NF40) —
+  // canvasStore guarantees presentation/placeholder are mutually exclusive,
+  // so this null check is what lets that type hold without a `!` on the
+  // registry side.
+  $: rendererProps = (() => {
+    if (!currentComponentType || currentComponentType !== rendererKey) return {};
+    if (currentComponentType === "step-frames-placeholder") {
+      return placeholder ? rendererRegistry["step-frames-placeholder"].props({ placeholder }) : {};
+    }
+    if (!presentation) return {};
+    return rendererRegistry[currentComponentType].props({
+      presentation,
+      clickable,
+      nodeActions,
+      nodeToFrameEnabled,
+      nodeToFrame,
+      viewport,
+      currentFrame: currentFrame ?? 0,
+    });
+  })();
 
   let cleanup: (() => void) | null = null;
 
