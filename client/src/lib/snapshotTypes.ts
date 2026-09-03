@@ -13,3 +13,10 @@ export interface WorkspaceGroup {
   isCurrent: boolean;
   snapshots: SnapshotEntry[];
 }
+
+// Shared shape for the server's JSON error-result endpoints (NF39) — matches
+// the ad hoc { ok, error? } cast fetchAllSnapshots already used inline.
+export interface ApiResult {
+  ok: boolean;
+  error?: string;
+}

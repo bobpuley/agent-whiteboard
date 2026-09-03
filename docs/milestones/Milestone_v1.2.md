@@ -12,7 +12,7 @@
   - *Acceptance:* toggling dark mode while any of these UI states is visible shows themed, not hardcoded, colors.
 - [x] **NF38 — Mermaid SVG DOMPurify pass.** In `Mermaid.svelte`, run `mermaid.render()`'s output through `DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true } })` before assigning to `container.innerHTML`, immediately after the render resolves and before the `token !== renderToken` staleness check.
   - *Acceptance:* existing Mermaid renderer tests and showcase slides render unchanged.
-- [ ] **NF39 — Type `snapshotActions.ts`'s JSON responses.** Add a shared `ApiResult`-shaped interface and cast/validate all three `res.json()` calls in `client/src/lib/snapshotActions.ts` against it, matching `fetchSnapshots.ts`'s existing convention.
+- [x] **NF39 — Type `snapshotActions.ts`'s JSON responses.** Add a shared `ApiResult`-shaped interface and cast/validate all three `res.json()` calls in `client/src/lib/snapshotActions.ts` against it, matching `fetchSnapshots.ts`'s existing convention.
 - [ ] **NF40 — Remove non-null assertions from `registry.ts`.** Retype `RendererEntry.props` to accept a context where `presentation` is non-nullable; move the null check into `App.svelte`'s single call site when constructing that narrowed context.
 - [ ] **NF41 — `scopeCss` parity test.** Add a unit test asserting `client/src/lib/scopeCss.ts` and `server/export-html.ts`'s `scopeCss()` produce identical output for a shared fixture set.
 - [ ] **NF42 — Missing unit tests.** Add `trapFocus.test.ts` (initial focus placement, Tab/Shift+Tab wrap, `Escape` → `onEscape`, focus restoration on `destroy()`). Add basic tests for `download.ts` and the client's `scopeCss.ts`.
