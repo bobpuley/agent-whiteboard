@@ -6,7 +6,7 @@ import Katex from "../../../client/src/renderers/Katex.svelte";
 import VegaLite from "../../../client/src/renderers/VegaLite.svelte";
 import StepFramesPlaceholder from "../../../client/src/renderers/StepFramesPlaceholder.svelte";
 
-const baseCtx = { clickable: false, nodeActions: undefined, nodeToFrameEnabled: false, placeholder: null, currentFrame: 0 };
+const baseCtx = { clickable: false, nodeActions: undefined, nodeToFrameEnabled: false, currentFrame: 0 };
 
 describe("rendererRegistry", () => {
   it("has an entry for every canvas type the server can send, plus the placeholder", () => {
@@ -68,10 +68,8 @@ describe("rendererRegistry", () => {
 
   it("step-frames-placeholder loads its component and maps frameCount", async () => {
     expect(await rendererRegistry["step-frames-placeholder"].load()).toBe(StepFramesPlaceholder);
-    expect(rendererRegistry["step-frames-placeholder"].props({
-      ...baseCtx,
-      presentation: null,
-      placeholder: { frameCount: 3 },
-    })).toEqual({ frameCount: 3 });
+    expect(rendererRegistry["step-frames-placeholder"].props({ placeholder: { frameCount: 3 } })).toEqual({
+      frameCount: 3,
+    });
   });
 });
