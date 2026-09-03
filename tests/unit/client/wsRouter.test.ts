@@ -24,7 +24,7 @@ vi.mock("../../../client/src/stores/doneStore.js", () => ({
   doneStore: { dispatch: (cmd: RenderCommand) => doneDispatch(cmd) },
 }));
 
-import { disconnected, initRouter } from "../../../client/src/stores/wsRouter.js";
+import { disconnected, reconnectExhausted, initRouter } from "../../../client/src/stores/wsRouter.js";
 
 describe("wsRouter", () => {
   beforeEach(() => {
@@ -36,6 +36,7 @@ describe("wsRouter", () => {
 
   afterEach(() => {
     disconnected.set(false);
+    reconnectExhausted.set(false);
   });
 
   it("initRouter connects the websocket and returns a cleanup function", () => {
@@ -64,6 +65,23 @@ describe("wsRouter", () => {
 
     window.dispatchEvent(new CustomEvent("ws:connected"));
     expect(get(disconnected)).toBe(false);
+
+    cleanup();
+  });
+
+  it("tracks reconnectExhausted from the ws:disconnected event detail (F32)", () => {
+    const cleanup = initRouter();
+    expect(get(reconnectExhausted)).toBe(false);
+
+    window.dispatchEvent(new CustomEvent("ws:disconnected", { detail: { exhausted: false } }));
+    expect(get(disconnected)).toBe(true);
+    expect(get(reconnectExhausted)).toBe(false);
+
+    window.dispatchEvent(new CustomEvent("ws:disconnected", { detail: { exhausted: true } }));
+    expect(get(reconnectExhausted)).toBe(true);
+
+    window.dispatchEvent(new CustomEvent("ws:connected"));
+    expect(get(reconnectExhausted)).toBe(false);
 
     cleanup();
   });

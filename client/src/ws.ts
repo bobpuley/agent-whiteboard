@@ -62,35 +62,74 @@ function isKnownRenderCommand(cmd: unknown): cmd is RenderCommand {
   return type === "step-frames-placeholder" || (KNOWN_RENDERER_TYPES as readonly string[]).includes(type as string);
 }
 
+// Bounded exponential backoff (F32) — caps both the per-attempt delay and the
+// total attempt count so a dev-server restart recovers automatically, but a
+// truly dead server eventually falls back to the manual-restart banner.
+const RECONNECT_INITIAL_DELAY_MS = 500;
+const RECONNECT_MAX_DELAY_MS = 10_000;
+const RECONNECT_MAX_ATTEMPTS = 10;
+
 export function connectWebSocket(onCommand: CommandHandler): () => void {
   const protocol = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${protocol}://${location.host}/stream`);
+  const url = `${protocol}://${location.host}/stream`;
 
-  ws.addEventListener("message", (event) => {
-    let cmd: unknown;
-    try {
-      cmd = JSON.parse(event.data as string);
-    } catch {
-      console.error("ws: failed to parse message", event.data);
-      return;
-    }
-    if (!isKnownRenderCommand(cmd)) {
-      console.error("ws: received message with unrecognized action/type — ignoring", cmd);
-      return;
-    }
-    onCommand(cmd);
-  });
+  let ws: WebSocket;
+  let reconnectAttempts = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
 
-  ws.addEventListener("close", () => {
-    onCommand({ action: "clear" });
-    // Dispatch a custom event so App.svelte can show the disconnected banner.
-    window.dispatchEvent(new CustomEvent("ws:disconnected"));
-  });
+  function scheduleReconnect() {
+    const exhausted = reconnectAttempts >= RECONNECT_MAX_ATTEMPTS;
+    // Dispatch a custom event so App.svelte can show the disconnected banner,
+    // with `exhausted` telling it whether a retry is still in flight.
+    window.dispatchEvent(new CustomEvent("ws:disconnected", { detail: { exhausted } }));
+    if (exhausted) return;
 
-  ws.addEventListener("open", () => {
-    window.dispatchEvent(new CustomEvent("ws:connected"));
-  });
+    const delay = Math.min(RECONNECT_INITIAL_DELAY_MS * 2 ** reconnectAttempts, RECONNECT_MAX_DELAY_MS);
+    reconnectAttempts++;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
+  function connect() {
+    ws = new WebSocket(url);
+
+    ws.addEventListener("message", (event) => {
+      let cmd: unknown;
+      try {
+        cmd = JSON.parse(event.data as string);
+      } catch {
+        console.error("ws: failed to parse message", event.data);
+        return;
+      }
+      if (!isKnownRenderCommand(cmd)) {
+        console.error("ws: received message with unrecognized action/type — ignoring", cmd);
+        return;
+      }
+      onCommand(cmd);
+    });
+
+    ws.addEventListener("close", () => {
+      onCommand({ action: "clear" });
+      if (!stopped) scheduleReconnect();
+    });
+
+    ws.addEventListener("open", () => {
+      // A successful reopen resets the backoff — no client-side state replay
+      // is needed since the server's next replace/clear repopulates state.
+      reconnectAttempts = 0;
+      window.dispatchEvent(new CustomEvent("ws:connected"));
+    });
+  }
+
+  connect();
 
   // Returns a cleanup function.
-  return () => ws.close();
+  return () => {
+    stopped = true;
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+    ws.close();
+  };
 }

@@ -8,7 +8,7 @@
   import { modalStore } from "./stores/modalStore.js";
   import { themeStore } from "./stores/themeStore.js";
   import { stepNav } from "./stores/stepNav.js";
-  import { disconnected, initRouter } from "./stores/wsRouter.js";
+  import { disconnected, reconnectExhausted, initRouter } from "./stores/wsRouter.js";
   import { rendererRegistry } from "./renderers/registry.js";
   import type { RendererKey } from "./renderers/registry.js";
 
@@ -91,7 +91,11 @@
 <main>
   {#if $disconnected}
     <div class="banner" role="alert" aria-live="assertive">
-      Server disconnected. Restart <code>npm run dev</code>.
+      {#if $reconnectExhausted}
+        Server disconnected. Restart <code>npm run dev</code>.
+      {:else}
+        Server disconnected. Reconnecting…
+      {/if}
     </div>
   {/if}
 
