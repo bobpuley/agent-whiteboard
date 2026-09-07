@@ -13,6 +13,7 @@ import { pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
 import { createApp } from "./app.js";
 import { createMcpServer } from "./mcp.js";
+import { parsePort } from "./port.js";
 import { addClient } from "./ws.js";
 
 export interface StartServerOptions {
@@ -36,7 +37,7 @@ function assertLoopbackHost(host: string): void {
 }
 
 export function startServer(options: StartServerOptions = {}): Server {
-  const PORT = parseInt(process.env.PORT ?? "3000", 10);
+  const PORT = parsePort(process.env.PORT, 3000, "PORT");
   const HOST = process.env.HOST ?? "localhost";
   assertLoopbackHost(HOST);
 

@@ -48,6 +48,13 @@ describe("startServer()", () => {
     }
   });
 
+  // NF52 (v1.5) — PORT validation.
+  it("fails fast with a clear error when PORT is not a valid port number", () => {
+    process.env.PORT = "abc";
+
+    expect(() => startServer()).toThrow(/Invalid PORT "abc"/);
+  });
+
   // F27 (v1.0) — loopback-only guardrail.
   it("refuses to bind a non-loopback HOST without an opt-in", () => {
     process.env.PORT = "0";

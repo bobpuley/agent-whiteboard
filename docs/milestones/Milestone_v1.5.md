@@ -8,7 +8,7 @@
 
 - [x] **NF50 — Explicit `crypto` import.** `server/snapshot-writer.ts` imports `randomUUID` explicitly from `node:crypto` instead of relying on the bare global `crypto`, matching `server/export-html.ts`'s existing pattern.
 - [x] **NF51 — Type the `channel.ts` notification cast.** Define a minimal local interface for the one extra `notification()` method needed and cast the MCP `Server` instance to that instead of `any`; log (don't silently swallow) failures from the `.catch()`.
-- [ ] **NF52 — Validate `PORT`/`CHANNEL_PORT` env vars.** Add a shared port-parsing helper used by `server/index.ts` and `server/channel.ts`/`server/app.ts`, failing fast with a clear error before bind/listen/fetch if the value isn't a valid port number.
+- [x] **NF52 — Validate `PORT`/`CHANNEL_PORT` env vars.** Add a shared port-parsing helper used by `server/index.ts` and `server/channel.ts`/`server/app.ts`, failing fast with a clear error before bind/listen/fetch if the value isn't a valid port number.
   - *Acceptance:* starting the server with `PORT=abc` fails fast with a clear error instead of a low-level bind error.
 - [ ] **NF53 — Split `app.ts` into per-feature route modules.** Move route registrations into `server/routes/{render,slideshow,snapshots,export}.ts`, each invoked from `createApp()`, with no behavior change.
   - *Acceptance:* full REST/MCP test suite stays green; `createApp()`'s behavior is unchanged.
