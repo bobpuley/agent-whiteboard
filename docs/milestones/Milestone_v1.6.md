@@ -10,7 +10,7 @@
   - *DoD:* opening delete for a workspace named `"my-course"` and arming the confirm shows that exact text; existing delete tests updated/passing.
 - [ ] **F35 — Export format toggle in the export modal.** Step 2 of export mode gains an HTML/Zip segmented control, defaulting to HTML; both whole-workspace and selected-snapshot export actions respect the current selection.
   - *DoD:* toggling to Zip and exporting (either action) downloads a `.zip`, not `.html`; toggling back to HTML preserves today's exact existing behavior unchanged.
-- [ ] **F36 — Zip export pipeline.** New `server/export-zip.ts` (`generateExportZip`) + `POST /export-zip` (`server/routes/export.ts`) producing a zip of the selected snapshot JSON files plus a `manifest.json` (workspace name, export timestamp, app version, included filenames); viewport-cache data excluded; rejects mixed-workspace item lists with 400.
+- [x] **F36 — Zip export pipeline.** New `server/export-zip.ts` (`generateExportZip`) + `POST /export-zip` (`server/routes/export.ts`) producing a zip of the selected snapshot JSON files plus a `manifest.json` (workspace name, export timestamp, app version, included filenames); viewport-cache data excluded; rejects mixed-workspace item lists with 400.
   - *DoD:* downloaded zip's `manifest.json` matches the schema in `04`'s §8 exactly for a known export; no viewport-cache file present anywhere in the zip; a manually crafted cross-workspace `items` array is rejected with 400.
 
 > **Implementation note:** ships export first, fully working end-to-end (including the client format toggle and download), before starting import — import's `manifest.json` validation and merge-matching logic in Sprint 86 both depend on this sprint's exact manifest shape being final.

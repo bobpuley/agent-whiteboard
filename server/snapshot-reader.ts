@@ -207,6 +207,46 @@ export async function findSnapshotById(id: string, dir: string): Promise<string 
   return null;
 }
 
+export interface RawSnapshotFile {
+  filename: string;
+  raw: string;
+}
+
+/**
+ * Scan a single workspace directory for a snapshot whose `id` field matches,
+ * returning its filename and verbatim file contents (not the parsed
+ * record) — the zip export pipeline (F36) adds files byte-for-byte rather
+ * than re-rendering them. Old snapshots without an `id` field are never
+ * matched. Returns null if no match or the workspace directory is absent.
+ */
+export async function findSnapshotFileByIdInWorkspace(workspace: string, id: string, dir: string): Promise<RawSnapshotFile | null> {
+  const workspaceDir = join(dir, workspace);
+
+  let files: string[];
+  try {
+    files = (await readdir(workspaceDir)).filter((f) => f.endsWith("_screen.json"));
+  } catch {
+    return null;
+  }
+
+  for (const filename of files) {
+    try {
+      const raw = await readFile(join(workspaceDir, filename), "utf-8");
+      const parsed = JSON.parse(raw) as ParsedSnapshotFile;
+      if (parsed.id === id) {
+        return { filename, raw };
+      }
+    } catch (err) {
+      console.error(
+        `[agent-whiteboard] snapshot-reader: skipping unreadable file ${filename}:`,
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
+
+  return null;
+}
+
 export interface SnapshotRecord {
   frames: Frame[];
   timestamp: string;
