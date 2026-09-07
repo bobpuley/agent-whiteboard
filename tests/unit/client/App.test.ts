@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/svelte";
 import type { RenderCommand } from "../../../client/src/ws.js";
 import App from "../../../client/src/App.svelte";
 
@@ -39,5 +39,25 @@ describe("App.svelte", () => {
     expect(after).not.toBe(before);
     expect(["light", "dark"]).toContain(after);
     expect(getByRole("button", { name: after === "dark" ? /switch to light theme/i : /switch to dark theme/i })).toBeTruthy();
+  });
+
+  it("import toolbar button opens the import modal (F37)", async () => {
+    const { getByLabelText, queryByLabelText } = render(App);
+
+    expect(queryByLabelText("Import workspace")).toBeNull();
+    await fireEvent.click(getByLabelText("Import"));
+    expect(getByLabelText("Import workspace")).toBeTruthy();
+  });
+
+  it("dropping a file anywhere on the page opens the import modal and hands off the file (F37)", async () => {
+    const { container, findByText } = render(App);
+    const main = container.querySelector("main")!;
+    const file = new File(["not a real zip"], "export.zip", { type: "application/zip" });
+
+    await fireEvent.drop(main, { dataTransfer: { types: ["Files"], files: [file] } });
+
+    // A malformed zip still proves the hand-off worked: acceptFile() ran and
+    // surfaced its own error inside the now-open modal.
+    expect(await findByText(/could not read this file as a zip/)).toBeTruthy();
   });
 });
