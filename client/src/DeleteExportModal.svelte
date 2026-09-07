@@ -235,7 +235,7 @@
           <p class="modal-step-hint">Step 2 of 2 — {mode} the whole workspace, or select individual snapshots below.</p>
           <button class="whole-workspace-action" disabled={busy} on:click={handleWholeAction}>
             {#if mode === "delete" && confirmingWhole}
-              Click again to confirm
+              Click again to delete "{selectedWorkspace.name}"
             {:else}
               {verb} entire workspace ({selectedWorkspace.snapshots.length} snapshot{selectedWorkspace.snapshots.length === 1 ? "" : "s"})
             {/if}

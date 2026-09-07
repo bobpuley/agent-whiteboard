@@ -38,6 +38,15 @@ describe("DeleteExportModal.svelte", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows the workspace name in the whole-workspace delete confirm text (F34)", async () => {
+    const { getByText } = render(DeleteExportModal, {
+      props: { mode: "delete", open: true, workspaces: ONE_WORKSPACE, loadError: null },
+    });
+
+    await fireEvent.click(getByText(/^Delete entire workspace/));
+    expect(getByText('Click again to delete "ws-1"')).toBeTruthy();
+  });
+
   it("skips step 1 and opens directly on step 2 when exactly one workspace has snapshots (U7i)", () => {
     const { queryByText, getByText } = render(DeleteExportModal, {
       props: { mode: "delete", open: true, workspaces: ONE_WORKSPACE, loadError: null },
