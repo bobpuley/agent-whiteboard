@@ -44,7 +44,7 @@
 | v1.2      | Design Debt — Client Hardening                                     | 81       | released                             | [Milestone_v1.2.md](./milestones/Milestone_v1.2.md) |
 | v1.3      | Design Debt — Data Integrity & Export Isolation                    | 82       | released                             | [Milestone_v1.3.md](./milestones/Milestone_v1.3.md) |
 | v1.4      | Design Debt — Server Hardening & Performance                       | 83       | released                             | [Milestone_v1.4.md](./milestones/Milestone_v1.4.md) |
-| v1.5      | Design Debt — Server Hygiene & Tooling                             | 84       | planned                              | [Milestone_v1.5.md](./milestones/Milestone_v1.5.md) |
+| v1.5      | Design Debt — Server Hygiene & Tooling                             | 84       | in progress                          | [Milestone_v1.5.md](./milestones/Milestone_v1.5.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
 > v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`) — sequenced one slice per milestone; v0.26 must complete before any public release. (Detailed rationale lived in the pre-v1.0 `02`/`04` sections at the time; no `docs/v0.26/` archive exists — `02`/`04` were reset to "not yet defined" for v1.0 planning without archiving first, so this predates the archival convention used from v0.31 onward. Consult `git log -- docs/02_assumptions-and-risks.md docs/04_architecture.md` around the v0.26 release for that history if needed.)

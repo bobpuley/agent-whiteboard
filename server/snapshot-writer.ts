@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "fs";
 import { readdir, rm, stat, unlink } from "fs/promises";
 import { join, resolve, sep } from "path";
@@ -46,7 +47,7 @@ export interface SnapshotFile {
  * broadcast the id to the browser (e.g. for viewport-cache keying) without
  * waiting on the (synchronous, but logically separate) disk write. */
 export function generateSnapshotId(): string {
-  return crypto.randomUUID();
+  return randomUUID();
 }
 
 export function saveSnapshot(
@@ -62,7 +63,7 @@ export function saveSnapshot(
     mkdirSync(dir, { recursive: true });
 
     const now = new Date();
-    const usedId = id ?? crypto.randomUUID();
+    const usedId = id ?? randomUUID();
     // Include the (already-unique) id so two writes in the same second never collide.
     const filename = `${formatTimestamp(now)}_${usedId}_screen.json`;
 
