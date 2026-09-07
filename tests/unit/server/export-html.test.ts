@@ -170,6 +170,47 @@ describe("generateExportHtml — layout containment (B20)", () => {
   });
 });
 
+describe("generateExportHtml — DOMPurify sanitization (F6/NF38, regression coverage)", () => {
+  // Guards against a real incompatibility between DOMPurify 3.4.8+ and
+  // happy-dom (capricorn86/happy-dom#1810) that was found while upgrading
+  // vitest/vite (NF54): DOMPurify(win) against a happy-dom Window silently
+  // let <script>/on* attributes through unsanitized. generateExportHtml()
+  // now builds its Window via jsdom instead — this test would have caught
+  // the regression before it ever shipped.
+  it("strips a <script> tag from an html-type payload", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsXss",
+        filename: "xss-html.json",
+        record: {
+          frames: [{ type: "html", payload: '<p>safe</p><script>window.pwned = true</script>' }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items, "offline");
+    expect(result.html).not.toContain("<script>window.pwned");
+    expect(result.html).toContain("<p>safe</p>");
+  });
+
+  it("strips a dangerous onerror attribute from an svg-type payload", async () => {
+    const items: ValidatedExportItem[] = [
+      {
+        workspace: "wsXss",
+        filename: "xss-svg.json",
+        record: {
+          frames: [{ type: "svg", payload: '<svg><circle onerror="window.pwned = true" r="5"/></svg>' }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const result = await generateExportHtml(items, "offline");
+    expect(result.html).not.toContain("onerror");
+  });
+});
+
 describe("generateExportHtml — table border alignment (B21)", () => {
   it("collapses table borders so a table's outer border can't sit offset from its rows' cell borders", async () => {
     const items: ValidatedExportItem[] = [

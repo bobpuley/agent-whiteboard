@@ -12,8 +12,9 @@
   - *Acceptance:* starting the server with `PORT=abc` fails fast with a clear error instead of a low-level bind error.
 - [x] **NF53 — Split `app.ts` into per-feature route modules.** Move route registrations into `server/routes/{render,slideshow,snapshots,export}.ts`, each invoked from `createApp()`, with no behavior change.
   - *Acceptance:* full REST/MCP test suite stays green; `createApp()`'s behavior is unchanged.
-- [ ] **NF54 — Upgrade `vite`/`vitest` majors.** Bump both to current majors, verify `@sveltejs/vite-plugin-svelte` compatibility, re-run the full client test suite and `client/vite.config.ts`'s proxy setup (including the WS proxy).
+- [x] **NF54 — Upgrade `vite`/`vitest` majors.** Bump both to current majors, verify `@sveltejs/vite-plugin-svelte` compatibility, re-run the full client test suite and `client/vite.config.ts`'s proxy setup (including the WS proxy).
   - *Acceptance:* `npm run dev`, `npm test`, and `npm run build` all succeed post-upgrade with no regressions.
+  - *Note:* upgraded to the latest versions still compatible with this project's Svelte 4 (vite 4→5, `@sveltejs/vite-plugin-svelte` 2→3, vitest 0.34→3.2) rather than vite/vitest's literal latest majors (8/5) — those require a Svelte 5 migration via `@sveltejs/vite-plugin-svelte` 4+/5+, which is out of scope here (confirmed with user). Also replaced `happy-dom` with `jsdom` everywhere (client test environment + `server/export-html.ts`'s DOMPurify window) after discovering dompurify 3.4.8+ silently fails to sanitize against a happy-dom `Window` (capricorn86/happy-dom#1810) — this was a real, previously-latent XSS risk in the `/export-html` production path that this upgrade would otherwise have activated by floating dompurify's version.
 
 > **Implementation note:** all 5 tasks are independent and implementable in any order. NF54 (tooling upgrade) carries the most open-ended risk/effort — budget extra time if breaking config changes surface; do it last so a mid-milestone rollback doesn't block the other 4 items.
 

@@ -1,4 +1,4 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { connectWebSocket } from "../../../client/src/ws.js";
 import type { RenderCommand } from "../../../client/src/ws.js";
