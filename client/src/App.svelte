@@ -3,6 +3,7 @@
   import type { ComponentType, SvelteComponent } from "svelte";
   import HistoryPanel from "./HistoryPanel.svelte";
   import DeleteExportModal from "./DeleteExportModal.svelte";
+  import ImportModal from "./ImportModal.svelte";
   import Icon from "./lib/Icon.svelte";
   import { canvasStore } from "./stores/canvasStore.js";
   import { doneStore } from "./stores/doneStore.js";
@@ -91,6 +92,25 @@
   function handleModalDeleted() {
     if (historyOpen) historyPanelRef?.fetchSnapshots();
   }
+
+  let importOpen = false;
+  let importModalRef: ImportModal;
+
+  // Page-level drop target (F37) — a .zip dropped anywhere on the app opens
+  // the import modal and hands the file straight to its exposed acceptFile(),
+  // reusing the exact same manifest-resolution path as the modal's own
+  // drop-zone/file-picker (below).
+  function onPageDragOver(e: DragEvent) {
+    if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+  }
+
+  function onPageDrop(e: DragEvent) {
+    const file = e.dataTransfer?.files[0];
+    if (!file) return;
+    e.preventDefault();
+    importOpen = true;
+    void importModalRef?.acceptFile(file);
+  }
 </script>
 
 <HistoryPanel bind:this={historyPanelRef} bind:open={historyOpen} on:close={() => { historyOpen = false; }} />
@@ -104,7 +124,9 @@
   on:deleted={handleModalDeleted}
 />
 
-<main>
+<ImportModal bind:this={importModalRef} open={importOpen} on:close={() => { importOpen = false; }} />
+
+<main on:dragover={onPageDragOver} on:drop={onPageDrop}>
   {#if $disconnected}
     <div class="banner" role="alert" aria-live="assertive">
       {#if $reconnectExhausted}
@@ -177,6 +199,9 @@
     </button>
     <button class="panel-icon-btn export-btn" on:click={() => modalStore.open("export")} aria-label="Export snapshots" title="Export snapshots to HTML">
       <Icon name="export" />
+    </button>
+    <button class="panel-icon-btn import-btn" on:click={() => { importOpen = true; }} aria-label="Import" title="Import workspace from a .zip">
+      <Icon name="import" />
     </button>
 
     {#if $doneStore.armed || $doneStore.sent || $doneStore.error}
@@ -348,7 +373,8 @@
     color: var(--board-danger);
   }
 
-  .panel-icon-btn.export-btn:hover {
+  .panel-icon-btn.export-btn:hover,
+  .panel-icon-btn.import-btn:hover {
     background: var(--board-accent-bg);
     border-color: var(--board-accent);
     color: var(--board-accent);

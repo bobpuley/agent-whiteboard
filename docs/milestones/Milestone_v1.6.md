@@ -17,7 +17,7 @@
 
 ### Sprint 86 — Import: entry point, collision handling, merge logic (F37–F40, NF55)
 
-- [ ] **F37 — Import entry point.** New `ImportModal.svelte` + toolbar button, plus drag-and-drop of a `.zip` onto the same drop target; client reads `manifest.json` out of the selected file locally (via `jszip`) before any upload.
+- [x] **F37 — Import entry point.** New `ImportModal.svelte` + toolbar button, plus drag-and-drop of a `.zip` onto the same drop target; client reads `manifest.json` out of the selected file locally (via `jszip`) before any upload.
   - *DoD:* selecting or dropping a valid exported zip opens the modal with the workspace name already resolved from the manifest, with no network request yet.
 - [ ] **F38 — Name-collision prompt.** If the manifest's workspace name matches an existing workspace, show Merge / Import as new (editable, pre-filled `"<name> (n)"`) / Cancel; otherwise skip straight to import.
   - *DoD:* importing a zip with a colliding name shows the three-way prompt; "import as new" with an edited name creates a distinct workspace, unchanged original.
