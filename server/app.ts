@@ -387,10 +387,8 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     }
     const frames = snapshot.frames;
     const title = typeof snapshot.title === "string" ? snapshot.title : undefined;
-    const nodeToFrame =
-      snapshot.nodeToFrame !== null && typeof snapshot.nodeToFrame === "object"
-        ? (snapshot.nodeToFrame as Record<string, number>)
-        : undefined;
+    const parsedNodeToFrame = nodeToFrameSchema.safeParse(snapshot.nodeToFrame);
+    const nodeToFrame = parsedNodeToFrame.success ? parsedNodeToFrame.data : undefined;
     // Pre-v0.11 snapshots may lack an id (J1, `02`) — not addressable by the
     // viewport cache; the browser falls back to treating it as unseen (auto-fit).
     const snapshotId = typeof snapshot.id === "string" ? snapshot.id : undefined;

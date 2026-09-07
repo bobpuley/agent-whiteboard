@@ -1488,6 +1488,33 @@ describe("POST /snapshots/load", () => {
     expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
   });
 
+  it("drops a hand-edited non-numeric nodeToFrame instead of crashing or propagating it (NF45)", async () => {
+    const corruptedSnapshot = JSON.stringify({
+      timestamp: "2026-06-09T14:30:00.000Z",
+      workspace: "agent-whiteboard",
+      cursor: 0,
+      frames: [
+        { type: "mermaid", payload: "graph TD; A" },
+        { type: "mermaid", payload: "graph TD; A --> B" },
+      ],
+      nodeToFrame: { A: "not-a-number" },
+    });
+    vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(corruptedSnapshot);
+
+    const res = await app.request("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: "20260609_143000_screen.json" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const { getCanvas, isStepSequence } = await import("../../../server/session.js");
+    const canvas = getCanvas();
+    expect(isStepSequence(canvas) && canvas.nodeToFrame).toBeUndefined();
+  });
+
   it("returns 400 when filename is not a string", async () => {
     const res = await app.request("/snapshots/load", {
       method: "POST",
