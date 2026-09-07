@@ -42,3 +42,24 @@ export async function exportItems(items: Array<{ workspace: string; id: string }
   }
   await triggerDownload(res);
 }
+
+// F35/F36 — same {workspace, id}[] item shape as exportItems(), hitting the
+// zip endpoint instead of the HTML one.
+export async function exportZip(items: Array<{ workspace: string; id: string }>): Promise<void> {
+  const res = await fetch("/export-zip", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+  if (!res.ok) {
+    let message = "Export failed";
+    try {
+      const data = (await res.json()) as ApiResult;
+      message = data.error ?? message;
+    } catch {
+      /* ignore — keep default message */
+    }
+    throw new Error(message);
+  }
+  await triggerDownload(res);
+}

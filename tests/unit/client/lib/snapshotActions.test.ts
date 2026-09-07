@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deleteFiles, deleteWorkspace, exportItems } from "../../../../client/src/lib/snapshotActions";
+import { deleteFiles, deleteWorkspace, exportItems, exportZip } from "../../../../client/src/lib/snapshotActions";
 
 // jsdom doesn't implement Blob URLs (github.com/jsdom/jsdom#1721) — stub the
 // two methods so vi.spyOn() has something to hook onto; real browsers (and
@@ -105,6 +105,40 @@ describe("snapshotActions", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       await expect(exportItems([{ workspace: "ws-1", id: "uuid-1" }])).rejects.toThrow("Export failed");
+    });
+  });
+
+  describe("exportZip", () => {
+    it("POSTs to /export-zip and triggers a download on a successful response", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: new Headers({ "Content-Disposition": 'attachment; filename="export.zip"' }),
+        blob: async () => new Blob(["zip-bytes"], { type: "application/zip" }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+      vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+      await exportZip([{ workspace: "ws-1", id: "uuid-1" }]);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/export-zip",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ items: [{ workspace: "ws-1", id: "uuid-1" }] }),
+        })
+      );
+      expect(createUrl).toHaveBeenCalled();
+    });
+
+    it("throws the server's error message on a non-ok response", async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: "no valid items to export" }),
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(exportZip([{ workspace: "ws-1", id: "uuid-1" }])).rejects.toThrow("no valid items to export");
     });
   });
 });

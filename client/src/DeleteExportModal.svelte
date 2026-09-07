@@ -3,7 +3,7 @@
   import type { WorkspaceGroup } from "./lib/snapshotTypes";
   import { trapFocus } from "./lib/trapFocus";
   import SnapshotRow from "./lib/SnapshotRow.svelte";
-  import { deleteWorkspace, deleteFiles, exportItems } from "./lib/snapshotActions";
+  import { deleteWorkspace, deleteFiles, exportItems, exportZip } from "./lib/snapshotActions";
 
   export let mode: "delete" | "export";
   export let open = false;
@@ -17,6 +17,7 @@
   let selectedFilenames = new Set<string>();
   let confirmingWhole = false;
   let confirmingSubset = false;
+  let exportFormat: "html" | "zip" = "html";
   let busy = false;
   let errorMessage: string | null = null;
   let doneMessage: string | null = null;
@@ -49,6 +50,7 @@
     busy = false;
     confirmingWhole = false;
     confirmingSubset = false;
+    exportFormat = "html";
     selectedFilenames = new Set();
     const defaultWorkspace = workspaces.length === 1 ? workspaces[0] : workspaces.find((w) => w.isCurrent);
     if (defaultWorkspace) {
@@ -122,7 +124,8 @@
           .filter((s): s is typeof s & { id: string } => s.id !== undefined)
           .map((s) => ({ workspace: selectedWorkspace!.name, id: s.id }));
         if (items.length === 0) throw new Error("no exportable snapshots in this workspace");
-        await exportItems(items);
+        if (exportFormat === "zip") await exportZip(items);
+        else await exportItems(items);
         showDone(`Exported entire workspace "${selectedWorkspace.name}"`);
       }
     } catch (err) {
@@ -151,7 +154,8 @@
           .map((filename) => ({ workspace: selectedWorkspace!.name, id: byFilename.get(filename) }))
           .filter((item): item is { workspace: string; id: string } => item.id !== undefined);
         if (items.length === 0) throw new Error("no exportable snapshots selected");
-        await exportItems(items);
+        if (exportFormat === "zip") await exportZip(items);
+        else await exportItems(items);
         showDone(`Exported ${filenames.length} snapshot${filenames.length === 1 ? "" : "s"} from "${selectedWorkspace.name}"`);
       }
     } catch (err) {
@@ -233,6 +237,28 @@
           {/each}
         {:else if selectedWorkspace}
           <p class="modal-step-hint">Step 2 of 2 — {mode} the whole workspace, or select individual snapshots below.</p>
+          {#if mode === "export"}
+            <div class="format-toggle" role="group" aria-label="Export format">
+              <button
+                type="button"
+                class="format-toggle-btn"
+                class:active={exportFormat === "html"}
+                aria-pressed={exportFormat === "html"}
+                on:click={() => (exportFormat = "html")}
+              >
+                HTML
+              </button>
+              <button
+                type="button"
+                class="format-toggle-btn"
+                class:active={exportFormat === "zip"}
+                aria-pressed={exportFormat === "zip"}
+                on:click={() => (exportFormat = "zip")}
+              >
+                Zip (for import)
+              </button>
+            </div>
+          {/if}
           <button class="whole-workspace-action" disabled={busy} on:click={handleWholeAction}>
             {#if mode === "delete" && confirmingWhole}
               Click again to delete "{selectedWorkspace.name}"
@@ -414,6 +440,38 @@
 
   .workspace-pick-chevron {
     color: var(--board-text-subtlest);
+  }
+
+  .format-toggle {
+    display: flex;
+    border: 1px solid var(--board-border-mid);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+
+  .format-toggle-btn {
+    flex: 1;
+    background: var(--board-bg);
+    color: var(--board-text-secondary);
+    border: none;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .format-toggle-btn + .format-toggle-btn {
+    border-left: 1px solid var(--board-border-mid);
+  }
+
+  .format-toggle-btn:hover:not(.active) {
+    background: var(--board-bg-hover);
+  }
+
+  .format-toggle-btn.active {
+    background: var(--board-accent);
+    color: #fff;
   }
 
   .whole-workspace-action {
