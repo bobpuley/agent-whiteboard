@@ -19,7 +19,7 @@
 
 - [x] **F37 — Import entry point.** New `ImportModal.svelte` + toolbar button, plus drag-and-drop of a `.zip` onto the same drop target; client reads `manifest.json` out of the selected file locally (via `jszip`) before any upload.
   - *DoD:* selecting or dropping a valid exported zip opens the modal with the workspace name already resolved from the manifest, with no network request yet.
-- [ ] **F38 — Name-collision prompt.** If the manifest's workspace name matches an existing workspace, show Merge / Import as new (editable, pre-filled `"<name> (n)"`) / Cancel; otherwise skip straight to import.
+- [x] **F38 — Name-collision prompt.** If the manifest's workspace name matches an existing workspace, show Merge / Import as new (editable, pre-filled `"<name> (n)"`) / Cancel; otherwise skip straight to import.
   - *DoD:* importing a zip with a colliding name shows the three-way prompt; "import as new" with an edited name creates a distinct workspace, unchanged original.
 - [x] **F39 — Server import pipeline + merge/dedup logic.** New `server/import-zip.ts` + `POST /import` (`server/routes/import.ts`, multipart upload via `extract-zip`); implements the create/merge modes and the id/timestamp dedup rule from `03`'s F39 exactly (no match → add; same id+timestamp → skip; same id, different timestamp → newer wins).
   - *DoD:* re-importing the same zip reports everything as skipped and writes no new files; a destination/incoming pair sharing an id with different timestamps ends with exactly one file for that id afterward, matching the newer timestamp.
