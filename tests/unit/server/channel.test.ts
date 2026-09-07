@@ -75,4 +75,18 @@ describe("channel", () => {
     expect(res.statusCode).toBe(404);
     expect(body()).toBe("");
   });
+
+  it("logs (does not silently swallow) a rejected notification", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const err = new Error("boom");
+    notification.mockRejectedValueOnce(err);
+
+    const { req, res } = fakeReqRes("POST", "/user-done");
+    requestHandler(req, res);
+
+    await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+    expect(consoleError.mock.calls[0]).toContain(err);
+
+    consoleError.mockRestore();
+  });
 });
