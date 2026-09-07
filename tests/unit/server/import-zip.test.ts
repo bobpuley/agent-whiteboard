@@ -48,7 +48,7 @@ describe("importZip — create mode (F39)", () => {
     });
 
     const result = await importZip(zip, "new-ws", "create", root);
-    expect(result).toEqual({ ok: true, workspace: "new-ws", added: 2, updated: 0, skipped: 0 });
+    expect(result).toEqual({ ok: true, workspace: "new-ws", added: 2, updated: 0, skipped: 0, newestFilename: "b_screen.json" });
 
     const files = readdirSync(join(root, "new-ws")).sort();
     expect(files).toEqual(["a_screen.json", "b_screen.json"]);
@@ -79,7 +79,7 @@ describe("importZip — merge mode dedup logic (F39)", () => {
     });
 
     const result = await importZip(zip, "ws", "merge", root);
-    expect(result).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0 });
+    expect(result).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0, newestFilename: "new_screen.json" });
     expect(readdirSync(join(root, "ws")).sort()).toEqual(["existing_screen.json", "new_screen.json"]);
   });
 
@@ -103,7 +103,7 @@ describe("importZip — merge mode dedup logic (F39)", () => {
     });
 
     const result = await importZip(zip, "ws", "merge", root);
-    expect(result).toEqual({ ok: true, workspace: "ws", added: 0, updated: 1, skipped: 0 });
+    expect(result).toEqual({ ok: true, workspace: "ws", added: 0, updated: 1, skipped: 0, newestFilename: "new_screen.json" });
 
     const files = readdirSync(join(root, "ws"));
     expect(files).toEqual(["new_screen.json"]);
@@ -130,8 +130,24 @@ describe("importZip — merge mode dedup logic (F39)", () => {
     });
 
     const result = await importZip(zip, "ws", "merge", root);
-    expect(result).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0 });
+    expect(result).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0, newestFilename: "legacy_screen.json" });
     expect(readdirSync(join(root, "ws")).sort()).toEqual(["existing_screen.json", "legacy_screen.json"]);
+  });
+
+  it("reports newestFilename as the newest among added/updated files, excluding skipped ones (F40)", async () => {
+    writeSnapshot("ws", "kept_screen.json", { id: "id-kept", timestamp: "2026-06-01T00:00:00.000Z" });
+    const zip = await buildZipBuffer({
+      "manifest.json": manifest("ws", ["older_screen.json", "newer_screen.json", "dup_screen.json"]),
+      // Older than "kept" (id-kept isn't touched at all — no match, added).
+      "older_screen.json": JSON.stringify({ id: "id-older", timestamp: "2026-01-01T00:00:00.000Z" }),
+      // The actual newest change in this batch.
+      "newer_screen.json": JSON.stringify({ id: "id-newer", timestamp: "2026-09-01T00:00:00.000Z" }),
+      // Exact duplicate of "kept" — skipped, must not be picked as newest.
+      "dup_screen.json": JSON.stringify({ id: "id-kept", timestamp: "2026-06-01T00:00:00.000Z" }),
+    });
+
+    const result = await importZip(zip, "ws", "merge", root);
+    expect(result).toEqual({ ok: true, workspace: "ws", added: 2, updated: 0, skipped: 1, newestFilename: "newer_screen.json" });
   });
 
   it("re-importing the exact same zip a second time reports everything as skipped and writes no new files", async () => {
@@ -141,7 +157,7 @@ describe("importZip — merge mode dedup logic (F39)", () => {
     });
 
     const first = await importZip(zip, "ws", "create", root);
-    expect(first).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0 });
+    expect(first).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0, newestFilename: "a_screen.json" });
 
     const second = await importZip(zip, "ws", "merge", root);
     expect(second).toEqual({ ok: true, workspace: "ws", added: 0, updated: 0, skipped: 1 });
@@ -191,7 +207,7 @@ describe("importZip — NF55 safety", () => {
     });
 
     const result = await importZip(zip, "ws", "create", root);
-    expect(result).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0 });
+    expect(result).toEqual({ ok: true, workspace: "ws", added: 1, updated: 0, skipped: 0, newestFilename: "good_screen.json" });
     expect(readdirSync(join(root, "ws"))).toEqual(["good_screen.json"]);
   });
 

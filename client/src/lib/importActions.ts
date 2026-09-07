@@ -3,7 +3,7 @@
 // export side.
 
 export type ImportUploadResult =
-  | { ok: true; workspace: string; added: number; updated: number; skipped: number }
+  | { ok: true; workspace: string; added: number; updated: number; skipped: number; newestFilename?: string }
   | { ok: false; error: string };
 
 export async function uploadImportZip(
@@ -25,5 +25,23 @@ export async function uploadImportZip(
     return data;
   } catch {
     return { ok: false, error: "Network error during import" };
+  }
+}
+
+// F40 — reuses the existing POST /snapshots/load endpoint to switch the
+// client's active workspace to the just-imported one, the same way
+// HistoryPanel.svelte's own snapshot rows do. Best-effort: the canvas
+// updates via the server's WebSocket broadcast if the request lands; a
+// network-level failure here is non-fatal to the import itself, which
+// already succeeded server-side.
+export async function loadImportedSnapshot(workspace: string, filename: string): Promise<void> {
+  try {
+    await fetch("/snapshots/load", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspace, filename }),
+    });
+  } catch (err) {
+    console.error("[agent-whiteboard] failed to load imported snapshot:", err);
   }
 }

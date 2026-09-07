@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import extract from "extract-zip";
@@ -9,7 +9,7 @@ import { findSnapshotFileByIdInWorkspace } from "./snapshot-reader.js";
 export type ImportMode = "create" | "merge";
 
 export type ImportZipResult =
-  | { ok: true; workspace: string; added: number; updated: number; skipped: number }
+  | { ok: true; workspace: string; added: number; updated: number; skipped: number; newestFilename?: string }
   | { ok: false; error: string };
 
 // NF55 — zip-bomb defense. Checked against yauzl's (unverified, attacker
@@ -52,6 +52,18 @@ function parseIdTimestamp(raw: string): ParsedIdTimestamp {
   } catch {
     return {};
   }
+}
+
+/**
+ * F40 — picks the filename of the newest (by ISO-8601 timestamp string
+ * comparison, same convention as snapshot-reader.ts's own sort) entry among
+ * everything actually added/updated by this import, so the caller can load
+ * it and switch the client's active workspace as a side effect.
+ */
+function pickNewestFilename(entries: Array<{ filename: string; timestamp?: string }>): string | undefined {
+  const withTimestamp = entries.filter((e): e is { filename: string; timestamp: string } => e.timestamp !== undefined);
+  if (withTimestamp.length === 0) return undefined;
+  return withTimestamp.reduce((newest, e) => (e.timestamp > newest.timestamp ? e : newest)).filename;
 }
 
 /**
@@ -138,6 +150,12 @@ export async function importZip(
       () => false
     );
 
+    // F40 — every added/updated file's {filename, timestamp}, so the newest
+    // one (by timestamp) can be reported back for the client's post-import
+    // POST /snapshots/load. Skipped files are deliberately excluded — nothing
+    // about them changed.
+    const changed: Array<{ filename: string; timestamp?: string }> = [];
+
     if (mode === "create") {
       if (destExists) {
         return { ok: false, error: `workspace "${targetWorkspace}" already exists` };
@@ -147,15 +165,17 @@ export async function importZip(
       for (const filename of manifest.snapshots) {
         if (!isValidSnapshotFilename(filename)) continue;
         const srcPath = join(extractDir, filename);
-        const srcExists = await stat(srcPath).then(
-          () => true,
-          () => false
-        );
-        if (!srcExists) continue;
-        await copyFile(srcPath, join(destDir, filename));
+        let raw: string;
+        try {
+          raw = await readFile(srcPath, "utf-8");
+        } catch {
+          continue;
+        }
+        await writeFile(join(destDir, filename), raw, "utf-8");
         added++;
+        changed.push({ filename, timestamp: parseIdTimestamp(raw).timestamp });
       }
-      return { ok: true, workspace: targetWorkspace, added, updated: 0, skipped: 0 };
+      return { ok: true, workspace: targetWorkspace, added, updated: 0, skipped: 0, newestFilename: pickNewestFilename(changed) };
     }
 
     // mode === "merge"
@@ -179,6 +199,7 @@ export async function importZip(
         // Legacy/id-less (pre-v0.11) — always imported as new, never matched.
         await writeFile(join(destDir, filename), raw, "utf-8");
         added++;
+        changed.push({ filename, timestamp: incoming.timestamp });
         continue;
       }
 
@@ -186,6 +207,7 @@ export async function importZip(
       if (existing === null) {
         await writeFile(join(destDir, filename), raw, "utf-8");
         added++;
+        changed.push({ filename, timestamp: incoming.timestamp });
         continue;
       }
 
@@ -206,8 +228,9 @@ export async function importZip(
       }
       await writeFile(join(destDir, filename), raw, "utf-8");
       updated++;
+      changed.push({ filename, timestamp: incoming.timestamp });
     }
-    return { ok: true, workspace: targetWorkspace, added, updated, skipped };
+    return { ok: true, workspace: targetWorkspace, added, updated, skipped, newestFilename: pickNewestFilename(changed) };
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }

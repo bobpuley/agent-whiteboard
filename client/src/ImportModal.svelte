@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
+  import { createEventDispatcher, onDestroy } from "svelte";
   import { trapFocus } from "./lib/trapFocus";
   import { readManifestFromZip } from "./lib/importFile";
   import type { ImportManifest } from "./lib/importFile";
   import { fetchAllSnapshots } from "./lib/fetchSnapshots";
-  import { uploadImportZip } from "./lib/importActions";
+  import { uploadImportZip, loadImportedSnapshot } from "./lib/importActions";
   import type { ImportUploadResult } from "./lib/importActions";
 
   export let open = false;
@@ -27,6 +27,7 @@
 
   let busy = false;
   let result: Extract<ImportUploadResult, { ok: true }> | null = null;
+  let doneTimer: ReturnType<typeof setTimeout> | null = null;
 
   $: if (!open) resetState();
 
@@ -42,7 +43,13 @@
     newNameInput = "";
     busy = false;
     result = null;
+    if (doneTimer) clearTimeout(doneTimer);
+    doneTimer = null;
   }
+
+  onDestroy(() => {
+    if (doneTimer) clearTimeout(doneTimer);
+  });
 
   // Exposed so App.svelte's page-level drop target (F37) can hand off a file
   // dropped anywhere on the app, not just onto this modal's own drop-zone —
@@ -124,7 +131,15 @@
       return;
     }
     result = uploadResult;
+    // F40 — switch the active workspace to the just-imported one by loading
+    // its newest added/updated snapshot, reusing the existing load pipeline
+    // (setLastWorkspace() side effect) instead of a bespoke "switch workspace"
+    // concept. Best-effort: a network hiccup here doesn't undo the import.
+    if (uploadResult.newestFilename) {
+      void loadImportedSnapshot(uploadResult.workspace, uploadResult.newestFilename);
+    }
     dispatch("imported");
+    doneTimer = setTimeout(() => dispatch("close"), 1500);
   }
 
   function onFileInputChange(e: Event) {
