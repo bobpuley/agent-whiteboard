@@ -1,3 +1,12 @@
+## 1.0.6 — 2026-09-07
+
+**Milestone v1.3 — Design Debt: Data Integrity & Export Isolation (Sprint 82) complete.** Promotes 3 findings from the Design Debt Log (`docs/06_nodejs_review.md` + a post-v1.0 dev-mode config finding) into shipped work: a data-validation gap, a concurrency-safety gap, and a dev-mode config hardcoding issue (NF45–NF47 in `03`).
+
+- **`nodeToFrame` validation (NF45):** `server/app.ts`'s snapshot-load route and `server/snapshot-reader.ts`'s `findSnapshotByIdInWorkspace` now validate `nodeToFrame` read back from disk with `nodeToFrameSchema.safeParse()` instead of an unchecked type assertion — a hand-corrupted value is dropped, matching existing malformed-`frames` handling, instead of propagating bad data to the browser.
+- **Export pipeline isolation (NF46):** `server/export-html.ts` no longer patches Node's global `document`/`window` for happy-dom-backed rendering, nor serializes concurrent calls behind a promise queue (the `exportQueue` workaround for bug B14). Investigation found none of the renderers actually need the global: `DOMPurify` already receives its per-call `Window` instance explicitly, and KaTeX/Vega-Lite render without any DOM at all. Removing the unnecessary global mutation eliminates the race outright rather than just serializing around it.
+- **Dev-mode port/proxy config (NF47):** `client/vite.config.ts` now reads `CLIENT_PORT` (default `5173`) and `PORT` (default `3000`) from the environment for the dev server's own port and every proxy target, instead of hardcoding both — overriding the server's `PORT` for `npm run dev` no longer silently breaks the client's API/WS proxying.
+- Full suite: 569 unit tests passing (up from 565), `tsc --noEmit`/`svelte-check`/`eslint` clean.
+
 ## 1.0.5 — 2026-09-03
 
 **Milestone v1.2 — Design Debt: Client Hardening (Sprint 81) complete.** Promotes 9 findings from the frontend design-debt log (`docs/06_frontend_review.md`) into shipped work: reconnect resilience, dark-mode theming gaps, a sanitization gap, type-safety cleanup, and test-coverage gaps (F32–F33, NF38–NF44 in `03`).

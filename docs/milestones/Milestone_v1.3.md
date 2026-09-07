@@ -1,6 +1,6 @@
 # Milestone v1.3 — Design Debt: Data Integrity & Export Isolation (Sprint 82)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-09-06 via `/doc-creator-driver:intake` (bug report batch). Promotes 3 findings logged in the Design Debt Log (`01_input-ideas.md`) into scheduled work — see `02`/`03`/`04` §5 (v1.3 / NF45–NF47). 2 from `docs/06_nodejs_review.md` (2026-07-18), 1 from a post-v1.0 dev-mode config finding (2026-07-19).
 
