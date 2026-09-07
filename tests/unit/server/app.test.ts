@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import JSZip from "jszip";
 import { createApp } from "../../../server/app.js";
 import { resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 import { cancelSlideshow } from "../../../server/slideshow.js";
@@ -26,6 +27,7 @@ vi.mock("../../../server/snapshot-reader.js", async (importOriginal) => {
     loadSnapshotContent: vi.fn(),
     findSnapshotById: vi.fn(),
     findSnapshotByIdInWorkspace: vi.fn(),
+    findSnapshotFileByIdInWorkspace: vi.fn(),
   };
 });
 
@@ -3320,5 +3322,115 @@ describe("POST /export-html (v0.13, ids-only since v0.27/NF21)", () => {
     expect(snapshotReaderModule.findSnapshotByIdInWorkspace).toHaveBeenCalledTimes(2);
     const body = await res.text();
     expect(body).toContain("<!DOCTYPE html>");
+  });
+});
+
+// ── v1.6 — Zip Export (F36) ────────────────────────────────────────────────
+
+describe("POST /export-zip", () => {
+  const RAW_FILE_A = {
+    filename: "a_screen.json",
+    raw: JSON.stringify({ id: "uuid-1", timestamp: "2026-01-01T00:00:00.000Z", workspace: "my-ws", cursor: 0, frames: [{ type: "mermaid", payload: "graph TD; A" }] }),
+  };
+  const RAW_FILE_B = {
+    filename: "b_screen.json",
+    raw: JSON.stringify({ id: "uuid-2", timestamp: "2026-01-02T00:00:00.000Z", workspace: "my-ws", cursor: 0, frames: [{ type: "svg", payload: "<svg></svg>" }] }),
+  };
+
+  beforeEach(() => {
+    vi.mocked(snapshotReaderModule.findSnapshotFileByIdInWorkspace).mockReset();
+  });
+
+  it("returns 400 when items is missing", async () => {
+    const res = await app.request("/export-zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).ok).toBe(false);
+  });
+
+  it("returns 400 when items is an empty array", async () => {
+    const res = await app.request("/export-zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [] }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when workspace contains path-traversal characters", async () => {
+    const res = await app.request("/export-zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ workspace: "../evil", id: "uuid-1" }] }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/no valid items/);
+  });
+
+  it("returns 400 for a manually crafted cross-workspace items array", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotFileByIdInWorkspace).mockReturnValue(RAW_FILE_A);
+
+    const res = await app.request("/export-zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [
+          { workspace: "ws-a", id: "uuid-1" },
+          { workspace: "ws-b", id: "uuid-2" },
+        ],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/same workspace/);
+  });
+
+  it("returns 400 when all ids are unresolvable", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotFileByIdInWorkspace).mockReturnValue(null);
+
+    const res = await app.request("/export-zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ workspace: "my-ws", id: "uuid-missing" }] }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 200 with a zip body and correct headers, manifest matching the exported items", async () => {
+    vi.mocked(snapshotReaderModule.findSnapshotFileByIdInWorkspace)
+      .mockReturnValueOnce(RAW_FILE_A)
+      .mockReturnValueOnce(RAW_FILE_B);
+
+    const res = await app.request("/export-zip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: [
+          { workspace: "my-ws", id: "uuid-1" },
+          { workspace: "my-ws", id: "uuid-2" },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/zip");
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    expect(disposition).toContain("attachment");
+    expect(disposition).toMatch(/my-ws.*\.zip/);
+
+    const buf = Buffer.from(await res.arrayBuffer());
+    const zip = await JSZip.loadAsync(buf);
+    expect(Object.keys(zip.files).sort()).toEqual(["a_screen.json", "b_screen.json", "manifest.json"]);
+
+    const manifest = JSON.parse(await zip.files["manifest.json"].async("string"));
+    expect(manifest.workspace).toBe("my-ws");
+    expect(manifest.snapshots.sort()).toEqual(["a_screen.json", "b_screen.json"]);
+
+    // No viewport-cache data anywhere in the zip (F36 DoD).
+    for (const name of Object.keys(zip.files)) {
+      expect(name).not.toMatch(/viewport/i);
+    }
   });
 });

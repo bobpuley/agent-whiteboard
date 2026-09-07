@@ -54,7 +54,9 @@
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@types/archiver": "^7.0.0",
     "@types/dompurify": "^3.2.0",
+    "archiver": "^7.0.1",
     "bootstrap": "^5.3.8",
     "dompurify": "^3.4.15",
     "hono": "^4.7.11",
@@ -81,6 +83,7 @@
     "eslint": "^10.6.0",
     "eslint-plugin-svelte": "^3.20.0",
     "globals": "^17.7.0",
+    "jszip": "^3.10.1",
     "svelte": "^4.2.19",
     "svelte-check": "^4.7.1",
     "svelte-eslint-parser": "^1.8.0",

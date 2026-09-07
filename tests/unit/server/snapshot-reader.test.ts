@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "../../../server/snapshot-reader.js";
+import { findSnapshotById, findSnapshotByIdInWorkspace, findSnapshotFileByIdInWorkspace, listSnapshots } from "../../../server/snapshot-reader.js";
 
 describe("listSnapshots — id field (v0.15)", () => {
   let root: string;
@@ -217,6 +217,61 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
 
     const record = await findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
     expect(record).toBeNull();
+  });
+});
+
+describe("findSnapshotFileByIdInWorkspace (v1.6, F36)", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "agent-whiteboard-snapshot-reader-"));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("returns the filename and verbatim raw file contents when the id matches", async () => {
+    const dir = join(root, "my-ws");
+    mkdirSync(dir, { recursive: true });
+    const raw = JSON.stringify({
+      id: "uuid-1",
+      timestamp: "2026-01-01T00:00:00.000Z",
+      cursor: 0,
+      frames: [{ type: "katex", payload: "x^2" }],
+      title: "Quadratic",
+    });
+    writeFileSync(join(dir, "20260101_000000_screen.json"), raw);
+
+    const result = await findSnapshotFileByIdInWorkspace("my-ws", "uuid-1", root);
+    expect(result).toEqual({ filename: "20260101_000000_screen.json", raw });
+  });
+
+  it("returns null when the id exists in a different workspace (no cross-workspace scan)", async () => {
+    const otherDir = join(root, "other-ws");
+    mkdirSync(otherDir, { recursive: true });
+    writeFileSync(
+      join(otherDir, "20260101_000000_screen.json"),
+      JSON.stringify({ id: "uuid-1", timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "katex", payload: "x^2" }] })
+    );
+    mkdirSync(join(root, "my-ws"), { recursive: true });
+
+    expect(await findSnapshotFileByIdInWorkspace("my-ws", "uuid-1", root)).toBeNull();
+  });
+
+  it("returns null when the workspace directory does not exist", async () => {
+    expect(await findSnapshotFileByIdInWorkspace("does-not-exist", "uuid-1", root)).toBeNull();
+  });
+
+  it("returns null when no snapshot in the workspace has a matching id", async () => {
+    const dir = join(root, "my-ws");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "20260101_000000_screen.json"),
+      JSON.stringify({ id: "uuid-other", timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "katex", payload: "x^2" }] })
+    );
+
+    expect(await findSnapshotFileByIdInWorkspace("my-ws", "uuid-1", root)).toBeNull();
   });
 });
 

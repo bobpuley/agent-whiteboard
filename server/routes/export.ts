@@ -4,6 +4,8 @@ import { findSnapshotById, findSnapshotByIdInWorkspace } from "../snapshot-reade
 import { validateWorkspaceInput } from "../render-core.js";
 import { generateExportHtml } from "../export-html.js";
 import type { ExportMode, ValidatedExportItem } from "../export-html.js";
+import { generateExportZip } from "../export-zip.js";
+import type { ExportZipItem } from "../export-zip.js";
 import { getSnapshotsRoot } from "../paths.js";
 
 export function registerExportRoutes(app: Hono): void {
@@ -60,6 +62,46 @@ export function registerExportRoutes(app: Hono): void {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Disposition": `attachment; filename="${downloadFilename}"`,
+      },
+    });
+  });
+
+  // ── Zip Export (v1.6, F36) ───────────────────────────────────────────────
+
+  app.post("/export-zip", async (c) => {
+    const body = await c.req.json<{ items?: unknown }>();
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return c.json({ ok: false, error: "items must be a non-empty array" }, 400);
+    }
+
+    const zipItems: ExportZipItem[] = [];
+    for (const item of body.items as unknown[]) {
+      if (typeof item !== "object" || item === null) continue;
+      const { workspace, id } = item as Record<string, unknown>;
+
+      if (typeof workspace !== "string") continue;
+      const validated = validateWorkspaceInput(workspace);
+      if (!validated.ok) continue;
+      if (typeof id !== "string") continue;
+
+      zipItems.push({ workspace: validated.workspace, id });
+    }
+
+    if (zipItems.length === 0) {
+      return c.json({ ok: false, error: "no valid items to export" }, 400);
+    }
+
+    const root = getSnapshotsRoot();
+    const result = await generateExportZip(zipItems, root);
+    if (!result.ok) {
+      return c.json({ ok: false, error: result.error }, 400);
+    }
+
+    return new Response(new Uint8Array(result.zip), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="${result.downloadFilename}"`,
       },
     });
   });
