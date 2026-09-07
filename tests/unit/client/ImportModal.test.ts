@@ -31,8 +31,13 @@ describe("ImportModal.svelte (F37)", () => {
     expect(getByText(/Drop a/)).toBeTruthy();
   });
 
-  it("resolves and shows the workspace name from a dropped zip's manifest.json, with no network request (F37)", async () => {
-    const fetchSpy = vi.fn();
+  it("resolves the manifest locally (jszip) with no network request until the collision check runs (F37)", async () => {
+    const fetchSpy = vi.fn().mockImplementation((url: string) => {
+      if (url === "/snapshots/all") {
+        return Promise.resolve({ json: () => Promise.resolve({ ok: true, workspaces: [] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, workspace: "my-course", added: 2, updated: 0, skipped: 0 }) });
+    });
     vi.stubGlobal("fetch", fetchSpy);
 
     const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
@@ -41,9 +46,137 @@ describe("ImportModal.svelte (F37)", () => {
     const dropZone = container.querySelector(".drop-zone")!;
     await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
 
+    // The workspace name resolves from the zip's manifest.json alone —
+    // fetchSpy hasn't necessarily been called yet at this exact instant,
+    // but once it is, it's for the F38 collision check, not for reading
+    // the file itself.
     await vi.waitFor(() => expect(getByText(/my-course/)).toBeTruthy());
-    expect(getByText(/2 snapshots/)).toBeTruthy();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledWith("/snapshots/all"));
+
+    vi.unstubAllGlobals();
+  });
+
+  it("skips straight to import when the resolved workspace name has no collision (F38)", async () => {
+    const fetchSpy = vi.fn().mockImplementation((url: string) => {
+      if (url === "/snapshots/all") {
+        return Promise.resolve({ json: () => Promise.resolve({ ok: true, workspaces: [{ name: "other-ws", isCurrent: true, snapshots: [] }] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, workspace: "my-course", added: 2, updated: 0, skipped: 0 }) });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, container } = render(ImportModal, { props: { open: true } });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+
+    await vi.waitFor(() => expect(getByText(/2 added, 0 updated, 0 skipped/)).toBeTruthy());
+    const importCall = fetchSpy.mock.calls.find(([url]) => url === "/import");
+    expect(importCall).toBeTruthy();
+    const body = importCall![1].body as FormData;
+    expect(body.get("targetWorkspace")).toBe("my-course");
+    expect(body.get("mode")).toBe("create");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the merge/import-as-new/cancel prompt when the resolved workspace name collides (F38)", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ ok: true, workspaces: [{ name: "my-course", isCurrent: true, snapshots: [] }] }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, getByLabelText, container } = render(ImportModal, { props: { open: true } });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+
+    await vi.waitFor(() => expect(getByText(/already exists/)).toBeTruthy());
+    expect(getByText("Merge")).toBeTruthy();
+    expect(getByText("Import as new")).toBeTruthy();
+    expect(getByText("Cancel")).toBeTruthy();
+    // Pre-filled auto-incremented suggestion.
+    expect((getByLabelText("New workspace name") as HTMLInputElement).value).toBe("my-course (2)");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("choosing Merge uploads with mode=merge and the original workspace name (F38)", async () => {
+    const fetchSpy = vi.fn().mockImplementation((url: string) => {
+      if (url === "/snapshots/all") {
+        return Promise.resolve({ json: () => Promise.resolve({ ok: true, workspaces: [{ name: "my-course", isCurrent: true, snapshots: [] }] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, workspace: "my-course", added: 1, updated: 1, skipped: 0 }) });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, container } = render(ImportModal, { props: { open: true } });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+    await vi.waitFor(() => expect(getByText("Merge")).toBeTruthy());
+
+    await fireEvent.click(getByText("Merge"));
+
+    await vi.waitFor(() => expect(getByText(/1 added, 1 updated, 0 skipped/)).toBeTruthy());
+    const importCall = fetchSpy.mock.calls.find(([url]) => url === "/import");
+    const body = importCall![1].body as FormData;
+    expect(body.get("targetWorkspace")).toBe("my-course");
+    expect(body.get("mode")).toBe("merge");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("choosing Import as new uploads with mode=create and the edited name (F38)", async () => {
+    const fetchSpy = vi.fn().mockImplementation((url: string) => {
+      if (url === "/snapshots/all") {
+        return Promise.resolve({ json: () => Promise.resolve({ ok: true, workspaces: [{ name: "my-course", isCurrent: true, snapshots: [] }] }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, workspace: "my-course-renamed", added: 2, updated: 0, skipped: 0 }) });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, getByLabelText, container } = render(ImportModal, { props: { open: true } });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+    await vi.waitFor(() => expect(getByText("Import as new")).toBeTruthy());
+
+    const nameInput = getByLabelText("New workspace name") as HTMLInputElement;
+    await fireEvent.input(nameInput, { target: { value: "my-course-renamed" } });
+    await fireEvent.click(getByText("Import as new"));
+
+    await vi.waitFor(() => expect(getByText(/my-course-renamed/)).toBeTruthy());
+    const importCall = fetchSpy.mock.calls.find(([url]) => url === "/import");
+    const body = importCall![1].body as FormData;
+    expect(body.get("targetWorkspace")).toBe("my-course-renamed");
+    expect(body.get("mode")).toBe("create");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("Cancel on the collision prompt resets back to the drop-zone with no upload (F38)", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ ok: true, workspaces: [{ name: "my-course", isCurrent: true, snapshots: [] }] }),
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, queryByText, container } = render(ImportModal, { props: { open: true } });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+    await vi.waitFor(() => expect(getByText("Cancel")).toBeTruthy());
+
+    await fireEvent.click(getByText("Cancel"));
+
+    expect(queryByText(/already exists/)).toBeNull();
+    expect(getByText(/Drop a/)).toBeTruthy();
+    expect(fetchSpy).not.toHaveBeenCalledWith("/import", expect.anything());
 
     vi.unstubAllGlobals();
   });
