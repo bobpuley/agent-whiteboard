@@ -23,6 +23,7 @@ export default defineConfig({
       "/snapshots": SERVER_HTTP_TARGET,
       "/viewport": SERVER_HTTP_TARGET,
       "/mcp": SERVER_HTTP_TARGET,
+      "/import": SERVER_HTTP_TARGET,
       // WebSocket proxy requires ws: true — HTTP proxy alone does not cover WS connections.
       "/stream": {
         target: SERVER_WS_TARGET,
