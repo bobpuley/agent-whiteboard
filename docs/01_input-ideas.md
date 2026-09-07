@@ -32,6 +32,8 @@
 ## Design Debt Log
 
 > MEDIUM-severity findings from the Node.js/TS (`docs/06_nodejs_review.md`) and Svelte/TS frontend (`docs/06_frontend_review.md`) review passes (2026-07-18), deliberately deferred out of v1.0 scope per user decision. These don't block the 1.0/npx release — logged here as candidates for a future milestone (see pointer in `05_dev-plan.md`). No propagation to `02`–`05` is forced by this log; promote an item explicitly if/when it's scheduled.
+>
+> The three source review docs (`docs/06_nodejs_review.md`, `docs/06_frontend_review.md`, `docs/06_frontend-desing-review.md`) were deleted 2026-09-07 once every finding was either shipped or captured here — citations to them elsewhere in `02`/`03`/milestone files are historical pointers to now-removed docs; consult `git log` / this commit's history if the original write-up is needed.
 
 **Promoted to v1.2 (2026-09-03)** — see `02`/`03`/`04` §4 and `Milestone_v1.2.md` (F32–F33, NF38–NF44): Mermaid DOMPurify gap, `snapshotActions.ts` untyped JSON, `registry.ts` non-null assertions, `scopeCss.ts` parity test, no WS reconnect, `trapFocus`/`download`/`scopeCss` missing unit tests, hardcoded colors instead of theme tokens, duplicated inline SVG icons in `App.svelte`, `Date.now()`-derived Mermaid diagram IDs.
 
@@ -39,4 +41,5 @@
 
 Still logged, unscheduled:
 
-- **`DeleteExportModal.svelte` exceeds the codebase's own >500-line component-size threshold** — now 615 lines (up from 608), 11 local `let` bindings, two modes and a two-step wizard in one file. A separate design-responsibility audit (`docs/06_frontend-desing-review.md`) concluded this reflects a parameterized shared shell, not extractable duplication — no concrete split recommended; only the confirm-arm-timer extraction remains a plausible, scoped follow-up if this is ever revisited.
+- **`DeleteExportModal.svelte` exceeds the codebase's own >500-line component-size threshold** — now 615 lines (up from 608), 11 local `let` bindings, two modes and a two-step wizard in one file. A separate design-responsibility audit (formerly `docs/06_frontend-desing-review.md`, since deleted) concluded this reflects a parameterized shared shell, not extractable duplication — no concrete split recommended; only the confirm-arm-timer extraction remains a plausible, scoped follow-up if this is ever revisited.
+- **No `X-Content-Type-Options: nosniff` header** (LOW, from `docs/06_nodejs_review.md`, 2026-07-18) — `server/app.ts`'s CSP middleware is the only security header set globally; there's no defense-in-depth MIME-sniffing guard, which is particularly relevant since this server serves user/agent-supplied SVG and HTML content. Fix is a one-line `c.header("X-Content-Type-Options", "nosniff")` alongside the existing CSP header. Missed by every prior Design Debt Log promotion wave (v1.2–v1.5) — surfaced 2026-09-07 while cleaning up the source review docs.
