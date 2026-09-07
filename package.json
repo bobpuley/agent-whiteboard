@@ -59,6 +59,7 @@
     "archiver": "^7.0.1",
     "bootstrap": "^5.3.8",
     "dompurify": "^3.4.15",
+    "extract-zip": "^2.0.1",
     "hono": "^4.7.11",
     "jsdom": "^26.1.0",
     "jszip": "^3.10.1",
