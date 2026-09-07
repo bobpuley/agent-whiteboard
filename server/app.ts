@@ -2,6 +2,7 @@
 // Exported so tests can import it without spinning up a real server.
 
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { existsSync } from "node:fs";
 import { signalClick, signalDone, waitForClick, waitForDone } from "./interaction.js";
@@ -49,6 +50,11 @@ const CSP_HEADER =
   "img-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'none'; " +
   "frame-ancestors 'none'";
 
+// NF48 (docs/03 §6): caps every JSON-accepting route's request body so an
+// oversized payload gets a fast 413 instead of running unbounded input
+// through synchronous rendering (mermaid/katex/vega-lite parsing).
+const MAX_BODY_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 export interface CreateAppOptions {
   // Absolute path to the built client (dist/client). When provided and it
   // exists on disk, the server serves it directly — the npx/production run
@@ -65,6 +71,8 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     await next();
     c.header("Content-Security-Policy", CSP_HEADER);
   });
+
+  app.use("*", bodyLimit({ maxSize: MAX_BODY_SIZE_BYTES }));
 
   app.post("/render", async (c) => {
     const body = await c.req.json<{ type?: string; payload?: string; options?: { title?: string; workspace?: string } }>();

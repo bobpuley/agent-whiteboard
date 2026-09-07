@@ -228,6 +228,31 @@ describe("Content-Security-Policy header", () => {
   });
 });
 
+// ── Body size limit (NF48) ───────────────────────────────────────────────────
+
+describe("global request body size limit (NF48)", () => {
+  it("returns 413 for a JSON body over the configured cap instead of parsing/rendering it", async () => {
+    const oversizedPayload = "graph TD; " + "A".repeat(11 * 1024 * 1024); // >10MB
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: oversizedPayload, options: { workspace: WORKSPACE } }),
+    });
+
+    expect(res.status).toBe(413);
+  });
+
+  it("still accepts a normal-sized request body", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: WORKSPACE } }),
+    });
+
+    expect(res.status).toBe(200);
+  });
+});
+
 // ── GET /export ───────────────────────────────────────────────────────────────
 
 describe("GET /export", () => {

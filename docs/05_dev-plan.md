@@ -43,7 +43,7 @@
 | v1.1.1    | Vega-Lite CSP `unsafe-eval` Fix (patch)                            | 80       | released                             | [Milestone_v1.1.1.md](./milestones/Milestone_v1.1.1.md) |
 | v1.2      | Design Debt — Client Hardening                                     | 81       | released                             | [Milestone_v1.2.md](./milestones/Milestone_v1.2.md) |
 | v1.3      | Design Debt — Data Integrity & Export Isolation                    | 82       | released                             | [Milestone_v1.3.md](./milestones/Milestone_v1.3.md) |
-| v1.4      | Design Debt — Server Hardening & Performance                       | 83       | planned                              | [Milestone_v1.4.md](./milestones/Milestone_v1.4.md) |
+| v1.4      | Design Debt — Server Hardening & Performance                       | 83       | in progress                          | [Milestone_v1.4.md](./milestones/Milestone_v1.4.md) |
 | v1.5      | Design Debt — Server Hygiene & Tooling                             | 84       | planned                              | [Milestone_v1.5.md](./milestones/Milestone_v1.5.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
