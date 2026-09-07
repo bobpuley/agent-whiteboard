@@ -30,6 +30,15 @@ describe("client/vite.config.ts — CLIENT_PORT/PORT env overrides (NF47)", () =
     expect((config.server?.proxy?.["/stream"] as { target: string }).target).toBe("ws://localhost:3000");
   });
 
+  it("proxies /import to the server (v1.6, F39) — regression: this route was missing from the proxy map, so dev-mode imports silently hit Vite's own SPA fallback instead of the server", async () => {
+    delete process.env.CLIENT_PORT;
+    delete process.env.PORT;
+
+    const { default: config } = await import("../../../client/vite.config.ts");
+
+    expect(config.server?.proxy?.["/import"]).toBe("http://localhost:3000");
+  });
+
   it("uses PORT for every HTTP and WS proxy target when set", async () => {
     process.env.PORT = "4000";
     delete process.env.CLIENT_PORT;
