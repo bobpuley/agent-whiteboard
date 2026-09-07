@@ -1,3 +1,16 @@
+## 1.1.0 — 2026-09-07
+
+**Milestone v1.6 — Workspace Export/Import for Sharing (Sprints 85–86) complete.** Adds a full workspace sharing round-trip: export a workspace as a portable `.zip` and import it into another whiteboard instance (FR31 in `01`, F34–F40/NF55 in `03`). The first milestone to ship real new user-facing functionality since 1.0 — correctly a minor bump per the versioning rule in `05`.
+
+- **Delete confirm wording (F34):** the whole-workspace delete confirm button now reads `Click again to delete "<workspace-name>"` instead of the generic "Click again to confirm".
+- **Zip export (F35, F36):** the export modal gains an HTML/Zip format toggle (step 2), defaulting to HTML. Zip mode hits a new `POST /export-zip` (`server/export-zip.ts`, the `archiver` package) which copies the selected snapshots' raw JSON files byte-for-byte into a `.zip` plus a generated `manifest.json` (workspace, timestamp, app version, included filenames) — no rendering pass, no viewport-cache data.
+- **Import entry point (F37):** a new `ImportModal.svelte` + toolbar button, plus a page-level drag-and-drop target (`App.svelte`'s `<main>`), reads a dropped/selected zip's `manifest.json` locally via `jszip` (promoted to a real dependency) to resolve the workspace name before any upload.
+- **Collision prompt (F38):** if the resolved workspace name already exists, the client shows Merge / Import as new (editable, auto-incremented `"<name> (n)"`) / Cancel, checked against the already-fetched `GET /snapshots/all` list rather than a dedicated new endpoint.
+- **Server import pipeline (F39, NF55):** a new `server/import-zip.ts` + `POST /import` (multipart, `extract-zip`) implements create/merge modes and the id/timestamp dedup rule (no match → add; same id+timestamp → skip; same id, newer timestamp → overwrite older, guaranteeing at most one file per id). Hardening: a 50MB route-specific body-size cap (`server/app.ts` excludes `/import` from the global 10MB JSON cap so the two limits don't stack), extraction to an isolated temp directory first (`extract-zip`'s own zip-slip protection, confirmed against a hand-crafted `../../` fixture), and a configurable per-entry/total uncompressed-size and entry-count guard as a zip-bomb defense.
+- **Post-import focus + summary (F40):** on success, the client loads the newest added/updated snapshot via the existing `POST /snapshots/load` (switching the active workspace as a side effect) and shows `{added, updated, skipped}` counts instead of a bare success message.
+- **Dev-proxy fix:** `client/vite.config.ts`'s proxy map was missing an `/import` entry, so `npm run dev` never reached the real endpoint — found via manual testing (both drag-drop and the file picker failed identically, pointing at the transport layer). Fixed with a regression test.
+- Full suite: 662 unit tests passing (up from 586), 38 e2e tests passing, `tsc --noEmit`/`svelte-check`/`eslint`/`npm run build` clean.
+
 ## 1.0.8 — 2026-09-07
 
 **Milestone v1.5 — Design Debt: Server Hygiene & Tooling (Sprint 84) complete.** Promotes the remaining LOW-severity findings from the Design Debt Log (`docs/06_nodejs_review.md`) into shipped work: an implicit-global dependency, an untyped MCP cast, unvalidated port env vars, a monolithic route file, and a stale build-tooling major (NF50–NF54 in `03`).
