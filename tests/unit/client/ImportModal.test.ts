@@ -24,6 +24,8 @@ const VALID_MANIFEST = JSON.stringify({
 describe("ImportModal.svelte (F37)", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it("shows the drop-zone / file picker when open with no file yet", () => {
@@ -80,6 +82,95 @@ describe("ImportModal.svelte (F37)", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("loads the newest imported snapshot via POST /snapshots/load, switching the active workspace (F40)", async () => {
+    const fetchSpy = vi.fn().mockImplementation((url: string) => {
+      if (url === "/snapshots/all") {
+        return Promise.resolve({ json: () => Promise.resolve({ ok: true, workspaces: [] }) });
+      }
+      if (url === "/import") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, workspace: "my-course", added: 2, updated: 0, skipped: 0, newestFilename: "b_screen.json" }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, container } = render(ImportModal, { props: { open: true } });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+
+    await vi.waitFor(() => expect(getByText(/2 added, 0 updated, 0 skipped/)).toBeTruthy());
+    await vi.waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/snapshots/load",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ workspace: "my-course", filename: "b_screen.json" }),
+        })
+      )
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("does not call POST /snapshots/load when the import reported no newestFilename (nothing changed)", async () => {
+    const fetchSpy = vi.fn().mockImplementation((url: string) => {
+      if (url === "/snapshots/all") {
+        return Promise.resolve({ json: () => Promise.resolve({ ok: true, workspaces: [] }) });
+      }
+      if (url === "/import") {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true, workspace: "my-course", added: 0, updated: 0, skipped: 2 }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, container } = render(ImportModal, { props: { open: true } });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+
+    await vi.waitFor(() => expect(getByText(/0 added, 0 updated, 2 skipped/)).toBeTruthy());
+    expect(fetchSpy).not.toHaveBeenCalledWith("/snapshots/load", expect.anything());
+
+    vi.unstubAllGlobals();
+  });
+
+  it("auto-closes a short delay after a successful import (F40)", async () => {
+    const fetchSpy = vi.fn().mockImplementation((url: string) => {
+      if (url === "/snapshots/all") {
+        return Promise.resolve({ json: () => Promise.resolve({ ok: true, workspaces: [] }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ ok: true, workspace: "my-course", added: 1, updated: 0, skipped: 0 }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const file = await buildZipFile({ "manifest.json": VALID_MANIFEST });
+    const { getByText, component, container } = render(ImportModal, { props: { open: true } });
+    let closed = false;
+    component.$on("close", () => {
+      closed = true;
+    });
+
+    const dropZone = container.querySelector(".drop-zone")!;
+    await fireEvent.drop(dropZone, { dataTransfer: { files: [file] } });
+
+    await vi.waitFor(() => expect(getByText(/1 added, 0 updated, 0 skipped/)).toBeTruthy());
+    expect(closed).toBe(false);
+    await vi.waitFor(() => expect(closed).toBe(true), { timeout: 3000 });
+  }, 4000);
 
   it("shows the merge/import-as-new/cancel prompt when the resolved workspace name collides (F38)", async () => {
     const fetchSpy = vi.fn().mockResolvedValue({

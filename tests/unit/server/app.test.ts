@@ -3491,7 +3491,7 @@ describe("POST /import", () => {
 
     const res = await app.request("/import", { method: "POST", body: form });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, workspace: "uploaded-ws", added: 1, updated: 0, skipped: 0 });
+    expect(await res.json()).toEqual({ ok: true, workspace: "uploaded-ws", added: 1, updated: 0, skipped: 0, newestFilename: "a_screen.json" });
   });
 
   it("defaults to create mode when mode is omitted", async () => {

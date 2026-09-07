@@ -111,6 +111,12 @@
     importOpen = true;
     void importModalRef?.acceptFile(file);
   }
+
+  // F40 — the imported workspace's snapshot list may now be new to the
+  // history panel too, same refresh handleModalDeleted() already does.
+  function handleImported() {
+    if (historyOpen) historyPanelRef?.fetchSnapshots();
+  }
 </script>
 
 <HistoryPanel bind:this={historyPanelRef} bind:open={historyOpen} on:close={() => { historyOpen = false; }} />
@@ -124,7 +130,12 @@
   on:deleted={handleModalDeleted}
 />
 
-<ImportModal bind:this={importModalRef} open={importOpen} on:close={() => { importOpen = false; }} />
+<ImportModal
+  bind:this={importModalRef}
+  open={importOpen}
+  on:close={() => { importOpen = false; }}
+  on:imported={handleImported}
+/>
 
 <main on:dragover={onPageDragOver} on:drop={onPageDrop}>
   {#if $disconnected}

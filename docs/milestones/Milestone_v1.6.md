@@ -25,7 +25,7 @@
   - *DoD:* re-importing the same zip reports everything as skipped and writes no new files; a destination/incoming pair sharing an id with different timestamps ends with exactly one file for that id afterward, matching the newer timestamp.
 - [x] **NF55 — Import safety: size cap + path-traversal/zip-bomb defense.** `POST /import` enforces a 50MB `bodyLimit` override, validates `manifest.json` before extracting anything else, and rejects any zip entry that would resolve outside the destination directory.
   - *DoD:* a >50MB upload is rejected before extraction; a zip crafted with a `../../` entry is rejected with no file written outside the workspace directory (test using a hand-built malicious archive, not just a well-formed one).
-- [ ] **F40 — Post-import focus + summary.** On success, the client loads the newest imported/updated snapshot (switching active workspace as a side effect of the existing `POST /snapshots/load`) and shows `{added, updated, skipped}` counts instead of a bare success message.
+- [x] **F40 — Post-import focus + summary.** On success, the client loads the newest imported/updated snapshot (switching active workspace as a side effect of the existing `POST /snapshots/load`) and shows `{added, updated, skipped}` counts instead of a bare success message.
   - *DoD:* after import, the app is showing content from the imported workspace with no further user action; the shown summary's counts match the server response exactly.
 
 > **Implementation note:** NF55's zip-bomb/path-traversal tests need a deliberately malicious fixture archive (not reused from any real export) — build it once as a test fixture rather than hand-crafting bytes inline per test.
