@@ -12,6 +12,13 @@ import { createServer } from 'node:http'
 
 const CHANNEL_PORT = Number(process.env.CHANNEL_PORT ?? 3001)
 
+// notifications/claude/channel is a Claude-proprietary extension not in the MCP schema,
+// so the SDK's Server type has no method for it — this describes the one extra method
+// actually needed instead of casting to `any`.
+interface NotifiableServer {
+  notification(notification: { method: string; params: unknown }): Promise<void>
+}
+
 const mcp = new Server(
   { name: 'agent-whiteboard-channel', version: '0.1.0' },
   {
@@ -28,14 +35,15 @@ await mcp.connect(new StdioServerTransport())
 // Tiny HTTP relay: main server POSTs here when the browser fires a user event.
 const relay = createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/user-done') {
-    // notifications/claude/channel is a Claude-proprietary extension not in the MCP schema.
-    ;(mcp as any).notification({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    ;(mcp as unknown as NotifiableServer).notification({
       method: 'notifications/claude/channel',
       params: {
         content: 'User has finished exploring the whiteboard and is ready for you to continue.',
         meta: { event: 'user_done' },
       },
-    }).catch(() => {})
+    }).catch((err) => {
+      console.error('[agent-whiteboard-channel] notification failed:', err)
+    })
 
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true }))
