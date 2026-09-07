@@ -18,11 +18,11 @@ function vegaItem(workspace: string, marker: string, mark: string): ValidatedExp
   };
 }
 
-describe("generateExportHtml — concurrent-call safety (B14)", () => {
+describe("generateExportHtml — concurrent-call safety (B14, isolation hardened NF45/NF46)", () => {
   it("two overlapping calls each produce correct, uncorrupted output", async () => {
     // A is short (finishes first); B is long (still mid-flight when A
     // finishes) — a non-nested overlap, the case that isn't safe unless
-    // calls are serialized.
+    // each call's rendering is genuinely isolated from the other's.
     const itemsA = [vegaItem("wsA", "AAA1", "point")];
     const itemsB = [
       vegaItem("wsB", "BBB1", "point"),
@@ -57,16 +57,70 @@ describe("generateExportHtml — concurrent-call safety (B14)", () => {
 
     await Promise.all([generateExportHtml(itemsA, "offline"), generateExportHtml(itemsB, "offline")]);
 
-    // Without serialization, the shorter call's `finally` can restore global
-    // DOM state to a snapshot that still points at the longer call's
-    // (later-to-be-closed) Window, leaving `global.document` non-undefined
-    // even after both calls have fully settled.
+    // NF46: generateExportHtml() never touches global.document/window at
+    // all — each call's happy-dom Window is passed explicitly to DOMPurify,
+    // so there is no global state left behind to dangle.
     expect(typeof (global as unknown as { document?: unknown }).document).toBe("undefined");
 
     // A subsequent, purely sequential call must still work correctly.
     const resultC = await generateExportHtml([vegaItem("wsC", "CCC1", "point")], "offline");
     expect(resultC.html).toContain("CCC1");
     expect(typeof (global as unknown as { document?: unknown }).document).toBe("undefined");
+  });
+
+  it("overlapping calls sanitizing svg/html payloads via DOMPurify don't leak content into each other (NF46)", async () => {
+    // Both calls exercise the DOMPurify(win) path (the one thing that used
+    // to route through global DOM state) with distinct, identifiable markup
+    // — a non-nested overlap like the vega-lite test above, but covering the
+    // svg/html renderer instead.
+    const itemsA: ValidatedExportItem[] = [
+      {
+        workspace: "wsSvgA",
+        filename: "a.json",
+        record: {
+          frames: [{ type: "svg", payload: "<svg><title>MARKER-SVG-A</title><circle r='5'/></svg>" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+    const itemsB: ValidatedExportItem[] = [
+      {
+        workspace: "wsHtmlB",
+        filename: "b1.json",
+        record: {
+          frames: [{ type: "html", payload: "<p>MARKER-HTML-B1</p>" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+      {
+        workspace: "wsHtmlB",
+        filename: "b2.json",
+        record: {
+          frames: [{ type: "html", payload: "<p>MARKER-HTML-B2</p>" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+      {
+        workspace: "wsHtmlB",
+        filename: "b3.json",
+        record: {
+          frames: [{ type: "html", payload: "<p>MARKER-HTML-B3</p>" }],
+          timestamp: new Date().toISOString(),
+        },
+      },
+    ];
+
+    const [resultA, resultB] = await Promise.all([
+      generateExportHtml(itemsA, "offline"),
+      generateExportHtml(itemsB, "offline"),
+    ]);
+
+    expect(resultA.html).toContain("MARKER-SVG-A");
+    expect(resultA.html).not.toContain("MARKER-HTML-B");
+    for (const marker of ["MARKER-HTML-B1", "MARKER-HTML-B2", "MARKER-HTML-B3"]) {
+      expect(resultB.html).toContain(marker);
+    }
+    expect(resultB.html).not.toContain("MARKER-SVG-A");
   });
 });
 

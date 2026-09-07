@@ -32,49 +32,6 @@ export interface ExportResult {
  */
 export type ExportMode = "cdn" | "offline";
 
-// ── Global DOM setup for happy-dom ────────────────────────────────────────
-
-type GlobalKey =
-  | "document" | "window" | "CSSStyleSheet" | "SVGElement" | "HTMLElement"
-  | "Element" | "DOMParser" | "MutationObserver"
-  | "requestAnimationFrame" | "cancelAnimationFrame";
-
-function saveGlobals(): Map<GlobalKey, unknown> {
-  const keys: GlobalKey[] = [
-    "document", "window", "CSSStyleSheet", "SVGElement", "HTMLElement",
-    "Element", "DOMParser", "MutationObserver",
-    "requestAnimationFrame", "cancelAnimationFrame",
-  ];
-  const saved = new Map<GlobalKey, unknown>();
-  for (const k of keys) saved.set(k, (global as Record<string, unknown>)[k]);
-  return saved;
-}
-
-function setGlobals(win: Window): void {
-  const g = global as Record<string, unknown>;
-  const w = win as unknown as Record<string, unknown>;
-  g["document"] = win.document;
-  g["window"] = win;
-  g["CSSStyleSheet"] = w["CSSStyleSheet"];
-  g["SVGElement"] = w["SVGElement"];
-  g["HTMLElement"] = w["HTMLElement"];
-  g["Element"] = w["Element"];
-  g["DOMParser"] = w["DOMParser"];
-  g["MutationObserver"] = w["MutationObserver"];
-  g["requestAnimationFrame"] = (fn: FrameRequestCallback) => setTimeout(() => fn(Date.now()), 16);
-  g["cancelAnimationFrame"] = clearTimeout;
-}
-
-function restoreGlobals(saved: Map<GlobalKey, unknown>): void {
-  for (const [k, v] of saved) {
-    if (v === undefined) {
-      delete (global as Record<string, unknown>)[k];
-    } else {
-      (global as Record<string, unknown>)[k] = v;
-    }
-  }
-}
-
 // ── Renderers ──────────────────────────────────────────────────────────────
 
 function renderMermaidContainer(payload: string): string {
@@ -523,14 +480,21 @@ function itemsIncludeType(items: ValidatedExportItem[], type: string): boolean {
 
 // ── Public entrypoint ──────────────────────────────────────────────────────
 
-async function generateExportHtmlInner(
+/**
+ * Each call builds its own happy-dom `Window` and passes it explicitly to
+ * `DOMPurify(win)` — sanitization runs entirely against that instance, never
+ * against Node's global object. KaTeX's `renderToString()` and Vega's
+ * `View.toSVG()` (via `renderer: "none"`) need no DOM at all. Because
+ * nothing here reads or writes `global.document`/`window`, concurrent calls
+ * (reachable from both `POST /export-html` and the `export_html` MCP tool,
+ * see bug B14 in `01`) can never stomp on each other's state — no
+ * serialization queue is needed.
+ */
+export async function generateExportHtml(
   items: ValidatedExportItem[],
   mode: ExportMode
 ): Promise<ExportResult> {
   const win = new Window();
-  const savedGlobals = saveGlobals();
-  setGlobals(win);
-
   const purify = DOMPurify(win as unknown as Window & typeof globalThis);
 
   const rendered: RenderedItem[] = [];
@@ -546,7 +510,6 @@ async function generateExportHtmlInner(
       });
     }
   } finally {
-    restoreGlobals(savedGlobals);
     win.close();
   }
 
@@ -558,30 +521,4 @@ async function generateExportHtmlInner(
   const downloadFilename = buildDownloadFilename(uniqueWorkspaces);
 
   return { html, downloadFilename };
-}
-
-// generateExportHtmlInner() patches global DOM state (document, window, ...)
-// for the duration of a call so happy-dom-backed rendering works, then
-// restores it in a `finally`. That save/set/restore isn't reentrant: two
-// overlapping calls (POST /export-html and the export_html MCP tool can run
-// concurrently) each save/restore against whatever the *other* call happened
-// to have in place at that moment, which can leave global DOM state pointing
-// at an already-closed Window once both settle (B14). A simple queue forces
-// calls to run one at a time, in the order they were made, so only one
-// call's globals are ever active at once.
-let exportQueue: Promise<unknown> = Promise.resolve();
-
-export function generateExportHtml(
-  items: ValidatedExportItem[],
-  mode: ExportMode
-): Promise<ExportResult> {
-  const result = exportQueue.then(() => generateExportHtmlInner(items, mode));
-  // Chain the queue off a version that never rejects, so one failed export
-  // doesn't permanently wedge every export queued after it; the caller of
-  // generateExportHtml() still sees the original rejection via `result`.
-  exportQueue = result.then(
-    () => undefined,
-    () => undefined
-  );
-  return result;
 }
