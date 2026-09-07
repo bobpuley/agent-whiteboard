@@ -10,7 +10,7 @@
 - [x] **NF51 — Type the `channel.ts` notification cast.** Define a minimal local interface for the one extra `notification()` method needed and cast the MCP `Server` instance to that instead of `any`; log (don't silently swallow) failures from the `.catch()`.
 - [x] **NF52 — Validate `PORT`/`CHANNEL_PORT` env vars.** Add a shared port-parsing helper used by `server/index.ts` and `server/channel.ts`/`server/app.ts`, failing fast with a clear error before bind/listen/fetch if the value isn't a valid port number.
   - *Acceptance:* starting the server with `PORT=abc` fails fast with a clear error instead of a low-level bind error.
-- [ ] **NF53 — Split `app.ts` into per-feature route modules.** Move route registrations into `server/routes/{render,slideshow,snapshots,export}.ts`, each invoked from `createApp()`, with no behavior change.
+- [x] **NF53 — Split `app.ts` into per-feature route modules.** Move route registrations into `server/routes/{render,slideshow,snapshots,export}.ts`, each invoked from `createApp()`, with no behavior change.
   - *Acceptance:* full REST/MCP test suite stays green; `createApp()`'s behavior is unchanged.
 - [ ] **NF54 — Upgrade `vite`/`vitest` majors.** Bump both to current majors, verify `@sveltejs/vite-plugin-svelte` compatibility, re-run the full client test suite and `client/vite.config.ts`'s proxy setup (including the WS proxy).
   - *Acceptance:* `npm run dev`, `npm test`, and `npm run build` all succeed post-upgrade with no regressions.
