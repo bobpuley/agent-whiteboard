@@ -6,6 +6,10 @@
 
 *v1.0 planning not yet started. Use `/doc-creator-driver:intake` or `/doc-creator-driver:start` to begin.*
 
+**FR31 — Workspace export/import for sharing (2026-09-07)**
+
+- Feature request, as received: (1) the delete-entire-workspace confirmation message should mention the workspace name; (2) add an export-for-sharing option, reusing the current export flow/window, that produces a zip of the workspace folder (selected slides, or the whole workspace as today) instead of an HTML page — the zip must be importable into another whiteboard instance; (3) add the corresponding import functionality, handling corner cases such as an existing workspace with the same name or slides already present — a slide timestamp is likely needed to resolve some of these cases.
+
 **FR29 — Delete/Export modal default workspace selection (2026-07-25)**
 
 - Feature request: when opening the delete/export modals, the current workspace should be selected by default.

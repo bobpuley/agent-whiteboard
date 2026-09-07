@@ -124,3 +124,30 @@
 - Starting the server with `PORT=abc` fails fast with a clear error instead of a low-level bind error.
 - `createApp()`'s route registration is unchanged in behavior after the `routes/*` split — full REST/MCP test suite stays green.
 - `npm run dev`, `npm test`, and `npm run build` all succeed post-upgrade with no regressions in the client test suite.
+
+---
+
+## 8. Workspace Export/Import for Sharing (FR31 in `01`)
+
+> Resolved via a `/grill-me` design interview (2026-09-07) before this table was written — see `02`'s v1.6 section for the risk/assumption writeup behind these decisions.
+
+| ID   | Requirement | Priority |
+|------|-------------|----------|
+| F34  | The whole-workspace delete confirmation button's text includes the workspace name (`Click again to delete "<workspace-name>"`) instead of the current generic "Click again to confirm". | v1.6 |
+| F35  | `DeleteExportModal.svelte`'s export mode gains a format toggle — **HTML** (today's behavior, default) or **Zip (for import)** — shown in step 2; both the "export entire workspace" and "export selected snapshots" actions honor whichever format is currently selected. | v1.6 |
+| F36  | Choosing the Zip format produces a downloadable `.zip` containing the raw snapshot JSON file(s) being exported (whole workspace or the selected subset) plus a `manifest.json` recording the workspace name, export timestamp, the app/schema version, and the list of included snapshot ids/filenames. Per-snapshot viewport state (pan/zoom, stored separately in the server's viewport cache) is deliberately excluded. | v1.6 |
+| F37  | A new **Import** entry point (a button alongside the existing Delete/Export triggers, and a drag-and-drop target) accepts a `.zip` produced by F36 and imports its workspace into the current whiteboard instance. | v1.6 |
+| F38  | If the imported zip's workspace name already exists in the destination, import shows a prompt with three choices: **Merge** into the existing workspace, **Import as new** (an editable name field, pre-filled with an auto-incremented suggestion like `"<name> (2)"`), or **Cancel**. If the name doesn't already exist, the workspace is created and populated directly, no prompt needed. | v1.6 |
+| F39  | During a merge, each incoming snapshot is matched against the destination workspace's existing snapshots by `id`. No match → add as a new file, preserving its original `id`/`timestamp`/filename from the export (required for this matching to stay correct across repeated import/export cycles). Same `id` and same `timestamp` → true duplicate, skip. Same `id`, different `timestamp` → conflicting edit, keep whichever has the newer `timestamp` (overwrite the older file) so at most one file per `id` ever exists in a workspace. Snapshots with no `id` (pre-v0.11 legacy format, see `02`'s J1) are always imported as new — they're never matched against anything. | v1.6 |
+| F40  | After a successful import, the app switches its current/active workspace to the one just imported, and shows a per-outcome summary (counts of newly added / overwritten-as-newer / skipped-as-duplicate snapshots) rather than a bare success message. | v1.6 |
+| NF55 | The import endpoint enforces a 50MB upload size cap, validates `manifest.json` before extracting anything else, and sanitizes every zip entry's path against the destination workspace directory (rejecting any entry that would resolve outside it) before writing it to disk — closing both the zip-slip and unbounded-decompression risks noted in `02`. | v1.6 |
+
+**Acceptance criteria (draft):**
+- Opening the delete confirmation for a whole workspace named `"my-course"` shows a button reading exactly `Click again to delete "my-course"`.
+- The export modal's step 2 shows an HTML/Zip toggle; exporting with Zip selected downloads a `.zip` (not an `.html` file) for both the whole-workspace and selected-snapshot actions.
+- The downloaded zip's `manifest.json` lists the correct workspace name, an ISO-8601 export timestamp, an app/schema version string, and exactly the snapshot ids/filenames that were selected for export; no viewport-cache data is present anywhere in the zip.
+- Importing a zip whose workspace name doesn't exist yet creates that workspace with all its snapshots present, correctly viewable, and becomes the active workspace, with a summary showing all snapshots as newly added.
+- Importing the *same* zip a second time into the same destination reports every snapshot as skipped-as-duplicate and writes no new files.
+- Importing a zip whose workspace name already exists in the destination shows the merge/rename/cancel prompt; choosing "import as new" with an edited name creates a separate workspace under that name with no changes to the original.
+- Given a destination snapshot and an incoming snapshot that share an `id` but have different `timestamp`s, merging keeps only the newer one on disk (verified by re-listing the workspace's snapshots afterward) and the summary reports it as overwritten, not as a fresh addition.
+- A zip crafted with a path-traversal entry (e.g. `../../etc/passthrough`) or exceeding 50MB is rejected by the import endpoint with a clear error, before any file is written outside the destination workspace directory.
