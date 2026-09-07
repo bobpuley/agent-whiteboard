@@ -1,6 +1,6 @@
 # Milestone v1.5 — Design Debt: Server Hygiene & Tooling (Sprint 84)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-09-06 via `/doc-creator-driver:intake` (bug report batch). Promotes the remaining LOW-severity findings logged in the Design Debt Log (`01_input-ideas.md`, from `docs/06_nodejs_review.md`, 2026-07-18) into scheduled work — see `02`/`03`/`04` §7 (v1.5 / NF50–NF54). No user-facing behavior change; pure hardening/maintainability.
 
