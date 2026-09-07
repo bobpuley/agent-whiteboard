@@ -1,3 +1,12 @@
+## 1.0.7 — 2026-09-07
+
+**Milestone v1.4 — Design Debt: Server Hardening & Performance (Sprint 83) complete.** Promotes 2 findings from the Design Debt Log (`docs/06_nodejs_review.md`) into shipped work: an unbounded request body and event-loop-blocking synchronous file I/O on the snapshot/viewport read and delete paths (NF48–NF49 in `03`).
+
+- **Global request body size limit (NF48):** `createApp()` installs `hono/body-limit` (10MB cap) ahead of every route handler — an oversized request body now gets a fast 413 instead of running unbounded input through synchronous mermaid/katex/vega-lite rendering.
+- **Async snapshot read/delete I/O (NF49):** `server/snapshot-reader.ts`'s `listSnapshots`/`listAllSnapshots`/`loadSnapshotContent`/`findSnapshotById`/`findSnapshotByIdInWorkspace`/`readSnapshotIdSafe` and `server/snapshot-writer.ts`'s `validateWorkspaceForDelete`/`deleteSnapshotFiles`/`deleteWorkspace` now use `fs/promises` instead of blocking the event loop for the duration of a directory scan or delete. `saveSnapshot()` is deliberately left synchronous — a single non-loop write, out of scope for this milestone's "loop-heavy read/delete paths" acceptance criteria.
+- **Viewport-cache rewrite (NF49):** `server/viewport-cache.ts` now keeps an in-memory cache (loaded once per snapshots root) with disk writes coalesced on a short debounce instead of a full synchronous read-modify-write per zoom/pan event. `render-core.ts`'s `stepAndBroadcast`/`seekAndBroadcast` (the only callers of `getViewport`) become async accordingly.
+- Full suite: 573 unit tests passing (up from 569), `tsc --noEmit`/`svelte-check`/`eslint` clean.
+
 ## 1.0.6 — 2026-09-07
 
 **Milestone v1.3 — Design Debt: Data Integrity & Export Isolation (Sprint 82) complete.** Promotes 3 findings from the Design Debt Log (`docs/06_nodejs_review.md` + a post-v1.0 dev-mode config finding) into shipped work: a data-validation gap, a concurrency-safety gap, and a dev-mode config hardcoding issue (NF45–NF47 in `03`).

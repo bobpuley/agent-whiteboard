@@ -1,6 +1,6 @@
 # Milestone v1.4 — Design Debt: Server Hardening & Performance (Sprint 83)
 
-**Status:** in progress
+**Status:** released
 
 > Opened 2026-09-06 via `/doc-creator-driver:intake` (bug report batch). Promotes 2 findings logged in the Design Debt Log (`01_input-ideas.md`, from `docs/06_nodejs_review.md`, 2026-07-18) into scheduled work — see `02`/`03`/`04` §6 (v1.4 / NF48–NF49).
 
