@@ -4,6 +4,7 @@ import { resetCanvas, resetLastWorkspace } from "../../../server/session.js";
 import { cancelSlideshow } from "../../../server/slideshow.js";
 import { resetClick, signalDone } from "../../../server/interaction.js";
 import { resetBuilders } from "../../../server/step-frames-builder.js";
+import { resetViewportCacheForTest } from "../../../server/viewport-cache.js";
 
 const WORKSPACE = "test-workspace";
 
@@ -44,6 +45,11 @@ afterEach(() => {
   resetLastWorkspace();
   resetClick();
   resetBuilders();
+  // NF49: several describe blocks below reuse the same fixed snapshots-root
+  // path across sibling tests, deleting/recreating the directory in their
+  // own afterEach — the viewport cache's in-memory state doesn't detect that
+  // on its own (same path in, same path out), so force a reload here too.
+  resetViewportCacheForTest();
 });
 
 // ── POST /render ─────────────────────────────────────────────────────────────
@@ -550,7 +556,7 @@ describe("POST /step", () => {
       const { setViewport } = await import("../../../server/viewport-cache.js");
       // commit_step_frames() in this suite always resolves to the mocked
       // generateSnapshotId() constant — see the vi.mock at the top of this file.
-      setViewport("test-uuid-generated", 1, { scale: 1.6, positionX: 0.05, positionY: -0.1 });
+      await setViewport("test-uuid-generated", 1, { scale: 1.6, positionX: 0.05, positionY: -0.1 });
 
       await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
@@ -1020,7 +1026,7 @@ describe("POST /seek", () => {
       const { setViewport } = await import("../../../server/viewport-cache.js");
       // commit_step_frames() in this suite always resolves to the mocked
       // generateSnapshotId() constant — see the vi.mock at the top of this file.
-      setViewport("test-uuid-generated", 2, { scale: 0.8, positionX: 0.2, positionY: 0.1 });
+      await setViewport("test-uuid-generated", 2, { scale: 0.8, positionX: 0.2, positionY: 0.1 });
 
       await buildStepFrames(THREE_FRAME_SEQUENCE_FRAMES);
 
@@ -2700,7 +2706,7 @@ describe("POST /viewport (v0.19)", () => {
     expect(await res.json()).toEqual({ ok: true });
 
     const { getViewport } = await import("../../../server/viewport-cache.js");
-    expect(getViewport("snap-1", 0)).toEqual({ scale: 1.4, positionX: 0.12, positionY: -0.05 });
+    expect(await getViewport("snap-1", 0)).toEqual({ scale: 1.4, positionX: 0.12, positionY: -0.05 });
   });
 
   it("rejects a missing id", async () => {
@@ -2784,7 +2790,7 @@ describe("POST /viewport (v0.19)", () => {
       body: JSON.stringify({ id: "snap-1", frame: 0, scale: 2, positionX: 0.3, positionY: 0.4 }),
     });
     const { getViewport } = await import("../../../server/viewport-cache.js");
-    expect(getViewport("snap-1", 0)).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
+    expect(await getViewport("snap-1", 0)).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
   });
 
   it("keeps entries for different frames of the same id independent (bug B19/FR21)", async () => {
@@ -2799,8 +2805,8 @@ describe("POST /viewport (v0.19)", () => {
       body: JSON.stringify({ id: "snap-1", frame: 1, scale: 2, positionX: 0.3, positionY: 0.4 }),
     });
     const { getViewport } = await import("../../../server/viewport-cache.js");
-    expect(getViewport("snap-1", 0)).toEqual({ scale: 1, positionX: 0, positionY: 0 });
-    expect(getViewport("snap-1", 1)).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
+    expect(await getViewport("snap-1", 0)).toEqual({ scale: 1, positionX: 0, positionY: 0 });
+    expect(await getViewport("snap-1", 1)).toEqual({ scale: 2, positionX: 0.3, positionY: 0.4 });
   });
 });
 
@@ -2899,7 +2905,7 @@ describe("POST /snapshots/load — id + viewport in broadcast (v0.19)", () => {
   it("includes a cached viewport in the broadcast when one exists for that id", async () => {
     vi.mocked(snapshotReaderModule.loadSnapshotContent).mockReturnValue(SNAPSHOT_WITH_ID);
     const { setViewport } = await import("../../../server/viewport-cache.js");
-    setViewport("loaded-id-1", 0, { scale: 1.7, positionX: 0.2, positionY: -0.1 });
+    await setViewport("loaded-id-1", 0, { scale: 1.7, positionX: 0.2, positionY: -0.1 });
 
     const { broadcastReplace } = await import("../../../server/ws.js");
     const spy = vi.mocked(broadcastReplace);
@@ -2987,9 +2993,9 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     writeSnapshotWithId(SNAP_ROOT, "test-ws", "20260101_000001_screen.json", "id-to-keep");
 
     const { setViewport, getViewport } = await import("../../../server/viewport-cache.js");
-    setViewport("id-to-delete", 0, { scale: 1, positionX: 0, positionY: 0 });
-    setViewport("id-to-delete", 1, { scale: 1.5, positionX: 0.2, positionY: 0.2 });
-    setViewport("id-to-keep", 0, { scale: 2, positionX: 0.1, positionY: 0.1 });
+    await setViewport("id-to-delete", 0, { scale: 1, positionX: 0, positionY: 0 });
+    await setViewport("id-to-delete", 1, { scale: 1.5, positionX: 0.2, positionY: 0.2 });
+    await setViewport("id-to-keep", 0, { scale: 2, positionX: 0.1, positionY: 0.1 });
 
     const res = await app.request("/snapshots/delete-files", {
       method: "POST",
@@ -2998,9 +3004,9 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     });
     expect(res.status).toBe(200);
 
-    expect(getViewport("id-to-delete", 0)).toBeUndefined();
-    expect(getViewport("id-to-delete", 1)).toBeUndefined();
-    expect(getViewport("id-to-keep", 0)).toEqual({ scale: 2, positionX: 0.1, positionY: 0.1 });
+    expect(await getViewport("id-to-delete", 0)).toBeUndefined();
+    expect(await getViewport("id-to-delete", 1)).toBeUndefined();
+    expect(await getViewport("id-to-keep", 0)).toEqual({ scale: 2, positionX: 0.1, positionY: 0.1 });
   });
 
   it("POST /snapshots/delete-workspace removes every viewport-cache entry for that workspace", async () => {
@@ -3009,9 +3015,9 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     writeSnapshotWithId(SNAP_ROOT, "other-ws", "20260101_000000_screen.json", "other-ws-id");
 
     const { setViewport, getViewport } = await import("../../../server/viewport-cache.js");
-    setViewport("ws-id-1", 0, { scale: 1, positionX: 0, positionY: 0 });
-    setViewport("ws-id-2", 0, { scale: 1, positionX: 0, positionY: 0 });
-    setViewport("other-ws-id", 0, { scale: 1, positionX: 0, positionY: 0 });
+    await setViewport("ws-id-1", 0, { scale: 1, positionX: 0, positionY: 0 });
+    await setViewport("ws-id-2", 0, { scale: 1, positionX: 0, positionY: 0 });
+    await setViewport("other-ws-id", 0, { scale: 1, positionX: 0, positionY: 0 });
 
     const res = await app.request("/snapshots/delete-workspace", {
       method: "POST",
@@ -3020,9 +3026,9 @@ describe("viewport-cache cleanup on delete (v0.19)", () => {
     });
     expect(res.status).toBe(200);
 
-    expect(getViewport("ws-id-1", 0)).toBeUndefined();
-    expect(getViewport("ws-id-2", 0)).toBeUndefined();
-    expect(getViewport("other-ws-id", 0)).toEqual({ scale: 1, positionX: 0, positionY: 0 });
+    expect(await getViewport("ws-id-1", 0)).toBeUndefined();
+    expect(await getViewport("ws-id-2", 0)).toBeUndefined();
+    expect(await getViewport("other-ws-id", 0)).toEqual({ scale: 1, positionX: 0, positionY: 0 });
   });
 });
 

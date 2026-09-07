@@ -115,7 +115,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
         400
       );
     }
-    return c.json(stepAndBroadcast(body.direction));
+    return c.json(await stepAndBroadcast(body.direction));
   });
 
   app.post("/seek", async (c) => {
@@ -123,7 +123,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     if (typeof body.frame !== "number" || !Number.isInteger(body.frame)) {
       return c.json({ ok: false, error: "frame must be an integer" }, 400);
     }
-    return c.json(seekAndBroadcast(body.frame));
+    return c.json(await seekAndBroadcast(body.frame));
   });
 
   app.post("/clear", (c) => {
@@ -306,11 +306,11 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     return c.json({ ok: true, ...event });
   });
 
-  app.get("/export", (c) => {
+  app.get("/export", async (c) => {
     const id = c.req.query("id");
     if (id !== undefined && id !== "") {
       const root = getSnapshotsRoot();
-      const payload = findSnapshotById(id, root);
+      const payload = await findSnapshotById(id, root);
       if (payload === null) {
         return c.json({ ok: false, error: "graph not found" }, 404);
       }
@@ -321,7 +321,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
 
   // ── History navigator (v0.4 — Sprint 17) ──────────────────────────────────────
 
-  app.get("/snapshots", (c) => {
+  app.get("/snapshots", async (c) => {
     // Workspace is mandatory, no lastWorkspace fallback — matches MCP's
     // list_snapshots exactly (F3/NF20; same validateWorkspaceInput() both
     // transports already use for render()/slideshow()).
@@ -331,16 +331,16 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     }
     const { workspace } = workspaceResult;
     const root = getSnapshotsRoot();
-    const snapshots = listSnapshots(workspace, root);
+    const snapshots = await listSnapshots(workspace, root);
     return c.json({ ok: true, snapshots });
   });
 
   // ── Sprint 18 — GET /snapshots/all (v0.5) ────────────────────────────────────
 
-  app.get("/snapshots/all", (c) => {
+  app.get("/snapshots/all", async (c) => {
     const workspace = getLastWorkspace();
     const root = getSnapshotsRoot();
-    const workspaces = listAllSnapshots(root, workspace);
+    const workspaces = await listAllSnapshots(root, workspace);
     return c.json({ ok: true, workspaces });
   });
 
@@ -372,7 +372,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       workspace = currentWorkspace;
     }
 
-    const raw = loadSnapshotContent(workspace, root, filename);
+    const raw = await loadSnapshotContent(workspace, root, filename);
     if (raw === null) {
       return c.json({ ok: false, error: `snapshot not found: ${filename}` });
     }
@@ -433,7 +433,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       return c.json({ ok: false, error: "positionY must be a finite number" }, 400);
     }
     const viewport: Viewport = { scale, positionX, positionY };
-    setViewport(body.id, body.frame, viewport);
+    await setViewport(body.id, body.frame, viewport);
     return c.json({ ok: true });
   });
 
@@ -442,7 +442,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   app.post("/snapshots/delete-files", async (c) => {
     const body = await c.req.json<{ workspace?: unknown; filenames?: unknown }>();
     const root = getSnapshotsRoot();
-    const validated = validateWorkspaceForDelete(body.workspace, root);
+    const validated = await validateWorkspaceForDelete(body.workspace, root);
     if (!validated.ok) {
       return c.json({ ok: false, error: validated.error }, validated.status);
     }
@@ -458,7 +458,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       }
     }
 
-    const result = deleteSnapshotFiles(workspace, root, filenames as string[]);
+    const result = await deleteSnapshotFiles(workspace, root, filenames as string[]);
     if (!result.ok) {
       return c.json({ ok: false, error: result.error }, 400);
     }
@@ -468,13 +468,13 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   app.post("/snapshots/delete-workspace", async (c) => {
     const body = await c.req.json<{ workspace?: unknown }>();
     const root = getSnapshotsRoot();
-    const validated = validateWorkspaceForDelete(body.workspace, root);
+    const validated = await validateWorkspaceForDelete(body.workspace, root);
     if (!validated.ok) {
       return c.json({ ok: false, error: validated.error }, validated.status);
     }
     const { workspace } = validated;
 
-    deleteWorkspace(workspace, root);
+    await deleteWorkspace(workspace, root);
     if (getLastWorkspace() === workspace) {
       setLastWorkspace("");
     }
@@ -504,7 +504,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       if (!validated.ok) continue;
       if (typeof id !== "string") continue;
 
-      const record = findSnapshotByIdInWorkspace(validated.workspace, id, root);
+      const record = await findSnapshotByIdInWorkspace(validated.workspace, id, root);
       if (record === null) continue;
 
       validItems.push({ workspace: validated.workspace, id, record });

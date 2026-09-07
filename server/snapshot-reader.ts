@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "fs";
+import { readdir, readFile } from "fs/promises";
 import { join } from "path";
 import type { Frame } from "./presentation.js";
 import { nodeToFrameSchema } from "./validate.js";
@@ -55,12 +55,18 @@ export function badgeType(frames: Frame[]): string {
   return frames.length > 1 ? "step-frames" : frames[0].type;
 }
 
-export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
+/**
+ * NF49: async fs/promises I/O throughout this file — `listSnapshots()` and
+ * `listAllSnapshots()` (below) read every snapshot file in a workspace (or
+ * every workspace), so a synchronous implementation blocks the event loop
+ * for the whole scan; the async equivalents yield between file reads.
+ */
+export async function listSnapshots(workspace: string, dir: string): Promise<SnapshotEntry[]> {
   const workspaceDir = join(dir, workspace);
 
   let files: string[];
   try {
-    files = readdirSync(workspaceDir).filter((f) => f.endsWith("_screen.json"));
+    files = (await readdir(workspaceDir)).filter((f) => f.endsWith("_screen.json"));
   } catch {
     return [];
   }
@@ -69,7 +75,7 @@ export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
 
   for (const filename of files) {
     try {
-      const raw = readFileSync(join(workspaceDir, filename), "utf-8");
+      const raw = await readFile(join(workspaceDir, filename), "utf-8");
       const parsed = JSON.parse(raw) as ParsedSnapshotFile;
 
       if (typeof parsed.timestamp !== "string" || !isFrameArray(parsed.frames)) {
@@ -110,10 +116,10 @@ export function listSnapshots(workspace: string, dir: string): SnapshotEntry[] {
  * Scan every workspace subdirectory under `dir` and return their snapshots grouped.
  * Workspaces with no readable snapshots are omitted from the result.
  */
-export function listAllSnapshots(dir: string, currentWorkspace: string): WorkspaceGroup[] {
+export async function listAllSnapshots(dir: string, currentWorkspace: string): Promise<WorkspaceGroup[]> {
   let entries: string[];
   try {
-    entries = readdirSync(dir, { withFileTypes: true })
+    entries = (await readdir(dir, { withFileTypes: true }))
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
   } catch {
@@ -123,7 +129,7 @@ export function listAllSnapshots(dir: string, currentWorkspace: string): Workspa
   const groups: WorkspaceGroup[] = [];
 
   for (const name of entries) {
-    const snapshots = listSnapshots(name, dir);
+    const snapshots = await listSnapshots(name, dir);
     if (snapshots.length === 0) continue;
     groups.push({ name, isCurrent: name === currentWorkspace, snapshots });
   }
@@ -137,18 +143,18 @@ export function listAllSnapshots(dir: string, currentWorkspace: string): Workspa
  * Read the raw content of a single snapshot file.
  * Returns null if the file does not exist or cannot be read.
  */
-export function loadSnapshotContent(workspace: string, dir: string, filename: string): string | null {
+export async function loadSnapshotContent(workspace: string, dir: string, filename: string): Promise<string | null> {
   try {
-    return readFileSync(join(dir, workspace, filename), "utf-8");
+    return await readFile(join(dir, workspace, filename), "utf-8");
   } catch {
     return null;
   }
 }
 
 /** Best-effort read of a snapshot file's `id` field, for viewport-cache cleanup on delete. */
-export function readSnapshotIdSafe(fullPath: string): string | undefined {
+export async function readSnapshotIdSafe(fullPath: string): Promise<string | undefined> {
   try {
-    const raw = readFileSync(fullPath, "utf-8");
+    const raw = await readFile(fullPath, "utf-8");
     const parsed = JSON.parse(raw) as { id?: unknown };
     return typeof parsed.id === "string" ? parsed.id : undefined;
   } catch {
@@ -163,10 +169,10 @@ export function readSnapshotIdSafe(fullPath: string): string | undefined {
  * mirrors `session.ts`'s `exportCanvas()`: `rawPayload ?? frames[0].payload`.
  * Old snapshots without an `id` field are silently skipped.
  */
-export function findSnapshotById(id: string, dir: string): string | null {
+export async function findSnapshotById(id: string, dir: string): Promise<string | null> {
   let workspaceDirs: string[];
   try {
-    workspaceDirs = readdirSync(dir, { withFileTypes: true })
+    workspaceDirs = (await readdir(dir, { withFileTypes: true }))
       .filter((d) => d.isDirectory())
       .map((d) => d.name);
   } catch {
@@ -177,14 +183,14 @@ export function findSnapshotById(id: string, dir: string): string | null {
     const workspaceDir = join(dir, workspace);
     let files: string[];
     try {
-      files = readdirSync(workspaceDir).filter((f) => f.endsWith("_screen.json"));
+      files = (await readdir(workspaceDir)).filter((f) => f.endsWith("_screen.json"));
     } catch {
       continue;
     }
 
     for (const filename of files) {
       try {
-        const raw = readFileSync(join(workspaceDir, filename), "utf-8");
+        const raw = await readFile(join(workspaceDir, filename), "utf-8");
         const parsed = JSON.parse(raw) as ParsedSnapshotFile;
         if (parsed.id === id && isFrameArray(parsed.frames)) {
           return typeof parsed.rawPayload === "string" ? parsed.rawPayload : parsed.frames[0].payload;
@@ -215,19 +221,19 @@ export interface SnapshotRecord {
  * directory is absent). Old snapshots without an `id` field are silently
  * skipped.
  */
-export function findSnapshotByIdInWorkspace(workspace: string, id: string, dir: string): SnapshotRecord | null {
+export async function findSnapshotByIdInWorkspace(workspace: string, id: string, dir: string): Promise<SnapshotRecord | null> {
   const workspaceDir = join(dir, workspace);
 
   let files: string[];
   try {
-    files = readdirSync(workspaceDir).filter((f) => f.endsWith("_screen.json"));
+    files = (await readdir(workspaceDir)).filter((f) => f.endsWith("_screen.json"));
   } catch {
     return null;
   }
 
   for (const filename of files) {
     try {
-      const raw = readFileSync(join(workspaceDir, filename), "utf-8");
+      const raw = await readFile(join(workspaceDir, filename), "utf-8");
       const parsed = JSON.parse(raw) as ParsedSnapshotFile;
       if (parsed.id === id && typeof parsed.timestamp === "string" && isFrameArray(parsed.frames)) {
         const record: SnapshotRecord = {
