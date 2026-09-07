@@ -42,8 +42,12 @@
 | v1.1      | Modal Default Workspace & Social Preview Refresh                  | 79       | released                             | [Milestone_v1.1.md](./milestones/Milestone_v1.1.md) |
 | v1.1.1    | Vega-Lite CSP `unsafe-eval` Fix (patch)                            | 80       | released                             | [Milestone_v1.1.1.md](./milestones/Milestone_v1.1.1.md) |
 | v1.2      | Design Debt — Client Hardening                                     | 81       | released                             | [Milestone_v1.2.md](./milestones/Milestone_v1.2.md) |
+| v1.3      | Design Debt — Data Integrity & Export Isolation                    | 82       | planned                              | [Milestone_v1.3.md](./milestones/Milestone_v1.3.md) |
+| v1.4      | Design Debt — Server Hardening & Performance                       | 83       | planned                              | [Milestone_v1.4.md](./milestones/Milestone_v1.4.md) |
+| v1.5      | Design Debt — Server Hygiene & Tooling                             | 84       | planned                              | [Milestone_v1.5.md](./milestones/Milestone_v1.5.md) |
 
 > Milestone status: **released** = shipped and tagged in git, **in progress** = current sprint, **planned** = future scope.
-> v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`, `02` §N, `04` §9) — sequenced one slice per milestone; v0.26 must complete before any public release.
+> v0.23–v0.26 implement the architecture consolidation from `desing-analysis/` (FR22 in `01`) — sequenced one slice per milestone; v0.26 must complete before any public release. (Detailed rationale lived in the pre-v1.0 `02`/`04` sections at the time; no `docs/v0.26/` archive exists — `02`/`04` were reset to "not yet defined" for v1.0 planning without archiving first, so this predates the archival convention used from v0.31 onward. Consult `git log -- docs/02_assumptions-and-risks.md docs/04_architecture.md` around the v0.26 release for that history if needed.)
+> **Versioning note:** the milestone label (`vX.Y`, this table's first column) and `package.json`'s published `version` are two independent numbering schemes. `package.json` stays on a `1.0.x` patch train regardless of milestone label (e.g. milestone v1.2 shipped as npm `1.0.5`) — milestone labels do not map onto npm semver majors/minors going forward.
 
 > When scoping a new milestone, skim the **Design Debt Log** in `01_input-ideas.md` for candidates worth promoting into a real task — it's a running list of non-behavioral findings (duplication, test gaps, hardening, style polish) that don't get pulled into planning automatically.

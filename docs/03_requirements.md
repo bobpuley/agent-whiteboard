@@ -77,3 +77,50 @@
 - `snapshotActions.ts`, `registry.ts` changes pass `tsc --noEmit`/`svelte-check` with no new `any`/non-null-assertion suppressions in the touched code.
 - New `scopeCss` parity test and `trapFocus` unit test are added and pass; full unit suite stays green.
 - `App.svelte`'s icon markup is visually unchanged (same rendered icons, sizes, and stroke styling) after the `Icon.svelte` extraction.
+
+---
+
+## 5. Design Debt — Data Integrity & Export Isolation (`docs/06_nodejs_review.md` + post-v1.0 dev-port finding, promoted from the Design Debt Log in `01`)
+
+| ID   | Requirement | Priority |
+|------|-------------|----------|
+| NF45 | `nodeToFrame` read back from a snapshot file on disk is validated with `nodeToFrameSchema.safeParse()` — the same schema already used on the MCP/REST write path — instead of a bare unchecked type assertion, in both `server/app.ts` and `server/snapshot-reader.ts`. A failed parse is treated the same way malformed `frames` already is (field ignored/skipped, load does not throw). | v1.3 |
+| NF46 | The HTML export pipeline (`server/export-html.ts`) no longer relies solely on a promise queue to serialize access to mutated `global.document`/`window` state; rendering runs in an isolated context (e.g. explicit `window`/`document` instances passed to DOMPurify/mermaid, or a worker thread) so a concurrent, unrelated touch of those globals cannot corrupt an in-flight export. | v1.3 |
+| NF47 | `client/vite.config.ts`'s dev-server port and proxy targets read from `CLIENT_PORT` (default `5173`) and `PORT` (default `3000`) env vars instead of being hardcoded, so overriding the server's `PORT` in `npm run dev` doesn't silently break dev-mode API calls. | v1.3 |
+
+**Acceptance criteria (draft):**
+- A snapshot file hand-edited to contain a non-numeric `nodeToFrame` value fails validation gracefully (field dropped, no downstream `NaN`/crash) instead of being cast through unchecked.
+- Two concurrent `POST /export-html` (or `export_html` MCP tool) calls do not corrupt each other's rendered output, verified by a test that exercises overlapping exports.
+- Setting `PORT=4000` before `npm run dev` results in the client dev server's proxy correctly targeting `:4000` with no manual `vite.config.ts` edit.
+
+---
+
+## 6. Design Debt — Server Hardening & Performance (`docs/06_nodejs_review.md`, promoted from the Design Debt Log in `01`)
+
+| ID   | Requirement | Priority |
+|------|-------------|----------|
+| NF48 | `createApp()` installs a global request body size limit (e.g. Hono's `bodyLimit` middleware, 5–10 MB cap) on all JSON-accepting routes, returning HTTP 413 on overflow instead of running an unbounded payload through synchronous rendering. | v1.4 |
+| NF49 | Snapshot and viewport-cache persistence (`server/viewport-cache.ts`, `server/snapshot-reader.ts`, `server/snapshot-writer.ts`) use `fs/promises` async equivalents instead of synchronous `fs` calls on loop-heavy read/delete paths; the viewport cache specifically debounces writes or keeps an in-memory cache flushed periodically instead of a full synchronous rewrite per update. | v1.4 |
+
+**Acceptance criteria (draft):**
+- A request with a body over the configured limit receives a 413 response instead of being parsed and rendered.
+- `listSnapshots`/`listAllSnapshots`/delete operations no longer block the event loop for their duration — verified by a test or manual check that a concurrent WebSocket broadcast isn't delayed by an in-flight large snapshot listing.
+- Rapid successive viewport updates (zoom/pan) no longer trigger a full synchronous file rewrite per event.
+
+---
+
+## 7. Design Debt — Server Hygiene & Tooling (`docs/06_nodejs_review.md`, promoted from the Design Debt Log in `01`)
+
+| ID   | Requirement | Priority |
+|------|-------------|----------|
+| NF50 | `server/snapshot-writer.ts` imports `randomUUID` explicitly from `node:crypto` instead of relying on the bare global `crypto`, matching the explicit-import pattern already used in `server/export-html.ts`. | v1.5 |
+| NF51 | `server/channel.ts`'s MCP `Server` cast defines a minimal local interface for the one extra `notification()` method actually needed, instead of `as any`; the swallowed `.catch(() => {})` logs the failure instead of silently discarding it. | v1.5 |
+| NF52 | `PORT` (`server/index.ts`) and `CHANNEL_PORT` (`server/channel.ts`, `server/app.ts`) are validated (`Number.isInteger(port) && port > 0 && port < 65536`) and fail fast with a clear error message before attempting to bind/listen/fetch. | v1.5 |
+| NF53 | `server/app.ts`'s route registrations are split into per-feature modules (e.g. `routes/render.ts`, `routes/slideshow.ts`, `routes/snapshots.ts`, `routes/export.ts`), each called from `createApp()`, with no behavior change. | v1.5 |
+| NF54 | `vite` and `vitest` are upgraded to current majors, with `@sveltejs/vite-plugin-svelte` compatibility re-verified and the full client test suite re-run green afterward. | v1.5 |
+
+**Acceptance criteria (draft):**
+- `tsc --noEmit` passes with no new `any` in `channel.ts`'s notification call.
+- Starting the server with `PORT=abc` fails fast with a clear error instead of a low-level bind error.
+- `createApp()`'s route registration is unchanged in behavior after the `routes/*` split — full REST/MCP test suite stays green.
+- `npm run dev`, `npm test`, and `npm run build` all succeed post-upgrade with no regressions in the client test suite.

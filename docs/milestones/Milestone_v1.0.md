@@ -16,7 +16,7 @@
 - [x] Add/update tests confirming `Escape` dismisses the popup without selecting an action, and `Space` activates a focused action item.
 
 ### Sprint 77 — package.json publish readiness ✅
-- [x] Add `license: "MIT"`, `description`, `repository`, `homepage`, `bugs`, `author`, `keywords` to `package.json`.
+- [x] Add `license: "MIT"`, `description`, `repository`, `homepage`, `bugs`, `author`, `keywords` to `package.json`. (Superseded `1.0.1` onward: license changed to `PolyForm-Noncommercial-1.0.0`, see `CHANGELOG.md`.)
 - [x] Remove `private: true`; add a `bin` field (`"agent-whiteboard": "bin/cli.js"`); add a `files` allowlist (`["bin", "dist", "README.md", "LICENSE", "CHANGELOG.md"]`).
 - [x] Bump `version` to `1.0.0`.
 - [x] Verify: `npm pack --dry-run` produces a tarball containing only the allowlisted paths; `npm publish --dry-run` succeeds locally.
