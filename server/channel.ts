@@ -9,8 +9,9 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createServer } from 'node:http'
+import { parsePort } from './port.js'
 
-const CHANNEL_PORT = Number(process.env.CHANNEL_PORT ?? 3001)
+const CHANNEL_PORT = parsePort(process.env.CHANNEL_PORT, 3001, 'CHANNEL_PORT')
 
 // notifications/claude/channel is a Claude-proprietary extension not in the MCP schema,
 // so the SDK's Server type has no method for it — this describes the one extra method

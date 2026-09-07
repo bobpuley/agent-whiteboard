@@ -28,6 +28,7 @@ import {
 import { generateExportHtml } from "./export-html.js";
 import type { ExportMode, ValidatedExportItem } from "./export-html.js";
 import { setViewport } from "./viewport-cache.js";
+import { parsePort } from "./port.js";
 import type { Viewport } from "./viewport-cache.js";
 import { getSnapshotsRoot } from "./paths.js";
 
@@ -252,11 +253,11 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   app.post("/user-done", async (c) => {
     signalDone(); // wake any pending wait_done() MCP tool calls
     // Also forward to channel relay if Claude Code was started with the channels flag.
-    const channelPort = Number(process.env.CHANNEL_PORT ?? 3001);
     try {
+      const channelPort = parsePort(process.env.CHANNEL_PORT, 3001, "CHANNEL_PORT");
       await fetch(`http://127.0.0.1:${channelPort}/user-done`, { method: "POST" });
     } catch {
-      // Channel server not running — ignore.
+      // Channel server not running, or CHANNEL_PORT misconfigured — ignore.
     }
     return c.json({ ok: true });
   });
