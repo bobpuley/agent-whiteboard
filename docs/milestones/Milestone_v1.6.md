@@ -1,6 +1,6 @@
 # Milestone v1.6 — Workspace Export/Import for Sharing (Sprints 85–86)
 
-**Status:** in progress
+**Status:** released
 
 > New feature (FR31 in `01_input-ideas.md`, 2026-09-07), not a Design Debt Log promotion. Design resolved via a `/grill-me` interview before this file was written — see `02`'s v1.6 section (assumptions/risks) and `03`'s §8 (requirements F34–F40, NF55) and `04`'s §8 (architecture) for the full decision record. Ships as npm **`1.1.0`** — the first milestone under the new versioning rule (`05`'s versioning note): npm's semver bump follows what actually shipped, not the milestone label.
 
