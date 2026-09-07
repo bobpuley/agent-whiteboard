@@ -343,7 +343,7 @@ describe("MCP tool: step / seek", () => {
       const { setViewport } = await import("../../../server/viewport-cache.js");
       // commit_step_frames() in this suite always resolves to the mocked
       // generateSnapshotId() constant — see the vi.mock at the top of this file.
-      setViewport("test-uuid-generated", 1, { scale: 1.6, positionX: 0.05, positionY: -0.1 });
+      await setViewport("test-uuid-generated", 1, { scale: 1.6, positionX: 0.05, positionY: -0.1 });
 
       await buildStepFrames(server, [{ payload: "graph TD; A-->B" }, { payload: "graph TD; C-->D" }]);
       vi.mocked(broadcastStepFrames).mockClear();
@@ -357,7 +357,7 @@ describe("MCP tool: step / seek", () => {
 
     it("seek() looks up and forwards a per-frame cached viewport", async () => {
       const { setViewport } = await import("../../../server/viewport-cache.js");
-      setViewport("test-uuid-generated", 2, { scale: 0.8, positionX: 0.2, positionY: 0.1 });
+      await setViewport("test-uuid-generated", 2, { scale: 0.8, positionX: 0.2, positionY: 0.1 });
 
       await buildStepFrames(server, [
         { payload: "graph TD; A-->B" },

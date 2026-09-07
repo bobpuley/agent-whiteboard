@@ -15,7 +15,7 @@ describe("listSnapshots — id field (v0.15)", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("includes id when the snapshot file has one", () => {
+  it("includes id when the snapshot file has one", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -23,12 +23,12 @@ describe("listSnapshots — id field (v0.15)", () => {
       JSON.stringify({ id: "uuid-1", timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "mermaid", payload: "graph TD; A" }] })
     );
 
-    const entries = listSnapshots("my-ws", root);
+    const entries = await listSnapshots("my-ws", root);
     expect(entries).toHaveLength(1);
     expect(entries[0].id).toBe("uuid-1");
   });
 
-  it("omits id for pre-v0.11 snapshot files that never had one", () => {
+  it("omits id for pre-v0.11 snapshot files that never had one", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -36,12 +36,12 @@ describe("listSnapshots — id field (v0.15)", () => {
       JSON.stringify({ timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "mermaid", payload: "graph TD; A" }] })
     );
 
-    const entries = listSnapshots("my-ws", root);
+    const entries = await listSnapshots("my-ws", root);
     expect(entries).toHaveLength(1);
     expect(entries[0].id).toBeUndefined();
   });
 
-  it("badges a single-frame snapshot with its own resolved type", () => {
+  it("badges a single-frame snapshot with its own resolved type", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -49,11 +49,11 @@ describe("listSnapshots — id field (v0.15)", () => {
       JSON.stringify({ id: "uuid-1", timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "katex", payload: "x^2" }] })
     );
 
-    const entries = listSnapshots("my-ws", root);
+    const entries = await listSnapshots("my-ws", root);
     expect(entries[0].type).toBe("katex");
   });
 
-  it("badges a multi-frame sequence as step-frames (v0.26 Sprint 43 — derived from frame count, no top-level type field anymore)", () => {
+  it("badges a multi-frame sequence as step-frames (v0.26 Sprint 43 — derived from frame count, no top-level type field anymore)", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -67,11 +67,11 @@ describe("listSnapshots — id field (v0.15)", () => {
       })
     );
 
-    const entries = listSnapshots("my-ws", root);
+    const entries = await listSnapshots("my-ws", root);
     expect(entries[0].type).toBe("step-frames");
   });
 
-  it("reads title from the top-level title field", () => {
+  it("reads title from the top-level title field", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -79,16 +79,44 @@ describe("listSnapshots — id field (v0.15)", () => {
       JSON.stringify({ id: "uuid-1", timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "mermaid", payload: "graph A" }], title: "My Diagram" })
     );
 
-    const entries = listSnapshots("my-ws", root);
+    const entries = await listSnapshots("my-ws", root);
     expect(entries[0].title).toBe("My Diagram");
   });
 
-  it("skips a malformed file with no frames array", () => {
+  it("skips a malformed file with no frames array", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "20260101_000000_screen.json"), JSON.stringify({ timestamp: "2026-01-01T00:00:00.000Z" }));
 
-    expect(listSnapshots("my-ws", root)).toHaveLength(0);
+    expect(await listSnapshots("my-ws", root)).toHaveLength(0);
+  });
+
+  it("yields to the event loop between file reads instead of blocking it for the whole scan (NF49)", async () => {
+    const dir = join(root, "big-ws");
+    mkdirSync(dir, { recursive: true });
+    for (let i = 0; i < 300; i++) {
+      writeFileSync(
+        join(dir, `snap-${String(i).padStart(4, "0")}_screen.json`),
+        JSON.stringify({ timestamp: "2026-01-01T00:00:00.000Z", frames: [{ type: "mermaid", payload: "graph TD; A" }] })
+      );
+    }
+
+    const listPromise = listSnapshots("big-ws", root);
+    let tickResolvedFirst = false;
+    // setImmediate fires on the very next event-loop iteration — if it wins
+    // a race against a 300-file async scan, the scan must be yielding
+    // control between reads rather than running the whole loop synchronously.
+    const tickPromise = new Promise<void>((resolve) => {
+      setImmediate(() => {
+        tickResolvedFirst = true;
+        resolve();
+      });
+    });
+
+    await Promise.race([listPromise, tickPromise]);
+    expect(tickResolvedFirst).toBe(true);
+
+    await listPromise; // drain it so it can't leak into a later test
   });
 });
 
@@ -103,7 +131,7 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns the full record when the id matches within the given workspace", () => {
+  it("returns the full record when the id matches within the given workspace", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -117,7 +145,7 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
       })
     );
 
-    const record = findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
+    const record = await findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
     expect(record).toEqual({
       frames: [{ type: "katex", payload: "x^2" }],
       timestamp: "2026-01-01T00:00:00.000Z",
@@ -125,7 +153,7 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
     });
   });
 
-  it("returns nodeToFrame when present", () => {
+  it("returns nodeToFrame when present", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -139,11 +167,11 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
       })
     );
 
-    const record = findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
+    const record = await findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
     expect(record?.nodeToFrame).toEqual({ A: 0 });
   });
 
-  it("drops a hand-edited non-numeric nodeToFrame value instead of returning it unchecked (NF45)", () => {
+  it("drops a hand-edited non-numeric nodeToFrame value instead of returning it unchecked (NF45)", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -157,11 +185,11 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
       })
     );
 
-    const record = findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
+    const record = await findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
     expect(record?.nodeToFrame).toBeUndefined();
   });
 
-  it("returns null when the id exists in a different workspace (no cross-workspace scan)", () => {
+  it("returns null when the id exists in a different workspace (no cross-workspace scan)", async () => {
     const otherDir = join(root, "other-ws");
     mkdirSync(otherDir, { recursive: true });
     writeFileSync(
@@ -170,16 +198,16 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
     );
     mkdirSync(join(root, "my-ws"), { recursive: true });
 
-    const record = findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
+    const record = await findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
     expect(record).toBeNull();
   });
 
-  it("returns null when the workspace directory does not exist", () => {
-    const record = findSnapshotByIdInWorkspace("does-not-exist", "uuid-1", root);
+  it("returns null when the workspace directory does not exist", async () => {
+    const record = await findSnapshotByIdInWorkspace("does-not-exist", "uuid-1", root);
     expect(record).toBeNull();
   });
 
-  it("returns null when no snapshot in the workspace has a matching id", () => {
+  it("returns null when no snapshot in the workspace has a matching id", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -187,7 +215,7 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
       JSON.stringify({ id: "uuid-other", timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "katex", payload: "x^2" }] })
     );
 
-    const record = findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
+    const record = await findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
     expect(record).toBeNull();
   });
 });
@@ -203,7 +231,7 @@ describe("findSnapshotById — cross-workspace, rawPayload precedence (v0.26 Spr
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns the single frame's payload for a one-shot snapshot", () => {
+  it("returns the single frame's payload for a one-shot snapshot", async () => {
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
     writeFileSync(
@@ -211,10 +239,10 @@ describe("findSnapshotById — cross-workspace, rawPayload precedence (v0.26 Spr
       JSON.stringify({ id: "uuid-1", timestamp: "2026-01-01T00:00:00.000Z", cursor: 0, frames: [{ type: "mermaid", payload: "graph TD; A" }] })
     );
 
-    expect(findSnapshotById("uuid-1", root)).toBe("graph TD; A");
+    expect(await findSnapshotById("uuid-1", root)).toBe("graph TD; A");
   });
 
-  it("returns rawPayload (verbatim step-frames envelope) when present, not the first frame's payload", () => {
+  it("returns rawPayload (verbatim step-frames envelope) when present, not the first frame's payload", async () => {
     const rawPayload = '{"frame_type":"mermaid","frames":[{"payload":"graph A"},{"payload":"graph B"}]}';
     const dir = join(root, "my-ws");
     mkdirSync(dir, { recursive: true });
@@ -229,10 +257,10 @@ describe("findSnapshotById — cross-workspace, rawPayload precedence (v0.26 Spr
       })
     );
 
-    expect(findSnapshotById("uuid-1", root)).toBe(rawPayload);
+    expect(await findSnapshotById("uuid-1", root)).toBe(rawPayload);
   });
 
-  it("returns null when no snapshot anywhere has a matching id", () => {
-    expect(findSnapshotById("nope", root)).toBeNull();
+  it("returns null when no snapshot anywhere has a matching id", async () => {
+    expect(await findSnapshotById("nope", root)).toBeNull();
   });
 });

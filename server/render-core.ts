@@ -172,7 +172,7 @@ export async function applyLoadedSnapshotResult(
   // B19/FR21 — composite id:frameIndex key). Looked up under the snapshot's
   // own id, not a synthesized one — a synthesized id can never have a cache
   // entry anyway.
-  const viewport = snapshotId !== undefined ? getViewport(snapshotId, 0) : undefined;
+  const viewport = snapshotId !== undefined ? await getViewport(snapshotId, 0) : undefined;
   // A concrete id is required on every broadcast (v0.26 Sprint 42) — pre-v0.11
   // snapshots may lack one (J1, `02`), so synthesize a fresh one here.
   const resolvedId = snapshotId ?? generateSnapshotId();
@@ -214,7 +214,7 @@ export type StepSeekResult =
  * verbatim between app.ts and mcp.ts, the one hot-path pair render-core.ts's
  * own NF12 header comment didn't yet cover).
  */
-export function stepAndBroadcast(direction: "next" | "prev"): StepSeekResult {
+export async function stepAndBroadcast(direction: "next" | "prev"): Promise<StepSeekResult> {
   const result = stepCursor(direction);
   if (!result) {
     return { ok: false, error: "no step-frames sequence is loaded" };
@@ -227,7 +227,7 @@ export function stepAndBroadcast(direction: "next" | "prev"): StepSeekResult {
     // restores its own saved viewport independently (v0.26.1, bug B19/FR21) —
     // no longer "must not re-fit" for the whole sequence.
     const resolvedId = id ?? generateSnapshotId();
-    const viewport = getViewport(resolvedId, result.currentFrame);
+    const viewport = await getViewport(resolvedId, result.currentFrame);
     broadcastStepFrames(frames, state.frameType, result.currentFrame, resolvedId, title, state.nodeToFrame, viewport);
   }
   return { ok: true, current_frame: result.currentFrame, total_frames: result.totalFrames };
@@ -237,7 +237,7 @@ export function stepAndBroadcast(direction: "next" | "prev"): StepSeekResult {
  * Jumps the step cursor to an arbitrary frame index and broadcasts it.
  * Shared by POST /seek and the MCP `seek` tool (NF19, see `stepAndBroadcast`).
  */
-export function seekAndBroadcast(frame: number): StepSeekResult {
+export async function seekAndBroadcast(frame: number): Promise<StepSeekResult> {
   const state = getCanvas();
   if (!isStepSequence(state)) {
     return { ok: false, error: "no step-frames sequence is loaded" };
@@ -261,7 +261,7 @@ export function seekAndBroadcast(frame: number): StepSeekResult {
     id: resolvedId,
     // Per-frame restore (v0.26.1, bug B19/FR21) — each frame of a sequence
     // re-fits or restores independently instead of sharing one viewport.
-    viewport: getViewport(resolvedId, frame),
+    viewport: await getViewport(resolvedId, frame),
   });
   return { ok: true, current_frame: frame, total_frames: total };
 }

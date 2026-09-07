@@ -104,9 +104,9 @@ export function createMcpServer(): McpServer {
           .describe('"next" to advance, "prev" to rewind.'),
       }),
     },
-    ({ direction }) => {
+    async ({ direction }) => {
       return {
-        content: [{ type: "text", text: JSON.stringify(stepAndBroadcast(direction)) }],
+        content: [{ type: "text", text: JSON.stringify(await stepAndBroadcast(direction)) }],
       };
     }
   );
@@ -124,9 +124,9 @@ export function createMcpServer(): McpServer {
         frame: z.number().int().nonnegative().describe("Zero-based frame index to jump to."),
       }),
     },
-    ({ frame }) => {
+    async ({ frame }) => {
       return {
-        content: [{ type: "text", text: JSON.stringify(seekAndBroadcast(frame)) }],
+        content: [{ type: "text", text: JSON.stringify(await seekAndBroadcast(frame)) }],
       };
     }
   );
@@ -415,10 +415,10 @@ export function createMcpServer(): McpServer {
         ),
       }),
     },
-    ({ id }) => {
+    async ({ id }) => {
       if (id !== undefined && id !== "") {
         const root = getSnapshotsRoot();
-        const payload = findSnapshotById(id, root);
+        const payload = await findSnapshotById(id, root);
         if (payload === null) {
           return {
             content: [{ type: "text", text: JSON.stringify({ ok: false, error: "graph not found" }) }],
@@ -455,7 +455,7 @@ export function createMcpServer(): McpServer {
           ),
       }),
     },
-    ({ workspace }) => {
+    async ({ workspace }) => {
       const workspaceResult = validateWorkspaceInput(workspace);
       if (!workspaceResult.ok) {
         return {
@@ -463,7 +463,7 @@ export function createMcpServer(): McpServer {
         };
       }
       const root = getSnapshotsRoot();
-      const snapshots = listSnapshots(workspaceResult.workspace, root);
+      const snapshots = await listSnapshots(workspaceResult.workspace, root);
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: true, snapshots }) }],
       };
@@ -517,7 +517,7 @@ export function createMcpServer(): McpServer {
       const root = getSnapshotsRoot();
       const validItems: ValidatedExportItem[] = [];
       for (const id of ids) {
-        const record = findSnapshotByIdInWorkspace(validatedWorkspace, id, root);
+        const record = await findSnapshotByIdInWorkspace(validatedWorkspace, id, root);
         if (record !== null) {
           validItems.push({ workspace: validatedWorkspace, id, record });
         }

@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, unlinkSync, writeFileSync } from "fs";
+import { mkdirSync, writeFileSync } from "fs";
+import { readdir, rm, stat, unlink } from "fs/promises";
 import { join, resolve, sep } from "path";
 import type { Frame } from "./presentation.js";
 import { getSnapshotsRoot } from "./paths.js";
@@ -107,7 +108,7 @@ export type WorkspaceForDeleteResult =
  * e.g. workspace ".", B6) and existence (404 if the workspace was never
  * created or was already deleted).
  */
-export function validateWorkspaceForDelete(workspace: unknown, root: string): WorkspaceForDeleteResult {
+export async function validateWorkspaceForDelete(workspace: unknown, root: string): Promise<WorkspaceForDeleteResult> {
   const validated = validateWorkspaceInput(workspace);
   if (!validated.ok) {
     return { ok: false, error: validated.error, status: 400 };
@@ -116,7 +117,11 @@ export function validateWorkspaceForDelete(workspace: unknown, root: string): Wo
   if (!resolve(dir).startsWith(resolve(root) + sep)) {
     return { ok: false, error: "invalid workspace: path traversal not allowed", status: 400 };
   }
-  if (!existsSync(dir)) {
+  const dirExists = await stat(dir).then(
+    () => true,
+    () => false
+  );
+  if (!dirExists) {
     return { ok: false, error: "workspace not found", status: 404 };
   }
   return { ok: true, workspace: validated.workspace };
@@ -129,7 +134,7 @@ export type DeleteFilesResult = { ok: true; deleted: number } | { ok: false; err
  * viewport-cache entries (C3, `02`). Missing files are silently skipped.
  * Shared by POST /snapshots/delete-files (NF26, v0.28 Sprint 59).
  */
-export function deleteSnapshotFiles(workspace: string, root: string, filenames: string[]): DeleteFilesResult {
+export async function deleteSnapshotFiles(workspace: string, root: string, filenames: string[]): Promise<DeleteFilesResult> {
   for (const f of filenames) {
     if (!isValidSnapshotFilename(f)) {
       return { ok: false, error: `invalid filename: ${f}` };
@@ -141,16 +146,16 @@ export function deleteSnapshotFiles(workspace: string, root: string, filenames: 
   const deletedIds: string[] = [];
   for (const f of filenames) {
     const fullPath = join(workspaceDir, f);
-    const id = readSnapshotIdSafe(fullPath);
+    const id = await readSnapshotIdSafe(fullPath);
     try {
-      unlinkSync(fullPath);
+      await unlink(fullPath);
       deleted++;
       if (id !== undefined) deletedIds.push(id);
     } catch {
       // Missing files are silently skipped.
     }
   }
-  deleteViewports(deletedIds);
+  await deleteViewports(deletedIds);
   return { ok: true, deleted };
 }
 
@@ -159,18 +164,17 @@ export function deleteSnapshotFiles(workspace: string, root: string, filenames: 
  * for every snapshot that lived in it (C3, `02`). Shared by
  * POST /snapshots/delete-workspace (NF26, v0.28 Sprint 59).
  */
-export function deleteWorkspace(workspace: string, root: string): void {
+export async function deleteWorkspace(workspace: string, root: string): Promise<void> {
   const workspaceDir = join(root, workspace);
   let idsToClean: string[] = [];
   try {
-    idsToClean = readdirSync(workspaceDir)
-      .filter((f) => f.endsWith("_screen.json"))
-      .map((f) => readSnapshotIdSafe(join(workspaceDir, f)))
-      .filter((id): id is string => id !== undefined);
+    const filenames = (await readdir(workspaceDir)).filter((f) => f.endsWith("_screen.json"));
+    const ids = await Promise.all(filenames.map((f) => readSnapshotIdSafe(join(workspaceDir, f))));
+    idsToClean = ids.filter((id): id is string => id !== undefined);
   } catch {
     // Workspace directory unreadable/absent — nothing to clean up.
   }
 
-  rmSync(workspaceDir, { recursive: true, force: true });
-  deleteViewports(idsToClean);
+  await rm(workspaceDir, { recursive: true, force: true });
+  await deleteViewports(idsToClean);
 }
