@@ -132,4 +132,79 @@ describe("DeleteExportModal.svelte", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(getByText(/no exportable snapshots/)).toBeTruthy();
   });
+
+  it("does not show the format toggle in delete mode", () => {
+    const { queryByText } = render(DeleteExportModal, {
+      props: { mode: "delete", open: true, workspaces: ONE_WORKSPACE_WITH_ID, loadError: null },
+    });
+    expect(queryByText("Zip (for import)")).toBeNull();
+  });
+
+  it("defaults the export format toggle to HTML and posts to /export-html (F35)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ "Content-Disposition": 'attachment; filename="export.html"' }),
+      blob: async () => new Blob(["<html></html>"], { type: "text/html" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const { getByText } = render(DeleteExportModal, {
+      props: { mode: "export", open: true, workspaces: ONE_WORKSPACE_WITH_ID, loadError: null },
+    });
+
+    expect(getByText("HTML").className).toContain("active");
+    await fireEvent.click(getByText(/Export entire workspace/));
+
+    expect(fetchMock).toHaveBeenCalledWith("/export-html", expect.anything());
+  });
+
+  it("switches to Zip and posts to /export-zip instead, downloading a .zip (F35)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ "Content-Disposition": 'attachment; filename="export.zip"' }),
+      blob: async () => new Blob(["zip-bytes"], { type: "application/zip" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const { getByText } = render(DeleteExportModal, {
+      props: { mode: "export", open: true, workspaces: ONE_WORKSPACE_WITH_ID, loadError: null },
+    });
+
+    await fireEvent.click(getByText("Zip (for import)"));
+    expect(getByText("Zip (for import)").className).toContain("active");
+
+    await fireEvent.click(getByText(/Export entire workspace/));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/export-zip",
+      expect.objectContaining({
+        body: JSON.stringify({ items: [{ workspace: "ws-1", id: "uuid-1" }] }),
+      })
+    );
+  });
+
+  it("respects the selected format for the selected-snapshots export action too (F35)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers({ "Content-Disposition": 'attachment; filename="export.zip"' }),
+      blob: async () => new Blob(["zip-bytes"], { type: "application/zip" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+
+    const { getByText, getByLabelText } = render(DeleteExportModal, {
+      props: { mode: "export", open: true, workspaces: ONE_WORKSPACE_WITH_ID, loadError: null },
+    });
+
+    await fireEvent.click(getByText("Zip (for import)"));
+    await fireEvent.click(getByLabelText("Select snapshot First"));
+    await fireEvent.click(getByText("Export selected"));
+
+    expect(fetchMock).toHaveBeenCalledWith("/export-zip", expect.anything());
+  });
 });
