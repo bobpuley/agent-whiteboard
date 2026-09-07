@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "fs";
 import { join } from "path";
 import type { Frame } from "./presentation.js";
+import { nodeToFrameSchema } from "./validate.js";
 
 export interface WorkspaceGroup {
   name: string;
@@ -236,8 +237,9 @@ export function findSnapshotByIdInWorkspace(workspace: string, id: string, dir: 
         if (typeof parsed.title === "string") {
           record.title = parsed.title;
         }
-        if (parsed.nodeToFrame !== null && typeof parsed.nodeToFrame === "object") {
-          record.nodeToFrame = parsed.nodeToFrame as Record<string, number>;
+        const parsedNodeToFrame = nodeToFrameSchema.safeParse(parsed.nodeToFrame);
+        if (parsedNodeToFrame.success) {
+          record.nodeToFrame = parsedNodeToFrame.data;
         }
         return record;
       }

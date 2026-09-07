@@ -143,6 +143,24 @@ describe("findSnapshotByIdInWorkspace (v0.15)", () => {
     expect(record?.nodeToFrame).toEqual({ A: 0 });
   });
 
+  it("drops a hand-edited non-numeric nodeToFrame value instead of returning it unchecked (NF45)", () => {
+    const dir = join(root, "my-ws");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "20260101_000000_screen.json"),
+      JSON.stringify({
+        id: "uuid-1",
+        timestamp: "2026-01-01T00:00:00.000Z",
+        cursor: 0,
+        frames: [{ type: "mermaid", payload: "graph TD; A" }],
+        nodeToFrame: { A: "not-a-number" },
+      })
+    );
+
+    const record = findSnapshotByIdInWorkspace("my-ws", "uuid-1", root);
+    expect(record?.nodeToFrame).toBeUndefined();
+  });
+
   it("returns null when the id exists in a different workspace (no cross-workspace scan)", () => {
     const otherDir = join(root, "other-ws");
     mkdirSync(otherDir, { recursive: true });
