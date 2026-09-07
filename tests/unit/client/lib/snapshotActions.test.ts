@@ -1,6 +1,12 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { deleteFiles, deleteWorkspace, exportItems } from "../../../../client/src/lib/snapshotActions";
+
+// jsdom doesn't implement Blob URLs (github.com/jsdom/jsdom#1721) — stub the
+// two methods so vi.spyOn() has something to hook onto; real browsers (and
+// the previous happy-dom test environment) implement both natively.
+URL.createObjectURL ??= () => "";
+URL.revokeObjectURL ??= () => {};
 
 describe("snapshotActions", () => {
   afterEach(() => {

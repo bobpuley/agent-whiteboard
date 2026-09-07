@@ -1,7 +1,13 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/svelte";
 import DeleteExportModal from "../../../client/src/DeleteExportModal.svelte";
+
+// jsdom doesn't implement Blob URLs (github.com/jsdom/jsdom#1721) — stub the
+// two methods so vi.spyOn() has something to hook onto; real browsers (and
+// the previous happy-dom test environment) implement both natively.
+URL.createObjectURL ??= () => "";
+URL.revokeObjectURL ??= () => {};
 
 const ONE_WORKSPACE = [
   { name: "ws-1", isCurrent: true, snapshots: [{ filename: "a.json", timestamp: "2026-01-01T00:00:00.000Z", type: "mermaid", title: "First" }] },

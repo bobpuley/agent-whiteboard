@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { createRequire } from "module";
 import { createHash } from "crypto";
-import { Window } from "happy-dom";
+import { JSDOM } from "jsdom";
 import katex from "katex";
 import * as vl from "vega-lite";
 import * as vega from "vega";
@@ -54,7 +54,13 @@ function renderSvgPayload(payload: string, purify: ReturnType<typeof DOMPurify>)
 }
 
 function renderHtmlPayload(payload: string, purify: ReturnType<typeof DOMPurify>): string {
-  return purify.sanitize(payload, { USE_PROFILES: { html: true } });
+  // ADD_TAGS: the "html" profile's default allowlist excludes <style> (unlike
+  // the "svg" profile below, which already allows it) — explicit here since
+  // scopeEmbeddedStyles() (B20) depends on <style> surviving sanitization.
+  // FORCE_BODY: without it, a leading <style> is parsed as implicit <head>
+  // content and silently dropped from DOMPurify's body-only output — ADD_TAGS
+  // alone isn't enough.
+  return purify.sanitize(payload, { USE_PROFILES: { html: true }, ADD_TAGS: ["style"], FORCE_BODY: true });
 }
 
 /**
@@ -481,7 +487,7 @@ function itemsIncludeType(items: ValidatedExportItem[], type: string): boolean {
 // ── Public entrypoint ──────────────────────────────────────────────────────
 
 /**
- * Each call builds its own happy-dom `Window` and passes it explicitly to
+ * Each call builds its own jsdom `Window` and passes it explicitly to
  * `DOMPurify(win)` — sanitization runs entirely against that instance, never
  * against Node's global object. KaTeX's `renderToString()` and Vega's
  * `View.toSVG()` (via `renderer: "none"`) need no DOM at all. Because
@@ -489,12 +495,18 @@ function itemsIncludeType(items: ValidatedExportItem[], type: string): boolean {
  * (reachable from both `POST /export-html` and the `export_html` MCP tool,
  * see bug B14 in `01`) can never stomp on each other's state — no
  * serialization queue is needed.
+ *
+ * jsdom, not happy-dom: DOMPurify 3.4.8+ silently fails to sanitize
+ * descendant nodes against a happy-dom `Window` (upstream incompatibility,
+ * capricorn86/happy-dom#1810) — <script> tags and on* attributes pass
+ * through unstripped. DOMPurify's own maintainers recommend jsdom for
+ * server-side use; confirmed this sanitizes correctly against jsdom.
  */
 export async function generateExportHtml(
   items: ValidatedExportItem[],
   mode: ExportMode
 ): Promise<ExportResult> {
-  const win = new Window();
+  const win = new JSDOM("").window;
   const purify = DOMPurify(win as unknown as Window & typeof globalThis);
 
   const rendered: RenderedItem[] = [];
