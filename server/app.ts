@@ -10,6 +10,7 @@ import { registerRenderRoutes } from "./routes/render.js";
 import { registerSlideshowRoutes } from "./routes/slideshow.js";
 import { registerSnapshotRoutes } from "./routes/snapshots.js";
 import { registerExportRoutes } from "./routes/export.js";
+import { registerImportRoutes } from "./routes/import.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -52,12 +53,21 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     c.header("Content-Security-Policy", CSP_HEADER);
   });
 
-  app.use("*", bodyLimit({ maxSize: MAX_BODY_SIZE_BYTES }));
+  // /import (NF55) enforces its own larger, route-specific limit inside
+  // registerImportRoutes() — excluded here so the two caps don't stack (a
+  // second, stricter bodyLimit later in the chain would otherwise still
+  // reject anything over MAX_BODY_SIZE_BYTES regardless of the route's own
+  // override).
+  app.use("*", async (c, next) => {
+    if (c.req.path === "/import") return next();
+    return bodyLimit({ maxSize: MAX_BODY_SIZE_BYTES })(c, next);
+  });
 
   registerRenderRoutes(app);
   registerSlideshowRoutes(app);
   registerSnapshotRoutes(app);
   registerExportRoutes(app);
+  registerImportRoutes(app);
 
   // ── Static client (v1.0 — NF33) ──────────────────────────────────────────
   // Mounted last so it never shadows an API route above; only serves GET

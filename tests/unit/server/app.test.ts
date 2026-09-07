@@ -6,6 +6,7 @@ import { cancelSlideshow } from "../../../server/slideshow.js";
 import { resetClick, signalDone } from "../../../server/interaction.js";
 import { resetBuilders } from "../../../server/step-frames-builder.js";
 import { resetViewportCacheForTest } from "../../../server/viewport-cache.js";
+import { IMPORT_MAX_BODY_SIZE_BYTES } from "../../../server/routes/import.js";
 
 const WORKSPACE = "test-workspace";
 
@@ -3432,5 +3433,102 @@ describe("POST /export-zip", () => {
     for (const name of Object.keys(zip.files)) {
       expect(name).not.toMatch(/viewport/i);
     }
+  });
+});
+
+// ── v1.6 — Import (F39, NF55) ───────────────────────────────────────────────
+
+describe("POST /import", () => {
+  const SNAP_ROOT = makeSnapRoot("import");
+
+  beforeEach(() => {
+    fsRmSync(SNAP_ROOT, { recursive: true, force: true });
+    process.env.WHITEBOARD_SNAPSHOTS_DIR = SNAP_ROOT;
+  });
+
+  afterEach(() => {
+    delete process.env.WHITEBOARD_SNAPSHOTS_DIR;
+  });
+
+  async function buildZipFile(entries: Record<string, string>, name = "export.zip"): Promise<File> {
+    const zip = new JSZip();
+    for (const [filename, content] of Object.entries(entries)) {
+      zip.file(filename, content);
+    }
+    const buf = await zip.generateAsync({ type: "nodebuffer" });
+    return new File([buf], name, { type: "application/zip" });
+  }
+
+  function manifest(workspace: string, snapshots: string[]): string {
+    return JSON.stringify({
+      formatVersion: 1,
+      workspace,
+      exportedAt: "2026-01-01T00:00:00.000Z",
+      appVersion: "1.1.0",
+      snapshots,
+    });
+  }
+
+  it("returns 400 when no file is attached", async () => {
+    const form = new FormData();
+    form.set("targetWorkspace", "ws");
+    form.set("mode", "create");
+
+    const res = await app.request("/import", { method: "POST", body: form });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/file is required/);
+  });
+
+  it("imports a new workspace end to end via multipart upload (mode: create)", async () => {
+    const file = await buildZipFile({
+      "manifest.json": manifest("uploaded-ws", ["a_screen.json"]),
+      "a_screen.json": JSON.stringify({ id: "id-a", timestamp: "2026-01-01T00:00:00.000Z" }),
+    });
+    const form = new FormData();
+    form.set("file", file);
+    form.set("targetWorkspace", "uploaded-ws");
+    form.set("mode", "create");
+
+    const res = await app.request("/import", { method: "POST", body: form });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, workspace: "uploaded-ws", added: 1, updated: 0, skipped: 0 });
+  });
+
+  it("defaults to create mode when mode is omitted", async () => {
+    const file = await buildZipFile({ "manifest.json": manifest("default-mode-ws", []) });
+    const form = new FormData();
+    form.set("file", file);
+    form.set("targetWorkspace", "default-mode-ws");
+
+    const res = await app.request("/import", { method: "POST", body: form });
+    expect(res.status).toBe(200);
+    expect((await res.json<{ ok: boolean }>()).ok).toBe(true);
+  });
+
+  it("returns 400 with the underlying error when the import pipeline rejects the request", async () => {
+    const file = await buildZipFile({ "a_screen.json": "{}" }); // no manifest.json
+    const form = new FormData();
+    form.set("file", file);
+    form.set("targetWorkspace", "ws");
+    form.set("mode", "create");
+
+    const res = await app.request("/import", { method: "POST", body: form });
+    expect(res.status).toBe(400);
+    expect((await res.json<{ ok: boolean; error: string }>()).error).toMatch(/manifest\.json/);
+  });
+
+  it("rejects an upload over the 50MB NF55 cap before extraction", async () => {
+    // bodyLimit checks the Content-Length header directly for a fast-path
+    // reject — a File whose byte length exceeds the cap triggers that
+    // without actually needing to hold 50MB+ in the test itself twice over.
+    const oversized = new Uint8Array(IMPORT_MAX_BODY_SIZE_BYTES + 1);
+    const file = new File([oversized], "big.zip", { type: "application/zip" });
+    const form = new FormData();
+    form.set("file", file);
+    form.set("targetWorkspace", "ws");
+    form.set("mode", "create");
+
+    const res = await app.request("/import", { method: "POST", body: form });
+    expect(res.status).toBe(413);
   });
 });
