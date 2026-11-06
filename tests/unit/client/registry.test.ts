@@ -11,7 +11,7 @@ const baseCtx = { clickable: false, nodeActions: undefined, nodeToFrameEnabled: 
 describe("rendererRegistry", () => {
   it("has an entry for every canvas type the server can send, plus the placeholder", () => {
     expect(Object.keys(rendererRegistry).sort()).toEqual(
-      ["mermaid", "svg", "html", "katex", "vega-lite", "step-frames-placeholder"].sort(),
+      ["mermaid", "svg", "html", "katex", "vega-lite", "quiz", "step-frames-placeholder"].sort(),
     );
   });
 

@@ -1,7 +1,7 @@
 // WebSocket client — connects to /stream and dispatches render commands.
 
 // Content types the server can send in a "replace" command.
-export type RendererType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
+export type RendererType = "mermaid" | "svg" | "html" | "katex" | "vega-lite" | "quiz";
 
 // Mermaid zoom/pan viewport (v0.19, F19/C3) — positionX/positionY are
 // normalized fractions of the canvas container, not raw pixels.
@@ -46,7 +46,7 @@ export type RenderCommand =
 
 type CommandHandler = (cmd: RenderCommand) => void;
 
-const KNOWN_RENDERER_TYPES: readonly RendererType[] = ["mermaid", "svg", "html", "katex", "vega-lite"];
+const KNOWN_RENDERER_TYPES: readonly RendererType[] = ["mermaid", "svg", "html", "katex", "vega-lite", "quiz"];
 const KNOWN_ACTIONS = ["replace", "clear", "set_node_actions", "set_done_armed"] as const;
 
 // Validates the minimal shape needed to safely cast to RenderCommand — in
