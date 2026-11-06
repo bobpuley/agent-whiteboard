@@ -1073,8 +1073,10 @@ async function runQuizDemo() {
   };
   const r1 = await post("/render", { type: "quiz", payload: JSON.stringify(inline), options: { workspace: WORKSPACE, title: "15a — answer, Submit, read your score" } });
   if (!r1.ok) { console.error(`   ✗ render failed: ${r1.error}`); return; }
-  console.log("   inline quiz on screen — answer and click Submit (the browser scores it); press Enter here when done");
-  await new Promise((res) => process.stdin.once("data", res));
+  console.log("   inline quiz on screen — answer and click Submit (the browser scores it) …");
+  const inlineResult = await fetch(`${BASE}/wait-quiz`, { method: "POST" }).then((r) => r.json());
+  if (inlineResult.type !== "submitted") { console.log(`   ${inlineResult.type ?? inlineResult.error}`); return; }
+  console.log(`   ✓ submitted — browser-computed score: ${inlineResult.score?.earned} / ${inlineResult.score?.possible}`);
 
   const deferred = {
     title: "Deferred quiz",
