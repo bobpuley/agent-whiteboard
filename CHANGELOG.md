@@ -1,3 +1,12 @@
+## 1.1.1 — 2026-11-06
+
+**Milestone v1.7 — Unified Import/Export Button (Sprints 87–88) complete.** Pure UI consolidation; no server, API, MCP or snapshot-format changes.
+
+- **Showcase page (F43):** `mockup/import-export-button-options.html` presented icon/tooltip/menu-label candidates; chosen: opposing-arrows icon, "Import / export" tooltip, "Export…" / "Import…" labels.
+- **Single toolbar button (F41):** the separate Export and Import buttons are replaced by one `ImportExportMenu.svelte` button opening a popover with "Export…" (existing export modal) and "Import…" (existing `ImportModal`). Delete and drag-and-drop `.zip` import are unchanged.
+- **ARIA menu behaviour (F42):** `aria-haspopup`/`aria-expanded`, `role="menuitem"`, arrow/Escape handling, focus return to the button, outside-click and Tab dismissal.
+- **Tests (NF56):** new `ImportExportMenu` unit tests plus updated `App` tests.
+
 ## 1.1.0 — 2026-09-07
 
 **Milestone v1.6 — Workspace Export/Import for Sharing (Sprints 85–86) complete.** Adds a full workspace sharing round-trip: export a workspace as a portable `.zip` and import it into another whiteboard instance (FR31 in `01`, F34–F40/NF55 in `03`). The first milestone to ship real new user-facing functionality since 1.0 — correctly a minor bump per the versioning rule in `05`.
