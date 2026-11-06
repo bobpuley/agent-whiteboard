@@ -1,6 +1,6 @@
 # Milestone v1.8 — Quiz Support (Sprints 89–91)
 
-**Status:** planned
+**Status:** in progress
 
 > New feature (FR33 in `01`, 2026-11-06). Requirements `03` §10, architecture `04` §10.
 
