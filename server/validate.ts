@@ -3,6 +3,7 @@
 import mermaid from "mermaid";
 import { z } from "zod";
 import type { Frame } from "./presentation.js";
+import { validateQuizPayload } from "./quiz.js";
 
 /**
  * Shared shape schemas for `node_actions` (wait_click) and `node_to_frame`
@@ -154,4 +155,20 @@ export async function validateFrame(frame: Pick<Frame, "type" | "payload">): Pro
     }
   }
   return null;
+}
+
+/**
+ * Types accepted by render() — the frame types plus "quiz" (F44). Quiz is
+ * deliberately NOT a FRAME_TYPE: it is a single interactive page, not
+ * something that makes sense inside a slideshow or step-frames sequence
+ * (wait_quiz hands back one submission), so validateFrame() keeps rejecting it.
+ */
+export const RENDER_TYPES = [...FRAME_TYPES, "quiz"] as const;
+
+export type RenderType = typeof RENDER_TYPES[number];
+
+/** The one validator for render() payloads, shared by POST /render and the MCP `render` tool. */
+export async function validateRenderPayload(type: string, payload: string): Promise<string | null> {
+  if (type === "quiz") return validateQuizPayload(payload);
+  return validateFrame({ type, payload });
 }

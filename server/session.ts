@@ -13,7 +13,7 @@
 
 import type { Frame, Presentation } from "./presentation.js";
 
-export type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite";
+export type CanvasType = "mermaid" | "svg" | "html" | "katex" | "vega-lite" | "quiz";
 export type Driver = "static" | "manual" | "timed";
 
 /** Input shape for setStepFrames() — a frame's `type` is optional, defaulting to the sequence's frameType. */
