@@ -42,11 +42,27 @@ describe("App.svelte", () => {
   });
 
   it("import toolbar button opens the import modal (F37)", async () => {
-    const { getByLabelText, queryByLabelText } = render(App);
+    const { getByLabelText, queryByLabelText, getByRole } = render(App);
 
     expect(queryByLabelText("Import workspace")).toBeNull();
-    await fireEvent.click(getByLabelText("Import"));
+    await fireEvent.click(getByLabelText("Import / export"));
+    await fireEvent.click(getByRole("menuitem", { name: /import…/i }));
     expect(getByLabelText("Import workspace")).toBeTruthy();
+  });
+
+  it("toolbar has one import/export button and no separate Export/Import buttons (F41)", () => {
+    const { queryByLabelText, getByLabelText } = render(App);
+    expect(getByLabelText("Import / export")).toBeTruthy();
+    expect(getByLabelText("Delete snapshots")).toBeTruthy();
+    expect(queryByLabelText("Export snapshots")).toBeNull();
+    expect(queryByLabelText("Import")).toBeNull();
+  });
+
+  it("menu Export… entry opens the export modal (F41)", async () => {
+    const { getByLabelText, getByRole } = render(App);
+    await fireEvent.click(getByLabelText("Import / export"));
+    await fireEvent.click(getByRole("menuitem", { name: /export…/i }));
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy());
   });
 
   it("dropping a file anywhere on the page opens the import modal and hands off the file (F37)", async () => {

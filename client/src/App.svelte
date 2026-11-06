@@ -5,6 +5,7 @@
   import DeleteExportModal from "./DeleteExportModal.svelte";
   import ImportModal from "./ImportModal.svelte";
   import Icon from "./lib/Icon.svelte";
+  import ImportExportMenu from "./lib/ImportExportMenu.svelte";
   import { canvasStore } from "./stores/canvasStore.js";
   import { doneStore } from "./stores/doneStore.js";
   import { modalStore } from "./stores/modalStore.js";
@@ -208,12 +209,7 @@
     <button class="panel-icon-btn delete-btn" on:click={() => modalStore.open("delete")} aria-label="Delete snapshots" title="Delete snapshots">
       <Icon name="trash" />
     </button>
-    <button class="panel-icon-btn export-btn" on:click={() => modalStore.open("export")} aria-label="Export snapshots" title="Export snapshots to HTML">
-      <Icon name="export" />
-    </button>
-    <button class="panel-icon-btn import-btn" on:click={() => { importOpen = true; }} aria-label="Import" title="Import workspace from a .zip">
-      <Icon name="import" />
-    </button>
+    <ImportExportMenu on:export={() => modalStore.open("export")} on:import={() => { importOpen = true; }} />
 
     {#if $doneStore.armed || $doneStore.sent || $doneStore.error}
       <div class="panel-sep"></div>
@@ -382,13 +378,6 @@
     background: var(--board-danger-bg);
     border-color: var(--board-danger);
     color: var(--board-danger);
-  }
-
-  .panel-icon-btn.export-btn:hover,
-  .panel-icon-btn.import-btn:hover {
-    background: var(--board-accent-bg);
-    border-color: var(--board-accent);
-    color: var(--board-accent);
   }
 
   .panel-sep {
