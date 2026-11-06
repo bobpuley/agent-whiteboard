@@ -26,6 +26,7 @@ const CHROME_EXEMPT_SELECTORS: Record<string, string[]> = {
   "Mermaid.svelte": [".render-error", ".zoom-hint"],
   "Katex.svelte": [".render-error"],
   "VegaLite.svelte": [".render-error"],
+  "Quiz.svelte": [".render-error"],
   "mermaid/NodeActionPopup.svelte": [
     ".node-action-popup",
     ".popup-item",

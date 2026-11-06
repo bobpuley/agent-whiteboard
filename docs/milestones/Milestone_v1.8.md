@@ -13,9 +13,9 @@
 
 ### Sprint 90 — Quiz renderer & inline evaluation (F44, F46, F48)
 
-- [ ] **F44 — `Quiz.svelte` + registry entry.** Radio/checkbox controls, Submit disabled until all answered.
+- [x] **F44 — `Quiz.svelte` + registry entry.** Radio/checkbox controls, Submit disabled until all answered.
   - *DoD:* renders in light and dark theme; keyboard operable.
-- [ ] **F46 — Inline result view.** On Submit, show per-question result and total score.
+- [x] **F46 — Inline result view.** On Submit, show per-question result and total score.
   - *DoD:* score matches `scoreQuiz`; shown only after Submit.
 
 ### Sprint 91 — Deferred handoff, persistence & export (F48, F49, F50, NF57)

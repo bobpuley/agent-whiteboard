@@ -20,6 +20,7 @@ import Mermaid from "./Mermaid.svelte";
 import Html from "./Html.svelte";
 import Katex from "./Katex.svelte";
 import VegaLite from "./VegaLite.svelte";
+import Quiz from "./Quiz.svelte";
 import StepFramesPlaceholder from "./StepFramesPlaceholder.svelte";
 
 export type RendererKey = RendererType | "step-frames-placeholder";
@@ -93,6 +94,10 @@ export const rendererRegistry: Record<ContentRendererKey, RendererEntry> & {
   },
   "vega-lite": {
     load: () => Promise.resolve(VegaLite as unknown as ComponentType<SvelteComponent>),
+    props: ({ presentation }) => ({ source: presentation.frames[0].payload }),
+  },
+  quiz: {
+    load: () => Promise.resolve(Quiz as unknown as ComponentType<SvelteComponent>),
     props: ({ presentation }) => ({ source: presentation.frames[0].payload }),
   },
   "step-frames-placeholder": {
