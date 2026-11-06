@@ -8,7 +8,7 @@ The original goal was simple: instead of explaining everything through long text
 
 As the project evolved, it became clear that the same interaction model is useful far beyond education. Whether an agent is explaining a software architecture, walking through a network protocol, debugging a problem, presenting data, or documenting a system, the ability to communicate visually is just as valuable. Agent Whiteboard is therefore intentionally domain-agnostic.
 
-Through a set of MCP tools, an AI agent can render Mermaid diagrams, SVG, HTML, LaTeX, and Vega-Lite charts and quizzes, build incremental multi-step explanations, pause until the user is ready to continue, react to clicks on diagrams, and keep a persistent history of snapshots that can later be reloaded or exported.
+Through a set of MCP tools, an AI agent can render Mermaid diagrams, SVG, HTML, LaTeX, Vega-Lite charts, and interactive quizzes, build incremental multi-step explanations, pause until the user is ready to continue, react to clicks on diagrams, and keep a persistent history of snapshots that can later be reloaded or exported.
 
 Unlike collaborative whiteboard applications, Agent Whiteboard is not a canvas that humans edit directly. The whiteboard is controlled by the AI agent, making it a lightweight visual communication surface between the agent and its user. Everything runs locally and integrates naturally with Claude Code through MCP.
 
@@ -23,7 +23,7 @@ The browser also has a History panel for browsing, reloading, deleting, and expo
 ```
 [Claude Code agent]
     │
-    └── 14 MCP tools — render, step-frames builder, slideshow, wait_click/wait_done/wait_quiz, snapshot export (see below)
+    └── 15 MCP tools — render, step-frames builder, slideshow, wait_click/wait_done/wait_quiz, snapshot export (see below)
            │
            ▼
     [Node.js server :3000]  — MCP over SSE + REST fallback + WebSocket
@@ -274,6 +274,14 @@ init_step_frames(frame_type="mermaid", workspace="my-lesson", title="TCP handsha
 
 `wait_done()` isn't coupled to step-frames — it just blocks on the Done button — so this pattern works with any number of frames and needs no dedicated tool support.
 
+Knowledge check — render a quiz and wait for the user to submit it (see [Quizzes](#quizzes)):
+
+```
+render(type="quiz", payload='{"questions":[{"id":"q1","text":"What does SYN start?","kind":"single","options":[{"id":"a","text":"A handshake"},{"id":"b","text":"A teardown"}]}]}', options={ workspace: "my-lesson" })
+→ wait_quiz()   # no answer key in the payload → deferred: the answers come back to the agent
+→ evaluate result.answers, explain the right answers, and score them
+```
+
 ## REST fallback
 
 All tools have HTTP equivalents for scripting or testing without an MCP client:
@@ -340,6 +348,8 @@ Section flags (combinable):
 -u, --popup           Section 10: node_actions popup menu
 -e, --edge            Section 11: edge click demo
 -x, --exportid        Section 12: export by graph ID (v0.11)
+-c, --incremental     Section 13: incremental step-frames creation (init/append/commit)
+-n, --nodetoframe     Section 14: node_to_frame autonomous navigation
 -q, --quiz            Section 15: quiz — inline scoring + deferred wait_quiz (v1.8)
 -a, --all             All sections
 -p, --port <port>     Server port (default: 3000)
