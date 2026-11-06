@@ -151,3 +151,21 @@
 - Importing a zip whose workspace name already exists in the destination shows the merge/rename/cancel prompt; choosing "import as new" with an edited name creates a separate workspace under that name with no changes to the original.
 - Given a destination snapshot and an incoming snapshot that share an `id` but have different `timestamp`s, merging keeps only the newer one on disk (verified by re-listing the workspace's snapshots afterward) and the summary reports it as overwritten, not as a fresh addition.
 - A zip crafted with a path-traversal entry (e.g. `../../etc/passthrough`) or exceeding 50MB is rejected by the import endpoint with a clear error, before any file is written outside the destination workspace directory.
+
+## 9. Unified Import/Export Button (FR32 in `01`)
+
+| ID   | Requirement | Milestone |
+|------|-------------|-----------|
+| F41  | The toolbar's separate Export and Import buttons are replaced by a single button that opens a popover menu with two entries — **Export…** (opens `DeleteExportModal` in export mode, unchanged) and **Import…** (opens `ImportModal`, unchanged). The Delete button stays separate. Drag-and-drop import of a `.zip` is unchanged. | v1.7 |
+| F42  | The popover implements the ARIA menu pattern: the button has `aria-haspopup="menu"` and `aria-expanded`; entries have `role="menuitem"`; Up/Down arrows move focus, Enter/Space activate, Esc closes and returns focus to the button, and clicking outside closes it. | v1.7 |
+| F43  | Before F41 is implemented, a showcase page `mockup/import-export-button-options.html` presents candidate icons (rendered in the real toolbar styling, light and dark theme), candidate tooltip/`aria-label` texts, and the open popover; the user's chosen icon and texts are recorded in this requirement and in `05_dev-plan.md`. | v1.7 |
+| NF56 | Unit tests cover the popover's open/close, keyboard navigation, focus return, outside-click dismissal, and that each entry opens the correct existing modal. | v1.7 |
+
+**Acceptance criteria (draft):**
+- The toolbar shows one import/export button (no separate Export and Import buttons); the Delete button is still present.
+- Clicking it opens a menu with exactly "Export…" and "Import…"; choosing each opens the same modal as before.
+- Using only the keyboard, the menu can be opened, navigated, activated, and dismissed with focus returning to the button.
+- Dropping a `.zip` onto the app still opens the import modal.
+- The icon and tooltip text match the user's selection from the showcase page.
+
+> **F43 decision (2026-11-06):** icon **B** (two opposing vertical arrows), tooltip / `aria-label` **B1** = "Import / export", menu labels **M1** = "Export…" / "Import…".

@@ -46,6 +46,12 @@ export const ICONS = {
     { tag: "polyline", points: "17 8 12 3 7 8" },
     { tag: "line", x1: 12, y1: 3, x2: 12, y2: 15 },
   ],
+  transfer: [
+    { tag: "line", x1: 7, y1: 4, x2: 7, y2: 20 },
+    { tag: "polyline", points: "3 8 7 4 11 8" },
+    { tag: "line", x1: 17, y1: 20, x2: 17, y2: 4 },
+    { tag: "polyline", points: "13 16 17 20 21 16" },
+  ],
 } as const satisfies Record<string, readonly IconShape[]>;
 
 export type IconName = keyof typeof ICONS;

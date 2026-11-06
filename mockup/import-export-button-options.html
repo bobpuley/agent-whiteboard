@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Import/Export button — icon, tooltip &amp; menu options</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f4f5f6; color: #222; padding: 32px 24px 80px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p.intro { font-size: 14px; color: #666; margin: 0 0 28px; max-width: 700px; line-height: 1.5; }
+  code { background: #eee; padding: 1px 5px; border-radius: 3px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(560px, 1fr)); gap: 20px; max-width: 1200px; }
+  .card { background: #fff; border: 1px solid #e2e2e2; border-radius: 8px; padding: 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 2px; }
+  .card .sub { font-size: 12px; color: #999; margin: 0 0 12px; }
+  .themes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stage { border-radius: 6px; padding: 12px; min-height: 230px; border: 1px solid var(--board-border); background: var(--board-canvas-bg); }
+  .stage .tag { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--board-text-muted); margin-bottom: 8px; }
+  .stage.dark { background: #2a2a2a; }
+  .row { display: flex; gap: 14px; align-items: flex-start; justify-content: flex-end; }
+
+  /* Light + dark board-chrome variables (copied from client/src/theme.css) */
+  .light {
+    --board-bg: #ffffff; --board-bg-hover: #f0f0f0; --board-border: #d8d8d8; --board-border-light: #e8e8e8;
+    --board-border-mid: #cccccc; --board-text: #333333; --board-text-secondary: #555555; --board-text-muted: #888888;
+    --board-accent: #2980b9; --board-accent-bg: #e8f4fd; --board-danger: #e74c3c; --board-danger-bg: #fdf0f0;
+    --board-shadow-controls: rgba(0,0,0,.06); --board-shadow-panel: rgba(0,0,0,.08); --board-canvas-bg: #fff;
+  }
+  .dark {
+    --board-bg: #1a1a1a; --board-bg-hover: #333333; --board-border: #3d3d3d; --board-border-light: #333333;
+    --board-border-mid: #4d4d4d; --board-text: #e6e6e6; --board-text-secondary: #b3b3b3; --board-text-muted: #999999;
+    --board-accent: #4ea3d8; --board-accent-bg: #1c3a4a; --board-danger: #e74c3c; --board-danger-bg: #3a2020;
+    --board-shadow-controls: rgba(0,0,0,.4); --board-shadow-panel: rgba(0,0,0,.5); --board-canvas-bg: #d9d9d9;
+  }
+
+  /* Real .controls-panel / .panel-icon-btn styling */
+  .controls-panel { display: flex; flex-direction: column; gap: 8px; padding: 10px 8px; background: var(--board-bg);
+    border: 1px solid var(--board-border); border-radius: 6px; box-shadow: -2px 0 8px var(--board-shadow-controls); }
+  .panel-icon-btn { padding: 6px 8px; border: 1px solid var(--board-border-mid); border-radius: 4px; background: var(--board-bg);
+    cursor: pointer; color: var(--board-text-secondary); transition: background .1s; line-height: 1; display: flex;
+    align-items: center; justify-content: center; min-width: 32px; min-height: 32px; }
+  .panel-icon-btn:hover { background: var(--board-bg-hover); }
+  .panel-icon-btn.delete-btn:hover { background: var(--board-danger-bg); border-color: var(--board-danger); color: var(--board-danger); }
+  .panel-icon-btn.io-btn:hover, .panel-icon-btn.io-btn[aria-expanded="true"] { background: var(--board-accent-bg); border-color: var(--board-accent); color: var(--board-accent); }
+  .panel-sep { height: 1px; background: var(--board-border-light); margin: 0 2px; }
+  .btnwrap { position: relative; }
+
+  /* Popover (open state) */
+  .popover { position: absolute; right: calc(100% + 8px); top: 0; min-width: 150px; background: var(--board-bg);
+    border: 1px solid var(--board-border); border-radius: 6px; box-shadow: 0 4px 12px var(--board-shadow-panel); padding: 4px; z-index: 2; }
+  .menuitem { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: 0; background: none;
+    color: var(--board-text); font-size: 13px; text-align: left; border-radius: 4px; cursor: pointer; }
+  .menuitem:hover, .menuitem.focus { background: var(--board-accent-bg); color: var(--board-accent); }
+  .menuitem.focus { outline: 2px solid var(--board-accent); outline-offset: -2px; }
+
+  .tips { font-size: 12px; color: #444; margin-top: 12px; }
+  .tips b { display: block; margin-bottom: 4px; }
+  .tips ul { margin: 0; padding-left: 18px; }
+  .tips li { margin: 2px 0; }
+  .tips code { font-size: 11px; }
+  .legend { font-size: 11px; color: var(--board-text-muted); margin-top: 8px; max-width: 150px; }
+  footer { max-width: 700px; margin-top: 40px; font-size: 12px; color: #999; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<h1>Unified Import/Export button — options</h1>
+<p class="intro">
+  Sprint 87 / F43. Each card shows one candidate icon in the real toolbar styling
+  (<code>.controls-panel</code> / <code>.panel-icon-btn</code> from <code>App.svelte</code>), in light and dark theme,
+  with the popover open (second entry shows the keyboard-focus ring). Delete stays as its own button. Below each card:
+  three tooltip / <code>aria-label</code> variants. Hover the button to see the accent hover state.
+  <br><br><b>Please reply with:</b> icon letter, tooltip variant (1–3), and the two menu labels
+  (the placeholders below are "Export…" / "Import…" — alternatives are shown in the last section).
+</p>
+
+<div class="grid" id="grid"></div>
+
+<h2 style="font-size:15px;margin:36px 0 8px">Menu label alternatives</h2>
+<ul style="font-size:13px;line-height:1.7;max-width:700px">
+  <li><b>M1</b> — "Export…" / "Import…" (placeholder; ellipsis signals a dialog follows)</li>
+  <li><b>M2</b> — "Export snapshots…" / "Import workspace…"</li>
+  <li><b>M3</b> — "Export to HTML…" / "Import from .zip…"</li>
+</ul>
+
+<footer>Icons: Feather-style outline set, 24×24 viewBox, <code>stroke-width="2.2"</code>, round caps — same as existing glyphs.
+No app code is changed by this page; Sprint 88 stays blocked until a choice is recorded in <code>03</code> (F41/F43) and the milestone file.</footer>
+
+<script>
+  const S = 'width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  const svg = (inner, size) => `<svg ${size ? S.replace(/15/g, size) : S}>${inner}</svg>`;
+
+  const ICONS = {
+    trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
+  };
+
+  const OPTIONS = [
+    { id: 'A', name: 'Up/down arrows', sub: 'transfer / swap — "data goes both ways"',
+      icon: '<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+      tips: ['Import / export', 'Import or export workspace', 'Share workspace (import / export)'] },
+    { id: 'B', name: 'Repeat arrows', sub: 'two opposing arrows (vertical)',
+      icon: '<line x1="7" y1="4" x2="7" y2="20"/><polyline points="3 8 7 4 11 8"/><line x1="17" y1="20" x2="17" y2="4"/><polyline points="13 16 17 20 21 16"/>',
+      tips: ['Import / export', 'Transfer snapshots', 'Import or export snapshots'] },
+    { id: 'C', name: 'Share', sub: 'node-share glyph — emphasises sharing a workspace',
+      icon: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>',
+      tips: ['Share workspace', 'Import / export workspace', 'Share (export or import)'] },
+    { id: 'D', name: 'Package', sub: 'a box you ship around — matches the .zip bundle',
+      icon: '<line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+      tips: ['Workspace bundle: import / export', 'Import or export workspace (.zip)', 'Bundle'] },
+    { id: 'E', name: 'Download-in-tray', sub: 'today\'s export glyph, reused for the combined button',
+      icon: ICONS.download,
+      tips: ['Import / export', 'Export or import', 'Workspace import / export'] },
+    { id: 'F', name: 'Ellipsis (⋯)', sub: 'generic "more actions" menu — no import/export semantics in the icon',
+      icon: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+      tips: ['More actions', 'Import / export', 'Workspace actions'] }
+  ];
+
+  function stage(theme, opt) {
+    return `
+      <div class="stage ${theme}">
+        <div class="tag">${theme} theme</div>
+        <div class="row">
+          <div class="controls-panel">
+            <div class="btnwrap">
+              <button class="panel-icon-btn io-btn" aria-haspopup="menu" aria-expanded="true" aria-label="${opt.tips[0]}" title="${opt.tips[0]}">${svg(opt.icon)}</button>
+              <div class="popover" role="menu">
+                <button class="menuitem" role="menuitem">${svg(ICONS.download, 14)}<span>Export…</span></button>
+                <button class="menuitem focus" role="menuitem">${svg(ICONS.upload, 14)}<span>Import…</span></button>
+              </div>
+            </div>
+            <div class="panel-sep"></div>
+            <button class="panel-icon-btn delete-btn" aria-label="Delete snapshots">${svg(ICONS.trash)}</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('grid').innerHTML = OPTIONS.map(o => `
+    <div class="card">
+      <h2>${o.id} — ${o.name}</h2>
+      <p class="sub">${o.sub}</p>
+      <div class="themes">
+        <div class="light">${stage('light', o)}</div>
+        <div class="dark">${stage('dark', o)}</div>
+      </div>
+      <div class="tips"><b>Tooltip / aria-label variants</b>
+        <ul>${o.tips.map((t, i) => `<li><b style="display:inline">${o.id}${i + 1}</b> — <code>${t}</code></li>`).join('')}</ul>
+      </div>
+    </div>`).join('');
+</script>
+</body>
+</html>
