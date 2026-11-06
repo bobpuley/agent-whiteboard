@@ -1,6 +1,6 @@
 # Milestone v1.7 — Unified Import/Export Button (Sprints 87–88)
 
-**Status:** in progress
+**Status:** released
 
 > New feature (FR32 in `01_input-ideas.md`, 2026-11-06). Design resolved via `/grill-me`; see `03` §9 and `04` §9.
 
