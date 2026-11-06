@@ -88,6 +88,32 @@ describe("Quiz.svelte (F44/F46)", () => {
     expect(container.querySelectorAll("input:checked")).toHaveLength(0);
   });
 
+  it("inline: also reports answers and score to onSubmit (best-effort), without blocking the on-screen score", async () => {
+    const onSubmit = vi.fn().mockRejectedValue(new Error("offline"));
+    const { getByRole, getByLabelText, queryByText } = render(Quiz, { props: { source: inlineQuiz, onSubmit } });
+    await fireEvent.click(getByLabelText("Paris"));
+    await fireEvent.click(getByLabelText("2"));
+    await fireEvent.click(getByLabelText("3"));
+    await fireEvent.click(getByRole("button", { name: "Submit" }));
+    expect(queryByText("Score: 3 / 3")).toBeTruthy();
+    expect(onSubmit).toHaveBeenCalledWith(
+      [{ questionId: "q1", selected: ["a"] }, { questionId: "q2", selected: ["a", "b"] }],
+      expect.objectContaining({ earned: 3, possible: 3 }),
+    );
+  });
+
+  it("starts fresh when the same payload is re-delivered as a new instance (e.g. history reload)", async () => {
+    const first = {};
+    const { getByRole, getByLabelText, component, queryByText } = render(Quiz, { props: { source: inlineQuiz, instance: first } });
+    await fireEvent.click(getByLabelText("Paris"));
+    await fireEvent.click(getByLabelText("2"));
+    await fireEvent.click(getByLabelText("3"));
+    await fireEvent.click(getByRole("button", { name: "Submit" }));
+    expect(queryByText(/Score:/)).toBeTruthy();
+    component.$set({ instance: {} });
+    await waitFor(() => expect(queryByText(/Score:/)).toBeNull());
+  });
+
   it("shows an error for an unparsable payload instead of throwing", () => {
     const { container } = render(Quiz, { props: { source: "not json" } });
     expect(container.querySelector(".render-error")?.textContent).toMatch(/Invalid quiz/);
@@ -96,6 +122,9 @@ describe("Quiz.svelte (F44/F46)", () => {
   it("is registered and maps the first frame's payload to source", async () => {
     const Component = await rendererRegistry.quiz.load();
     expect(Component).toBe(Quiz);
-    expect(rendererRegistry.quiz.props({ clickable: false, nodeActions: undefined, nodeToFrameEnabled: false, currentFrame: 0, presentation: { cursor: 0, frames: [{ type: "quiz", payload: deferredQuiz }] } })).toEqual({ source: deferredQuiz });
+    const presentation = { cursor: 0, frames: [{ type: "quiz", payload: deferredQuiz }] };
+    const props = rendererRegistry.quiz.props({ clickable: false, nodeActions: undefined, nodeToFrameEnabled: false, currentFrame: 0, presentation });
+    expect(props).toMatchObject({ source: deferredQuiz, instance: presentation });
+    expect(typeof props.onSubmit).toBe("function");
   });
 });

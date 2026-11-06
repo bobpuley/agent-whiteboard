@@ -130,6 +130,9 @@ async function renderByType(
       return renderSvgPayload(payload, purify);
     case "html":
       return renderHtmlPayload(payload, purify);
+    case "quiz":
+      // Quizzes are interactive and carry no static representation (F50) — export notes it instead of failing.
+      return '<p class="export-note">This item is an interactive quiz and is not included in HTML exports.</p>';
     default:
       throw new Error(`unsupported render type: ${type}`);
   }
@@ -325,6 +328,7 @@ const LAYOUT_CSS = `
   .type-badge { background: #e8f4fd; color: #2980b9; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
   .frame-section { margin-top: 16px; padding: 12px 16px; border: 1px solid #f0f0f0; border-radius: 4px; background: #fafafa; overflow-x: auto; }
   .frame-heading { font-size: 12px; color: #777; margin: 0 0 10px; font-style: italic; }
+  .export-note { color: #555; background: #f4f5f6; padding: 10px 14px; border-radius: 4px; border-left: 3px solid #aaa; font-size: 13px; margin: 0; }
   .export-error { color: #c0392b; background: #fdf0f0; padding: 10px 14px; border-radius: 4px; border-left: 3px solid #e74c3c; font-size: 13px; margin: 0; }
   svg { max-width: 100%; height: auto; }
   table { max-width: 100%; border-collapse: collapse; }

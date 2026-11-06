@@ -20,11 +20,11 @@
 
 ### Sprint 91 — Deferred handoff, persistence & export (F48, F49, F50, NF57)
 
-- [ ] **F48/F49 — `/quiz/submit`, `/wait-quiz`, MCP `wait_quiz`.** Payload-carrying long-poll with 10-minute timeout and submit-before-wait retention; in-quiz "Sent ✓"/retry state.
+- [x] **F48/F49 — `/quiz/submit`, `/wait-quiz`, MCP `wait_quiz`.** Payload-carrying long-poll with 10-minute timeout and submit-before-wait retention; in-quiz "Sent ✓"/retry state.
   - *DoD:* agent receives questions and answers; timeout and late-wait cases tested; MCP/REST parity.
-- [ ] **F50 — History reload & export behaviour.** Quiz reloads as fresh; HTML export skips with note.
+- [x] **F50 — History reload & export behaviour.** Quiz reloads as fresh; HTML export skips with note.
   - *DoD:* no answers in snapshot; export does not crash on a workspace containing a quiz.
-- [ ] **Docs.** README tool/endpoint tables and showcase entry for `quiz`/`wait_quiz`.
+- [x] **Docs.** README tool/endpoint tables and showcase entry for `quiz`/`wait_quiz`.
 
 ---
 

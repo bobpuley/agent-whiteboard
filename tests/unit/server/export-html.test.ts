@@ -507,3 +507,17 @@ describe("generateExportHtml — CDN mode (v0.32, FR26 in `01`, F21-F23 in `03`)
     expect(result.html).not.toContain("cdn.jsdelivr.net");
   });
 });
+
+describe("generateExportHtml — quiz snapshots (v1.8, F50)", () => {
+  it("replaces a quiz with an explanatory note and never leaks its questions or answer key", async () => {
+    const quiz = JSON.stringify({ questions: [{ id: "q1", text: "SECRET-QUESTION", kind: "single", options: [{ id: "a", text: "SECRET-KEY", correct: true }, { id: "b", text: "x" }] }] });
+    const items: ValidatedExportItem[] = [
+      { workspace: "w", filename: "q_screen.json", record: { frames: [{ type: "quiz", payload: quiz }], timestamp: new Date().toISOString() } },
+    ];
+    const result = await generateExportHtml(items, "cdn");
+    const html = JSON.stringify(result);
+    expect(html).toContain("interactive quiz");
+    expect(html).not.toContain("SECRET-QUESTION");
+    expect(html).not.toContain("SECRET-KEY");
+  });
+});

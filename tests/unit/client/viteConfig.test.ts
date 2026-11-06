@@ -39,6 +39,15 @@ describe("client/vite.config.ts — CLIENT_PORT/PORT env overrides (NF47)", () =
     expect(config.server?.proxy?.["/import"]).toBe("http://localhost:3000");
   });
 
+  it("proxies /quiz to the server (v1.8, F48) so the in-quiz Submit works under npm run dev", async () => {
+    delete process.env.CLIENT_PORT;
+    delete process.env.PORT;
+
+    const { default: config } = await import("../../../client/vite.config.ts");
+
+    expect(config.server?.proxy?.["/quiz"]).toBe("http://localhost:3000");
+  });
+
   it("uses PORT for every HTTP and WS proxy target when set", async () => {
     process.env.PORT = "4000";
     delete process.env.CLIENT_PORT;
