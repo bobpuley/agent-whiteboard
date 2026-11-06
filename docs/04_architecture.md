@@ -102,3 +102,11 @@ No architecture impact. F29 is a localized change to `resetState()` in `client/s
 - **No architecture impact on server, API, MCP tools, or data formats** — client-only UI change.
 - **Client:** new small component (e.g. `client/src/lib/ImportExportMenu.svelte`) rendered by `App.svelte` in place of the two buttons at the Export/Import positions. It owns popover open state and ARIA menu behaviour; entries call the existing `modalStore.open("export")` and the existing `importOpen = true` path (passed as callback/event), so `DeleteExportModal` and `ImportModal` are untouched. New icon (if not already in `lib/Icon.svelte`) is added there, following the existing icon-registry convention. Reuse the existing focus/outside-click helpers (`trapFocus` etc.) where they fit rather than adding new ones.
 - **Showcase (F43):** static `mockup/import-export-button-options.html`, same convention as `mockup/history-icon-options.html`; not shipped (`files` allowlist already excludes `mockup/`).
+
+## 10. Quiz Support (F44–F50, NF57 in `03`)
+
+- **Render type:** `quiz` added to the shared render-type list and `rendererRegistry` (`client/src/renderers/registry.ts`) with a new `Quiz.svelte`; payload validated server-side by a new `server/quiz.ts` (mode derivation, unique ids, weight sums) called from the same validation path as other types, so MCP and REST reject identically.
+- **Scoring:** pure function `scoreQuiz(quiz, answers)` in a shared module imported by the client (inline) and by tests; the server never scores in deferred mode.
+- **Submit/wait handoff:** `POST /quiz/submit` stores the latest submission in server memory and resolves any pending `POST /wait-quiz` long-poll; modeled on the existing `wait_done`/`user-done` state, but carrying a payload. New MCP tool `wait_quiz` wraps `/wait-quiz`. 10-minute timeout; a submission with no waiter is retained until consumed or the canvas is replaced. `server/channel.ts` is unchanged.
+- **Persistence/export:** snapshot writer stores the questions payload as-is; answers are never persisted. `export-html.ts` filters out `quiz` snapshots with a note; zip export/import are format-agnostic and need no change.
+- **No change** to WebSocket protocol beyond the new render type, or to the Done button / `doneStore` (the in-quiz Submit reuses its visual sent/error pattern only).

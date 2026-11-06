@@ -169,3 +169,22 @@
 - The icon and tooltip text match the user's selection from the showcase page.
 
 > **F43 decision (2026-11-06):** icon **B** (two opposing vertical arrows), tooltip / `aria-label` **B1** = "Import / export", menu labels **M1** = "Export…" / "Import…".
+
+## 10. Quiz Support (FR33 in `01`)
+
+| ID   | Requirement | Milestone |
+|------|-------------|-----------|
+| F44  | New render type `quiz`. `render({type:"quiz", payload, workspace})` takes a JSON payload `{ title?, questions: [{ id, text, kind: "single"\|"multiple", options: [{ id, text, correct?, weight? }], scoring?: "all_or_nothing"\|"partial", points? }] }`. A new `QuizRenderer` draws radio (single) or checkbox (multiple) controls plus an in-quiz **Submit** button, disabled until every question is answered. Invalid payloads are rejected with the same validation-error shape as other types, over both MCP and REST. | v1.8 |
+| F45  | **Mode is derived from the answer key.** If every question has at least one option with `correct: true`, the quiz is *inline*; if none do, it is *deferred*; a mix is rejected. | v1.8 |
+| F46  | **Inline evaluation.** On Submit the client scores the quiz locally and shows per-question correct/incorrect plus the total score (earned / possible points; `points` defaults to 1). The score is shown only at the end, not per question. | v1.8 |
+| F47  | **Scoring modes** (per question, default `all_or_nothing`). `all_or_nothing`: full points only if the selected set exactly equals the correct set, else 0. `partial` (multiple-choice only): each correct option carries a `weight` fraction of the question's points (weights of correct options must sum to 1, validated); score = sum of weights of correct options selected; wrong selections earn nothing and do not subtract (floor 0). | v1.8 |
+| F48  | **Deferred evaluation.** On Submit the client sends the answers to a new `POST /quiz/submit`; the in-quiz button shows "Sent ✓" (reusing the Done button's sent/error/retry pattern). No score is shown by the client. | v1.8 |
+| F49  | New MCP tool `wait_quiz` and REST twin `POST /wait-quiz`: long-poll until the user submits, returning `{ ok: true, questions, answers: [{ questionId, selected: [optionId] }] }` (plus `score` for an inline quiz). Times out after 10 minutes like `wait_done`. A submission made before `wait_quiz` is called is retained and returned. No channel push. | v1.8 |
+| F50  | Quizzes are snapshotted (questions payload only, no answers/score) and reload from history as a fresh unanswered quiz. HTML export and zip export treat `quiz` snapshots as unsupported: HTML export skips them with a visible note; zip export/import carry the raw JSON unchanged. | v1.8 |
+| NF57 | Unit tests cover payload validation (mode derivation, mixed-key rejection, weight sums), both scoring modes, Submit enablement, the submit→`wait_quiz` handoff (including submit-before-wait and timeout), and MCP/REST parity. | v1.8 |
+
+**Acceptance criteria (draft):**
+- An agent can render a single/multiple-choice quiz and the user can answer and Submit it.
+- Inline quiz: Submit reveals per-question results and a total score; the agent is not involved.
+- Deferred quiz: Submit sends answers; `wait_quiz` returns questions and answers to the agent, which evaluates them.
+- Invalid payloads (mixed answer keys, bad weights, duplicate ids) are rejected clearly.

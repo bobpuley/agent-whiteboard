@@ -76,3 +76,13 @@
 > ⚠️ ASSUMPTION: Folding two toolbar buttons into one popover costs one extra click for each of export and import. Accepted as a deliberate trade for a shorter toolbar; revisit if user feedback says import/export became harder to find.
 - **Risk — discoverability of the drag-and-drop import path.** Removing the standalone Import button leaves the button-less drop target as the only "direct" import path. Mitigation: the popover's "Import…" entry remains one click away and the drop target is unchanged.
 - **Risk — a single generic icon is ambiguous** (users may not guess it covers both directions). Mitigation: resolved by the showcase (F44) — tooltip text and icon are chosen together, and menu entries carry explicit labels.
+
+## v1.8 — Quiz Support
+
+> New feature (FR33 in `01`, 2026-11-06). Decisions resolved via a Q&A interview.
+
+> ⚠️ ASSUMPTION: Inline quizzes ship the answer key inside the render payload, so it is visible to anyone who opens browser devtools or the snapshot file. Accepted — this is a self-review quiz on a single-user local tool, not an assessment. Agents that need an unseen key must use deferred mode.
+> ⚠️ ASSUMPTION: `wait_quiz` also works on an inline quiz (returns the answers plus the client-computed score); nothing in the first version requires this, it falls out of reusing one submit path.
+- **Risk — long-poll is the only return path.** The agent must call `wait_quiz` after rendering; a user who submits while no wait is armed gets a "Sent" confirmation but the answers are held server-side only until the next `wait_quiz` (or until the quiz is replaced). Mitigation: the submit handler stores the latest submission so a late `wait_quiz` still returns it. Optional Claude Code channel push (`server/channel.ts`) is explicitly out of scope.
+- **Risk — new render type touches every type-switch.** Registry, validation, snapshot writer, MCP/REST parity, and HTML export all enumerate render types. Mitigation: export explicitly unsupported (skipped with a clear message) instead of half-rendered.
+- Snapshot format: a quiz snapshot stores the questions payload only; the user's answers/score are never persisted, so reloading from history shows a fresh unanswered quiz.
