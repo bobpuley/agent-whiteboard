@@ -92,7 +92,7 @@
     return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, "");
   }
 
-  $: resultFor = (qid: string) => score?.results.find((r) => r.questionId === qid);
+  $: resultById = new Map((score?.results ?? []).map((r) => [r.questionId, r]));
 </script>
 
 <div class="quiz-renderer">
@@ -103,7 +103,7 @@
       {#if quiz.title}<h2 class="quiz-title">{quiz.title}</h2>{/if}
 
       {#each quiz.questions as q, qi (q.id)}
-        {@const result = resultFor(q.id)}
+        {@const result = resultById.get(q.id)}
         <fieldset class="question" class:right={result?.correct} class:wrong={result && !result.correct} disabled={locked}>
           <legend>
             <span class="qnum">{qi + 1}.</span> {q.text}
