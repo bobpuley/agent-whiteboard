@@ -625,3 +625,30 @@ describe("MCP tool: export", () => {
     expect(result).toEqual({ ok: true, data: "graph TD; A-->B" });
   });
 });
+
+describe("MCP tool: render — quiz (v1.8, F44/F45)", () => {
+  const server = createMcpServer();
+  const quiz = JSON.stringify({
+    questions: [{ id: "q1", text: "Pick", kind: "multiple", options: [{ id: "a", text: "A" }, { id: "b", text: "B" }] }],
+  });
+
+  afterEach(() => {
+    resetCanvas();
+    resetLastWorkspace();
+    vi.mocked(broadcastReplace).mockClear();
+  });
+
+  it("renders a valid deferred quiz and broadcasts it", async () => {
+    const result = await callTool(server, "render", { type: "quiz", payload: quiz, options: { workspace: "ws1" } });
+    expect(result).toMatchObject({ ok: true });
+    expect(getCanvas()).toMatchObject({ presentation: { frames: [{ type: "quiz", payload: quiz }] } });
+    expect(broadcastReplace).toHaveBeenCalledWith(expect.objectContaining({ type: "quiz", payload: quiz }));
+  });
+
+  it("rejects an invalid quiz with the same error text as REST", async () => {
+    const result = (await callTool(server, "render", { type: "quiz", payload: "nope", options: { workspace: "ws1" } })) as { ok: boolean; error: string };
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("invalid quiz payload: payload must be valid JSON");
+    expect(broadcastReplace).not.toHaveBeenCalled();
+  });
+});

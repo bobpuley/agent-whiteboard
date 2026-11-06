@@ -5,7 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clearCanvas, exportCanvas } from "./session.js";
 import { broadcast } from "./ws.js";
-import { nodeActionsSchema, nodeToFrameSchema, validateFrame } from "./validate.js";
+import { nodeActionsSchema, nodeToFrameSchema, validateFrame, validateRenderPayload } from "./validate.js";
 import { getSnapshotsRoot } from "./paths.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
@@ -40,19 +40,20 @@ export function createMcpServer(): McpServer {
         '  • "html"        — HTML fragment, styled with Bootstrap 5 (CSS-only build, always available — no need to link or import it). Use its component classes instead of hand-authored CSS: "card"/"card-body"/"card-title" for panels, "alert alert-info"/"alert-warning"/"alert-danger" for callouts, "badge bg-primary"/"bg-success" for tags, "table table-striped"/"table-bordered" for data tables. No Bootstrap JS is loaded — components that depend on it (dropdowns, modals, tooltips, popovers, collapses, carousels, offcanvas) render their static markup but are not interactive, so avoid them. Example: render({ type: "html", payload: "<div class="card"><div class="card-body"><h5 class="card-title">Hello</h5><span class="badge bg-success">Done</span></div></div>" })\n' +
         '  • "katex"       — LaTeX string, rendered in display mode. Example: render({ type: "katex", payload: "E = mc^2" })\n' +
         '  • "vega-lite"   — Vega-Lite JSON spec (must be valid JSON). Example: render({ type: "vega-lite", payload: "{"$schema":"...","mark":"bar",...}" })\n' +
+        '  • "quiz"        — JSON quiz: { title?, questions: [{ id, text, kind: "single"|"multiple", options: [{ id, text, correct?, weight? }], scoring?: "all_or_nothing"|"partial", points? }] }. Either every question marks its correct option(s) (inline: the browser scores it) or none does (deferred). "partial" scoring (multiple-choice only) needs a weight on each correct option, summing to 1. Valid in render() only — not in slideshow() or step-frames.\n' +
         "render() is single-frame only. For a step-through sequence (multiple frames navigable via step()/seek()), use init_step_frames()/append_frame()/commit_step_frames() instead (see below).\n" +
         'options: { "workspace": "my-course", "title": "My diagram" }. workspace is REQUIRED — snapshot routing fails without it. title is optional.\n' +
         'options.workspace: workspace name for snapshot routing. Must be alphanumeric with dashes, underscores, dots, or spaces — no path separators. No env var fallback: always pass explicitly.\n' +
         'Example: render({ type: "mermaid", payload: "graph TD; A --> B", options: { workspace: "course_2", title: "System flow" } })',
       inputSchema: z.object({
         type: z
-          .enum(["mermaid", "svg", "html", "katex", "vega-lite"])
+          .enum(["mermaid", "svg", "html", "katex", "vega-lite", "quiz"])
           .describe("Content type."),
         payload: z
           .string()
           .describe(
             "The content source. For mermaid: must begin with a valid diagram keyword. " +
-              "For vega-lite: must be valid JSON. For svg/html/katex: any string."
+              "For vega-lite and quiz: must be valid JSON. For svg/html/katex: any string."
           ),
         options: z
           .object({
@@ -76,7 +77,7 @@ export function createMcpServer(): McpServer {
       }
       const { workspace } = workspaceResult;
 
-      const validationError = await validateFrame({ type, payload });
+      const validationError = await validateRenderPayload(type, payload);
       if (validationError) {
         return {
           content: [{ type: "text", text: JSON.stringify({ ok: false, error: validationError }) }],

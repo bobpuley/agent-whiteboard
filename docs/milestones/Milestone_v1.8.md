@@ -6,9 +6,9 @@
 
 ### Sprint 89 — Quiz payload, scoring, validation (F44, F45, F47, NF57)
 
-- [ ] **F44/F45 — Payload validation.** `server/quiz.ts` validates the schema and derives inline/deferred mode; wire `quiz` into the render path (MCP + REST) and snapshot writer.
+- [x] **F44/F45 — Payload validation.** `server/quiz.ts` validates the schema and derives inline/deferred mode; wire `quiz` into the render path (MCP + REST) and snapshot writer.
   - *DoD:* valid payloads render/persist; mixed keys, duplicate ids, bad weights rejected identically over MCP and REST.
-- [ ] **F47 — `scoreQuiz`.** Shared pure scoring function for `all_or_nothing` and `partial`.
+- [x] **F47 — `scoreQuiz`.** Shared pure scoring function for `all_or_nothing` and `partial`.
   - *DoD:* unit tests cover exact-set, partial weights, wrong picks earning nothing, `points` totals.
 
 ### Sprint 90 — Quiz renderer & inline evaluation (F44, F46, F48)

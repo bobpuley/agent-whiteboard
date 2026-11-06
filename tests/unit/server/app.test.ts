@@ -3532,3 +3532,53 @@ describe("POST /import", () => {
     expect(res.status).toBe(413);
   });
 });
+
+// ── POST /render — quiz (v1.8, F44/F45) ──────────────────────────────────────
+
+describe("POST /render — quiz", () => {
+  const quiz = JSON.stringify({
+    questions: [{ id: "q1", text: "2+2?", kind: "single", options: [{ id: "a", text: "4", correct: true }, { id: "b", text: "5" }] }],
+  });
+
+  beforeEach(() => {
+    vi.mocked(snapshotModule.saveSnapshot).mockClear();
+  });
+
+  it("accepts a valid quiz, stores it on the canvas and snapshots the questions payload", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "quiz", payload: quiz, options: { workspace: WORKSPACE } }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true });
+    expect(snapshotModule.saveSnapshot).toHaveBeenCalledWith(
+      [{ type: "quiz", payload: quiz }],
+      { title: undefined, workspace: WORKSPACE },
+      undefined,
+      "test-uuid-generated"
+    );
+  });
+
+  it("rejects an invalid quiz payload with the validation error and does not snapshot", async () => {
+    const res = await app.request("/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "quiz", payload: JSON.stringify({ questions: [] }), options: { workspace: WORKSPACE } }),
+    });
+    const body = await res.json<{ ok: boolean; error: string }>();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/invalid quiz payload/);
+    expect(snapshotModule.saveSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("is not accepted inside a slideshow", async () => {
+    const res = await app.request("/slideshow", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slides: [{ type: "quiz", payload: quiz }], delay_ms: 1000, workspace: WORKSPACE }),
+    });
+    const body = await res.json<{ ok: boolean }>();
+    expect(body.ok).toBe(false);
+  });
+});

@@ -4,7 +4,7 @@ import type { ClickEvent } from "../interaction.js";
 import { clearCanvas } from "../session.js";
 import type { CanvasType } from "../session.js";
 import { broadcast } from "../ws.js";
-import { FRAME_TYPES, nodeActionsSchema, nodeToFrameSchema, validateFrame } from "../validate.js";
+import { FRAME_TYPES, RENDER_TYPES, nodeActionsSchema, nodeToFrameSchema, validateRenderPayload } from "../validate.js";
 import { cancelSlideshow } from "../slideshow.js";
 import {
   appendFrameAndBroadcast,
@@ -33,9 +33,9 @@ export function registerRenderRoutes(app: Hono): void {
       return c.json({ ok: false, error: "payload must be a string" }, 400);
     }
 
-    if (!(FRAME_TYPES as readonly string[]).includes(body.type as string)) {
+    if (!(RENDER_TYPES as readonly string[]).includes(body.type as string)) {
       return c.json(
-        { ok: false, error: `type must be one of: ${FRAME_TYPES.join(", ")}` },
+        { ok: false, error: `type must be one of: ${RENDER_TYPES.join(", ")}` },
         400
       );
     }
@@ -44,7 +44,7 @@ export function registerRenderRoutes(app: Hono): void {
     const { payload } = body;
     const title = body.options?.title;
 
-    const validationError = await validateFrame({ type, payload });
+    const validationError = await validateRenderPayload(type, payload);
     if (validationError) {
       return c.json({ ok: false, error: validationError });
     }
