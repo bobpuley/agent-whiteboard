@@ -5,7 +5,7 @@ import { cancelSlideshow } from "./slideshow.js";
 import { broadcastReplace, broadcastStepFrames } from "./ws.js";
 import { generateSnapshotId } from "./snapshot-writer.js";
 import { assembleStepFramesPayload, persistContent } from "./persist.js";
-import { validateFrame } from "./validate.js";
+import { validateFrame, validateRenderPayload } from "./validate.js";
 import { getCanvas, isStepSequence, seekStepFrame, setCanvas, setLastWorkspace, setStepFrames, stepCursor } from "./session.js";
 import type { CanvasType, StepFrame } from "./session.js";
 import type { Frame } from "./presentation.js";
@@ -161,7 +161,8 @@ export async function applyLoadedSnapshotResult(
   rawPayload: string | undefined
 ): Promise<ApplyLoadedSnapshotResult> {
   for (const frame of frames) {
-    const validationError = await validateFrame(frame);
+    // A quiz is a single-frame render() type (F44): valid on its own, never inside a multi-frame sequence.
+    const validationError = frames.length === 1 ? await validateRenderPayload(frame.type, frame.payload) : await validateFrame(frame);
     if (validationError) {
       return { ok: false, error: validationError };
     }

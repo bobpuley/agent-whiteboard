@@ -8,7 +8,7 @@ The original goal was simple: instead of explaining everything through long text
 
 As the project evolved, it became clear that the same interaction model is useful far beyond education. Whether an agent is explaining a software architecture, walking through a network protocol, debugging a problem, presenting data, or documenting a system, the ability to communicate visually is just as valuable. Agent Whiteboard is therefore intentionally domain-agnostic.
 
-Through a set of MCP tools, an AI agent can render Mermaid diagrams, SVG, HTML, LaTeX, and Vega-Lite charts, build incremental multi-step explanations, pause until the user is ready to continue, react to clicks on diagrams, and keep a persistent history of snapshots that can later be reloaded or exported.
+Through a set of MCP tools, an AI agent can render Mermaid diagrams, SVG, HTML, LaTeX, and Vega-Lite charts and quizzes, build incremental multi-step explanations, pause until the user is ready to continue, react to clicks on diagrams, and keep a persistent history of snapshots that can later be reloaded or exported.
 
 Unlike collaborative whiteboard applications, Agent Whiteboard is not a canvas that humans edit directly. The whiteboard is controlled by the AI agent, making it a lightweight visual communication surface between the agent and its user. Everything runs locally and integrates naturally with Claude Code through MCP.
 
@@ -23,7 +23,7 @@ The browser also has a History panel for browsing, reloading, deleting, and expo
 ```
 [Claude Code agent]
     │
-    └── 13 MCP tools — render, step-frames builder, slideshow, wait_click/wait_done, snapshot export (see below)
+    └── 14 MCP tools — render, step-frames builder, slideshow, wait_click/wait_done/wait_quiz, snapshot export (see below)
            │
            ▼
     [Node.js server :3000]  — MCP over SSE + REST fallback + WebSocket
@@ -100,6 +100,7 @@ Push content to the whiteboard canvas. Replaces whatever is currently on screen.
 | `"html"` | HTML/CSS fragment. Sanitized via DOMPurify — inline styles only; `<script>` and `<style>` tags are stripped. |
 | `"katex"` | LaTeX string, rendered in display mode. |
 | `"vega-lite"` | Vega-Lite JSON spec (must be valid JSON string). |
+| `"quiz"` | JSON quiz — see [Quizzes](#quizzes). Valid in `render()` only (not in `slideshow()` or step-frames). |
 
 `render()` is single-frame only. For a step-through sequence (multiple frames navigable via `step()`/`seek()`), use [`init_step_frames`/`append_frame`/`commit_step_frames`](#init_step_framesframe_type-workspace-title) instead — see [Step-frames sequences](#step-frames-sequences).
 
@@ -160,6 +161,32 @@ Block until the user clicks the **Done** button in the browser tab, then return.
 **Returns:** `{ "ok": true }`
 
 <img src="docs/screenshots/done-button.png" width="700" alt="Done button visible in the controls panel while wait_done() is armed">
+
+### `wait_quiz()`
+
+Block until the user clicks **Submit** on the quiz currently on screen (rendered with `render({ type: "quiz", ... })`), then return the questions and the user's answers. A submission made before you call `wait_quiz()` is kept and returned immediately, as long as that quiz is still on screen. Times out after 10 minutes; a second `wait_quiz()` supersedes a pending one.
+
+**Returns:** `{ "ok": true, "type": "submitted", "questions": {...}, "answers": [{ "questionId": "q1", "selected": ["a"] }] }` — plus `"score": { "earned", "possible" }` for an inline quiz. Also `{ "ok": true, "type": "timeout" | "superseded" }`, or `{ "ok": false, "error": "..." }` if no quiz is on the canvas.
+
+### Quizzes
+
+A quiz is a JSON payload of single- or multiple-choice questions:
+
+```json
+{ "title": "Check-in",
+  "questions": [
+    { "id": "q1", "text": "Which verb is idempotent?", "kind": "single",
+      "options": [{ "id": "a", "text": "PUT", "correct": true }, { "id": "b", "text": "POST" }] },
+    { "id": "q2", "text": "Pick the primes", "kind": "multiple", "scoring": "partial", "points": 2,
+      "options": [{ "id": "a", "text": "2", "correct": true, "weight": 0.5 }, { "id": "b", "text": "3", "correct": true, "weight": 0.5 }, { "id": "c", "text": "4" }] }
+  ] }
+```
+
+- **Inline evaluation** — mark `correct: true` on the right option(s) of *every* question. The browser scores the quiz when the user clicks Submit and shows per-question results plus the total (the answer key is visible to anyone inspecting the page, so use deferred mode for anything you don't want revealed).
+- **Deferred evaluation** — mark none. Submit sends the answers to the agent, which receives them via `wait_quiz()` and evaluates them itself.
+- A payload where only some questions have a key is rejected.
+- **Scoring** (per question): `"all_or_nothing"` (default) earns `points` (default 1) only for the exact correct set. `"partial"` (multiple-choice only) gives every correct option a `weight`; the weights must sum to 1, the score is the sum of the weights of the correct options selected, and wrong picks earn nothing.
+- Quizzes are saved to history (questions only — answers and scores are never persisted) and reload as a fresh quiz. They are not included in HTML exports.
 
 ### `wait_click([node_actions])`
 
@@ -262,6 +289,8 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `POST /seek` | `{ "frame": N }` |
 | `POST /user-done` | — (simulates the Done button click) |
 | `POST /wait-done` | — (long-polls until Done is signalled) |
+| `POST /quiz/submit` | `{ "answers": [{ "questionId": "...", "selected": ["optionId", ...] }], "score": { "earned": N, "possible": N } (optional, inline quizzes only) }` (sent by browser) — 400 if no quiz is on screen or the answers don't match it |
+| `POST /wait-quiz` | — (long-polls until the quiz is submitted; REST twin of `wait_quiz`) |
 | `POST /node-click` | `{ "type": "node"\|"edge", "id": "...", "label": "..." }` (sent by browser) |
 | `POST /wait-click` | `{ "node_actions": { "<id>": ["action1", ...] } }` (optional; long-polls until a node/edge click is signalled) |
 | `POST /step-frames/init` | `{ "frame_type": "...", "workspace": "...", "title": "..." }` — starts an incremental builder, returns `{ "ok": true, "id": "<uuid>" }` |
@@ -299,6 +328,7 @@ Exercises every renderer and interactive feature (requires `npm run dev` running
 ```bash
 node tests/human_driven/showcase.js        # Sections 1–8: renderer slideshow + seek
 node tests/human_driven/showcase.js -x    # Section 12: export-by-id (v0.11)
+node tests/human_driven/showcase.js -q    # Section 15: quiz, inline + deferred (v1.8)
 node tests/human_driven/showcase.js -a    # All sections
 ```
 
@@ -310,6 +340,7 @@ Section flags (combinable):
 -u, --popup           Section 10: node_actions popup menu
 -e, --edge            Section 11: edge click demo
 -x, --exportid        Section 12: export by graph ID (v0.11)
+-q, --quiz            Section 15: quiz — inline scoring + deferred wait_quiz (v1.8)
 -a, --all             All sections
 -p, --port <port>     Server port (default: 3000)
 -d, --delay <ms>      Delay between slides (default: 5000)

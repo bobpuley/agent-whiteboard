@@ -9,6 +9,7 @@ import { nodeActionsSchema, nodeToFrameSchema, validateFrame, validateRenderPayl
 import { getSnapshotsRoot } from "./paths.js";
 import { cancelSlideshow, startSlideshow } from "./slideshow.js";
 import { waitForClick, waitForDone } from "./interaction.js";
+import { waitForQuiz } from "./quiz-submission.js";
 import { findSnapshotById, findSnapshotByIdInWorkspace, listSnapshots } from "./snapshot-reader.js";
 import { generateExportHtml } from "./export-html.js";
 import type { ValidatedExportItem } from "./export-html.js";
@@ -295,6 +296,25 @@ export function createMcpServer(): McpServer {
         content: [{ type: "text", text: JSON.stringify({ ok: true }) }],
       };
     }
+  );
+
+  // wait_quiz() — block until the user submits the quiz currently on the canvas.
+  server.registerTool(
+    "wait_quiz",
+    {
+      description:
+        'Block until the user clicks Submit on the quiz currently on the whiteboard (render({ type: "quiz", ... })). ' +
+        'Returns { "ok": true, "type": "submitted", "questions": <the quiz>, "answers": [{ "questionId": "...", "selected": ["optionId", ...] }] } ' +
+        "— for an inline quiz also a client-computed \"score\": { earned, possible }; for a deferred quiz (no answer key in the payload) you evaluate and score the answers yourself. " +
+        "A submission made before you call wait_quiz() is kept and returned immediately, as long as that quiz is still on screen. " +
+        'Times out after 10 minutes with { "ok": true, "type": "timeout" }; a second wait_quiz() supersedes a pending one ({ "type": "superseded" }). ' +
+        'Returns { "ok": false, "error": "..." } if no quiz is on the canvas. ' +
+        "Example flow: render({ type: \"quiz\", ... }) → wait_quiz() → evaluate answers",
+      inputSchema: z.object({}),
+    },
+    async () => ({
+      content: [{ type: "text", text: JSON.stringify(await waitForQuiz()) }],
+    })
   );
 
   // init_step_frames(frame_type, workspace, title?) — begin an incremental step-frames build.

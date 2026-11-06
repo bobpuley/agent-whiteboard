@@ -11,7 +11,11 @@
   // (Submit hands the answers to `onSubmit`, wired to the server in v1.8
   // Sprint 91 via the registry).
   export let source: string;
-  export let onSubmit: ((answers: QuizAnswer[]) => Promise<void>) | undefined = undefined;
+  // `instance` changes identity on every replace command (even for an identical
+  // payload, e.g. reloading the same snapshot from history) so the quiz always
+  // comes back fresh and unanswered.
+  export let onSubmit: ((answers: QuizAnswer[], score?: QuizScore) => Promise<void>) | undefined = undefined;
+  export let instance: unknown = undefined;
 
   let quiz: Quiz | null = null;
   let parseError: string | null = null;
@@ -22,9 +26,11 @@
   let sent = false;
   let sendError = false;
   let lastSource: string | null = null;
+  let lastInstance: unknown = undefined;
 
-  function load(src: string) {
+  function load(src: string, inst: unknown) {
     lastSource = src;
+    lastInstance = inst;
     quiz = null;
     parseError = null;
     selected = {};
@@ -42,7 +48,7 @@
     }
   }
 
-  $: if (source !== lastSource) load(source);
+  $: if (source !== lastSource || instance !== lastInstance) load(source, instance);
 
   $: locked = score !== null || sent;
   $: allAnswered = quiz !== null && quiz.questions.every((q) => (selected[q.id]?.length ?? 0) > 0);
@@ -65,6 +71,8 @@
     const answers = buildAnswers();
     if (inline) {
       score = scoreQuiz(quiz, answers);
+      // Best-effort: lets a pending wait_quiz() see the result; the on-screen score never depends on it.
+      void onSubmit?.(answers, score).catch(() => {});
       return;
     }
     if (!onSubmit) return;

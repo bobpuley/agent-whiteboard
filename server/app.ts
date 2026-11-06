@@ -11,6 +11,7 @@ import { registerSlideshowRoutes } from "./routes/slideshow.js";
 import { registerSnapshotRoutes } from "./routes/snapshots.js";
 import { registerExportRoutes } from "./routes/export.js";
 import { registerImportRoutes } from "./routes/import.js";
+import { registerQuizRoutes } from "./routes/quiz.js";
 
 // Re-export for tests that reference MERMAID_KEYWORDS / isValidMermaid directly.
 export { MERMAID_KEYWORDS } from "./validate.js";
@@ -68,6 +69,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   registerSnapshotRoutes(app);
   registerExportRoutes(app);
   registerImportRoutes(app);
+  registerQuizRoutes(app);
 
   // ── Static client (v1.0 — NF33) ──────────────────────────────────────────
   // Mounted last so it never shadows an API route above; only serves GET

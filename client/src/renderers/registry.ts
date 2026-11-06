@@ -21,6 +21,7 @@ import Html from "./Html.svelte";
 import Katex from "./Katex.svelte";
 import VegaLite from "./VegaLite.svelte";
 import Quiz from "./Quiz.svelte";
+import { submitQuizAnswers } from "../lib/quizActions.js";
 import StepFramesPlaceholder from "./StepFramesPlaceholder.svelte";
 
 export type RendererKey = RendererType | "step-frames-placeholder";
@@ -98,7 +99,7 @@ export const rendererRegistry: Record<ContentRendererKey, RendererEntry> & {
   },
   quiz: {
     load: () => Promise.resolve(Quiz as unknown as ComponentType<SvelteComponent>),
-    props: ({ presentation }) => ({ source: presentation.frames[0].payload }),
+    props: ({ presentation }) => ({ source: presentation.frames[0].payload, instance: presentation, onSubmit: submitQuizAnswers }),
   },
   "step-frames-placeholder": {
     load: () => Promise.resolve(StepFramesPlaceholder as unknown as ComponentType<SvelteComponent>),

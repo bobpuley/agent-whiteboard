@@ -18,6 +18,7 @@ const { values } = parseArgs({
     exportid:    { type: "boolean", short: "x", default: false   },
     incremental: { type: "boolean", short: "c", default: false   },
     nodetoframe: { type: "boolean", short: "n", default: false   },
+    quiz:        { type: "boolean", short: "q", default: false   },
     all:         { type: "boolean", short: "a", default: false   },
     "no-intro":    { type: "boolean",            default: false   },
     "intro-delay": { type: "string",             default: "3000" },
@@ -37,9 +38,10 @@ Section flags (combinable, e.g. -ie runs Sections 9+11 only):
   -u, --popup           Section 10: node_actions popup menu (simulated)
   -e, --edge            Section 11: edge click demo
   -x, --exportid        Section 12: export by graph ID (v0.11)
+  -q, --quiz            Section 15: quiz — inline scoring + deferred wait_quiz (v1.8)
   -c, --incremental     Section 13: incremental step-frames creation (init/append/commit, v0.8/v0.9)
   -n, --nodetoframe     Section 14: node_to_frame autonomous navigation (v0.2, U4e)
-  -a, --all             All sections (equivalent to -siuexcn)
+  -a, --all             All sections (equivalent to -siuexcnq)
 
 Other options:
   -p, --port <port>     Server port (default: 3000)
@@ -57,7 +59,7 @@ Other options:
 // ── Section selection ─────────────────────────────────────────────────────────
 // No section flags → behave as -s (backwards-compatible default).
 const anySection = values.standard || values.interactive || values.popup || values.edge || values.exportid
-  || values.incremental || values.nodetoframe || values.all;
+  || values.incremental || values.nodetoframe || values.quiz || values.all;
 const RUN_STANDARD    = !anySection || values.standard    || values.all;
 const RUN_INTERACTIVE = values.interactive || values.all;
 const RUN_POPUP       = values.popup       || values.all;
@@ -65,6 +67,7 @@ const RUN_EDGE        = values.edge        || values.all;
 const RUN_EXPORT_ID   = values.exportid    || values.all;
 const RUN_INCREMENTAL = values.incremental || values.all;
 const RUN_NODE_TO_FRAME = values.nodetoframe || values.all;
+const RUN_QUIZ        = values.quiz        || values.all;
 
 const TYPE_FILTER = values.type
   ? new Set(values.type.split(",").map((t) => t.trim()).filter(Boolean))
@@ -1050,6 +1053,56 @@ if (RUN_NODE_TO_FRAME) {
   await runNodeToFrameDemo();
 }
 
+// ── Section 15 — Quiz (v1.8) ─────────────────────────────────────────────────
+//
+// Inline quiz: the answer key is in the payload, the browser scores on Submit.
+// Deferred quiz: no key; Submit hands the answers to POST /wait-quiz, and this
+// script plays the agent that evaluates them.
+
+async function runQuizDemo() {
+  const inline = {
+    title: "Inline quiz",
+    questions: [
+      { id: "q1", text: "Which HTTP verb is idempotent?", kind: "single",
+        options: [{ id: "a", text: "PUT", correct: true }, { id: "b", text: "POST" }, { id: "c", text: "PATCH" }] },
+      { id: "q2", text: "Pick the primes (partial credit)", kind: "multiple", scoring: "partial", points: 2,
+        options: [{ id: "a", text: "2", correct: true, weight: 0.5 }, { id: "b", text: "3", correct: true, weight: 0.5 }, { id: "c", text: "4" }, { id: "d", text: "9" }] },
+      { id: "q3", text: "Which are JavaScript runtimes? (all or nothing)", kind: "multiple",
+        options: [{ id: "a", text: "Node.js", correct: true }, { id: "b", text: "Deno", correct: true }, { id: "c", text: "Cobol" }] },
+    ],
+  };
+  const r1 = await post("/render", { type: "quiz", payload: JSON.stringify(inline), options: { workspace: WORKSPACE, title: "15a — answer, Submit, read your score" } });
+  if (!r1.ok) { console.error(`   ✗ render failed: ${r1.error}`); return; }
+  console.log("   inline quiz on screen — answer and click Submit (the browser scores it); press Enter here when done");
+  await new Promise((res) => process.stdin.once("data", res));
+
+  const deferred = {
+    title: "Deferred quiz",
+    questions: [
+      { id: "q1", text: "Name a benefit of unit tests", kind: "single",
+        options: [{ id: "a", text: "Fast feedback" }, { id: "b", text: "Larger bundles" }] },
+      { id: "q2", text: "Which belong to a CI pipeline?", kind: "multiple",
+        options: [{ id: "a", text: "Lint" }, { id: "b", text: "Test" }, { id: "c", text: "Manual FTP upload" }] },
+    ],
+  };
+  const r2 = await post("/render", { type: "quiz", payload: JSON.stringify(deferred), options: { workspace: WORKSPACE, title: "15b — answer and Submit; the 'agent' (this script) receives your answers" } });
+  if (!r2.ok) { console.error(`   ✗ render failed: ${r2.error}`); return; }
+  console.log("   waiting for submission (POST /wait-quiz) …");
+  const result = await fetch(`${BASE}/wait-quiz`, { method: "POST" }).then((r) => r.json());
+  if (result.type !== "submitted") { console.log(`   ${result.type ?? result.error}`); return; }
+  console.log("   ✓ answers received by the agent:");
+  for (const a of result.answers) console.log(`     ${a.questionId}: ${a.selected.join(", ")}`);
+}
+
+if (RUN_QUIZ) {
+  console.log("\n── Section 15: quiz (inline + deferred) ──");
+  await renderIntro(
+    "Knowledge check",
+    "A quiz the browser can score itself, or one whose answers come back to the agent for evaluation."
+  );
+  await runQuizDemo();
+}
+
 // ── Outro — always shown last, regardless of section flags ──────────────────
 
 if (SHOW_OUTRO) {
@@ -1066,10 +1119,11 @@ const skipped = [
   !RUN_EXPORT_ID     && "  -x  Section 12: export by graph ID (v0.11)",
   !RUN_INCREMENTAL   && "  -c  Section 13: incremental step-frames creation (init/append/commit)",
   !RUN_NODE_TO_FRAME && "  -n  Section 14: node_to_frame autonomous navigation",
+  !RUN_QUIZ          && "  -q  Section 15: quiz — inline scoring + deferred wait_quiz (v1.8)",
 ].filter(Boolean);
 
 if (skipped.length) {
   console.log("   Sections not run (add flags to include):");
   skipped.forEach((s) => console.log(`   ${s}`));
-  console.log("   (use -a / --all to run everything — equivalent to -siuexcn)\n");
+  console.log("   (use -a / --all to run everything — equivalent to -siuexcnq)\n");
 }
