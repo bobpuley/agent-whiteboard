@@ -1,3 +1,15 @@
+## 1.2.0 — 2026-11-06
+
+**Milestone v1.8 — Quiz Support (Sprints 89–91) complete.** Adds interactive quizzes for reviewing the user's knowledge (FR33 in `01`, F44–F50/NF57 in `03`).
+
+- **`quiz` render type (F44, F45):** `render({ type: "quiz", ... })` takes a JSON payload of single- and multiple-choice questions, validated by the new `server/quiz.ts` (unique ids, option counts, weight sums). Mode is derived from the answer key: every question keyed → inline, none → deferred, a mix is rejected. Valid in `render()` only, not in slideshows or step-frames.
+- **Scoring (F47):** per question `all_or_nothing` (exact correct set) or `partial` (multiple-choice only; weighted correct options summing to 1, wrong picks earn nothing), with optional `points`.
+- **Quiz renderer + inline evaluation (F44, F46):** new `Quiz.svelte` with radio/checkbox controls and an in-quiz Submit, disabled until every question is answered. Inline quizzes show per-question results and the total score after Submit.
+- **Deferred evaluation (F48, F49):** Submit posts to the new `POST /quiz/submit`; the new `wait_quiz` MCP tool / `POST /wait-quiz` long-poll returns the questions and answers (plus the client-computed score for inline quizzes). 10-minute timeout, submit-before-wait retention, and superseding like `wait_click`.
+- **History & export (F50):** quizzes are snapshotted as questions only and reload fresh; HTML export replaces a quiz with an explanatory note and never leaks its questions or answer key.
+- **Dev/tooling:** `/quiz` added to the Vite dev proxy; README documents the quiz format, `wait_quiz` and the new endpoints; showcase Section 15 (`-q`) demonstrates inline and deferred quizzes.
+- Full suite: 745 unit tests passing; `tsc`/`svelte-check`/`eslint`/`npm run build` clean.
+
 ## 1.1.1 — 2026-11-06
 
 **Milestone v1.7 — Unified Import/Export Button (Sprints 87–88) complete.** Pure UI consolidation; no server, API, MCP or snapshot-format changes.
