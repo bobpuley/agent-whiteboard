@@ -29,7 +29,7 @@ The browser also has a History panel for browsing, reloading, deleting, and expo
     [Node.js server :3000]  — MCP over SSE + REST fallback + WebSocket
            │
            ▼
-    [Browser tab :5173]  — Svelte SPA, auto-opens on start, with a History panel for browsing/deleting/exporting past snapshots
+    [Browser tab :5173]  — Svelte SPA, auto-opens on start, with a History panel for browsing/deleting/exporting/importing past snapshots
 ```
 
 The server exposes MCP tools over SSE at `http://localhost:3000/mcp`. Claude Code connects automatically when `.mcp.json` is present in the project root.
@@ -273,12 +273,16 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 | `POST /snapshots/delete-files` | `{ "workspace": "...", "filenames": ["..._screen.json", ...] }` — deletes specific snapshot files |
 | `POST /snapshots/delete-workspace` | `{ "workspace": "..." }` — deletes an entire workspace's snapshot folder |
 | `POST /export-html` | `{ "items": [{ "workspace": "...", "id": "..." }, ...], "mode": "cdn" \| "offline" }` (`mode` optional, defaults to `"cdn"`) — returns the assembled HTML file as a download, not JSON |
+| `POST /export-zip` | `{ "items": [{ "workspace": "...", "id": "..." }, ...] }` — returns a portable `.zip` (the selected snapshots' raw JSON plus a `manifest.json`) as a download, for sharing a workspace |
+| `POST /import` | multipart form: `file` (a `.zip` from `/export-zip`), `mode` (`"create"` \| `"merge"`, default `"create"`), `targetWorkspace` — imports snapshots, deduplicating by snapshot `id`/`timestamp`; 50MB cap |
 
 All endpoints return the same JSON shapes as the MCP tools, except `POST /export-html`, which streams the HTML file directly (`Content-Disposition: attachment`). `mode: "cdn"` (default) links Mermaid/Bootstrap/KaTeX from a CDN; `mode: "offline"` embeds them for offline reading, at the cost of a much larger file (the Mermaid bundle alone is ~3.3MB).
 
 ## History & snapshots
 
-Every `render()` / `commit_step_frames()` call writes a JSON snapshot to `~/.agent-whiteboard/<workspace>/` (override with the `WHITEBOARD_SNAPSHOTS_DIR` environment variable). The browser's right-side controls panel has a history toggle that opens a panel for browsing and loading past snapshots grouped by workspace, plus delete and export icon buttons that open a 2-step modal (`client/src/DeleteExportModal.svelte`) for deleting or exporting an entire workspace or a chosen subset of snapshots. Destructive actions require a second confirming click. Exports are produced by the `export_html()` tool / `POST /export-html` endpoint described above.
+Every `render()` / `commit_step_frames()` call writes a JSON snapshot to `~/.agent-whiteboard/<workspace>/` (override with the `WHITEBOARD_SNAPSHOTS_DIR` environment variable). The browser's right-side controls panel has a history toggle that opens a panel for browsing and loading past snapshots grouped by workspace, plus a delete button that opens a 2-step modal (`client/src/DeleteExportModal.svelte`) for deleting an entire workspace or a chosen subset of snapshots. Destructive actions require a second confirming click.
+
+A single **Import / export** button (opposing-arrows icon) opens a small keyboard-accessible menu with two entries: **Export…** opens the same modal for exporting a workspace or subset of snapshots as self-contained HTML (the `export_html()` tool / `POST /export-html` endpoint described above) or as a portable `.zip` (`POST /export-zip`), and **Import…** opens a dialog for loading such a `.zip` into this or another whiteboard instance (`POST /import`, merging or creating a new workspace). Dropping a `.zip` anywhere on the page also starts an import.
 
 | Step 1 — choose a workspace                                                                                                                  | Step 2 — delete requires a second confirming click                                                                                    |
 |----------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
