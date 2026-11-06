@@ -6,6 +6,11 @@
 
 *v1.0 planning not yet started. Use `/doc-creator-driver:intake` or `/doc-creator-driver:start` to begin.*
 
+**FR32 — Single toolbar button for import/export (2026-11-06)**
+
+- Feature request, as received: "use only one button to handle import/export operation, create a mockup/showcase to decide what icon fits better and what tooltip text is more meaningful".
+- User decisions (via `/grill-me`): the single button opens a **popover menu with two entries** (Export…, Import…), each opening the existing modal; the **Delete button stays separate**; the popover follows the **full ARIA menu pattern** (keyboard + focus return); the icon/tooltip choice is made from an **HTML showcase page in `mockup/`** (same approach as `mockup/history-icon-options.html`), in a dedicated sprint **before** implementation. Milestone: new **v1.7**, two sprints.
+
 **FR31 — Workspace export/import for sharing (2026-09-07)**
 
 - Feature request, as received: (1) the delete-entire-workspace confirmation message should mention the workspace name; (2) add an export-for-sharing option, reusing the current export flow/window, that produces a zip of the workspace folder (selected slides, or the whole workspace as today) instead of an HTML page — the zip must be importable into another whiteboard instance; (3) add the corresponding import functionality, handling corner cases such as an existing workspace with the same name or slides already present — a slide timestamp is likely needed to resolve some of these cases.
