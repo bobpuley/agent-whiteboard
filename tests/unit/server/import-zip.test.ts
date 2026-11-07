@@ -248,12 +248,21 @@ describe("importZip — NF55 safety", () => {
   });
 
   it("cleans up its temp directory after a successful import", async () => {
-    const before = readdirSync(tmpdir()).filter((n) => n.startsWith("agent-whiteboard-import-"));
-    const zip = await buildZipBuffer({ "manifest.json": manifest("ws-cleanup", []) });
-
-    await importZip(zip, "ws-cleanup", "create", root);
-
-    const after = readdirSync(tmpdir()).filter((n) => n.startsWith("agent-whiteboard-import-"));
-    expect(after.length).toBe(before.length);
+    // Use a private TMPDIR: other test files (separate workers) also run imports
+    // and create "agent-whiteboard-import-*" dirs in the shared system tmpdir, so
+    // comparing before/after counts there is racy (it flaked in CI).
+    const privateTmp = mkdtempSync(join(tmpdir(), "import-zip-tmp-"));
+    const prev = process.env.TMPDIR;
+    process.env.TMPDIR = privateTmp;
+    try {
+      const zip = await buildZipBuffer({ "manifest.json": manifest("ws-cleanup", []) });
+      const result = await importZip(zip, "ws-cleanup", "create", root);
+      expect(result.ok).toBe(true);
+      expect(readdirSync(privateTmp)).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = prev;
+      rmSync(privateTmp, { recursive: true, force: true });
+    }
   });
 });

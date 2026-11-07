@@ -1,3 +1,9 @@
+## 1.2.2 — 2026-11-07
+
+Patch: test-only fix, no behavioural change.
+
+- **Fix flaky CI test:** `import-zip.test.ts` "cleans up its temp directory" counted `agent-whiteboard-import-*` folders in the shared system tmpdir, which other test files (separate workers) also populate, so the before/after comparison raced. The test now uses a private `TMPDIR` and asserts it ends empty.
+
 ## 1.2.1 — 2026-11-07
 
 Patch: lint fix, no behavioural change.
