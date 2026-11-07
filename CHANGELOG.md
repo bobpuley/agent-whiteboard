@@ -1,3 +1,9 @@
+## 1.3.1 — 2026-11-07
+
+Patch: documentation only.
+
+- **README reordered for users:** quickstart, MCP registration, agent skills, use cases and tools now come first; Environment variables and REST fallback follow; Development, Tests and Manual showcase are at the end. Added a "Jump to" line, moved the `/mcp` enable step into MCP registration, reworded the `.mcp.json` note for non-contributors, and listed `npm run check` under Tests.
+
 ## 1.3.0 — 2026-11-07
 
 **Milestone v1.9 — Agent Skills & `install-skills` CLI (Sprint 92) complete.** Adds ready-made agent skills and a one-command installer (FR34 in `01`, F51–F54/NF58 in `03`).

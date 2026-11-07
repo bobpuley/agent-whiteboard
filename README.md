@@ -18,6 +18,8 @@ The browser also has a History panel for browsing, reloading, deleting, and expo
 
 <img src="docs/screenshots/history-panel.png" width="700" alt="History panel listing past snapshots grouped by workspace">
 
+**Jump to:** [Quickstart](#quickstart) · [MCP registration](#mcp-registration) · [Agent skills](#agent-skills) · [Use cases](#use-cases) · [MCP tools](#mcp-tools) · [Environment variables](#environment-variables) · [Development](#development) *(contributors)*
+
 ## How it works
 
 ```
@@ -54,59 +56,22 @@ By default the server only binds to loopback addresses (`localhost`/`127.0.0.1`/
 
 This is a **single-user, local-only** tool: there is no authentication on any endpoint. That's an accepted trade-off, not an oversight — the server refuses to start if `HOST` is set to anything other than a loopback address, unless you explicitly set `ALLOW_NON_LOOPBACK=1` (not recommended; anyone who can reach the port can render arbitrary content, read/delete your snapshot history, and exfiltrate exported data). Don't expose this server beyond your own machine.
 
-## Development
+## MCP registration
 
-Running from source (contributing, or testing an unreleased change) instead of `npx agent-whiteboard`:
+Add a `.mcp.json` to your project root (this repository already has one) and Claude Code picks it up automatically:
 
-```bash
-npm install
-npm run dev
+```json
+{
+  "mcpServers": {
+    "agent-whiteboard": {
+      "type": "sse",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
 ```
 
-This starts the Node server (`:3000`), the Vite dev server (`:5173`), and opens the browser tab automatically.
-
-Enable the MCP server in Claude Code the first time:
-
-```
-/mcp
-```
-
-Select `agent-whiteboard` and enable it. The tools will be available immediately.
-
-## Environment variables
-
-| Variable                    | Default                | Description                                                                                                                                                                                     |
-|-----------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `PORT`                      | `3000`                 | Server port — serves the REST/MCP/WebSocket API, and (via `npx agent-whiteboard`) the built client too.                                                                                         |
-| `HOST`                      | `localhost`            | Bind address. Must resolve to a loopback address (`localhost`, `127.0.0.1`, `::1`) — the server refuses to start otherwise unless `ALLOW_NON_LOOPBACK` is set. See [Trust model](#trust-model). |
-| `ALLOW_NON_LOOPBACK`        | unset                  | Set to `1` to allow binding a non-loopback `HOST`. Not recommended — there is no authentication on any endpoint.                                                                                |
-| `WHITEBOARD_SNAPSHOTS_DIR`  | `~/.agent-whiteboard`  | Snapshot storage location.                                                                                                                                                                      |
-| `CHANNEL_PORT`              | `3001`                 | Port for the stdio-channel HTTP relay used by Claude Code's channel forwarding (only relevant if Claude Code was started with channels enabled).                                                |
-
-**Port conflicts:** if `:3000` (or `:3001`/`:5173`, see below) is already in use on your machine, set `PORT` (and `CHANNEL_PORT` if needed) to a free port before starting.
-
-> Dev-only (`npm run dev`, not `npx agent-whiteboard`): the Vite client dev server always runs on `:5173`, hardcoded in `client/vite.config.ts` — not currently configurable via an environment variable.
-
-## Use cases
-
-Agent Whiteboard is domain-agnostic; these are the workflows it is built for. Each links the tools involved.
-
-| Context                   | Workflow                                              | Tools                                                 |
-|---------------------------|-------------------------------------------------------|-------------------------------------------------------|
-| **Teaching & training**   | Concept explainer (one visual, then pause)            | `render` → `wait_done`                                |
-|                           | Progressive build-up of a diagram                     | step-frames + `wait_done` per frame                   |
-|                           | Worked example (math / algorithm), one step per frame | `katex` / `mermaid` step-frames, `step` / `seek`      |
-|                           | Learner-driven branching on a topic map               | `wait_click` with `node_actions`                      |
-| **Assessment**            | Inline self-check quiz (scored in the browser)        | `render` quiz with a key → `wait_quiz`                |
-|                           | Deferred quiz graded by the agent                     | `render` quiz without a key → `wait_quiz`             |
-|                           | Teach → quiz → remediate; spaced review               | quizzes + `list_snapshots`                            |
-| **Analysis & data**       | Iterative data exploration, version history           | `vega-lite` + `wait_done`, History panel              |
-|                           | Findings walkthrough / report                         | step-frames (`html` + `vega-lite`) + `export_html`    |
-|                           | Statistics / math derivation with an illustration     | `katex` + `vega-lite`                                 |
-| **Design & architecture** | Iterative system design, click to drill down          | `mermaid` + `wait_click`                              |
-|                           | Option comparison and decision                        | step-frames + `html` table                            |
-|                           | Explaining a codebase or protocol; onboarding pack    | sequence diagrams, step-frames, quiz, `export_html`   |
-| **Sharing**               | Export a lesson or analysis; share a workspace        | `export_html`; zip export/import in the History panel |
+The server must be running before Claude Code connects. The first time, run `/mcp` in Claude Code, select `agent-whiteboard` and enable it; the tools are available immediately. If you override `PORT`, update the URL above to match. See [Environment variables](#environment-variables) for the full list of overridable settings.
 
 ## Agent skills
 
@@ -131,6 +96,58 @@ npx agent-whiteboard install-skills --list      # show the bundled skills
 ```
 
 Existing skill folders are left untouched unless you pass `--force`. `--dir <path>` installs into any other folder (for agents that keep skills elsewhere). Prefer to do it by hand? Copy the folders from [`skills/`](skills/) yourself. Restart your agent session afterwards so it picks the skills up.
+
+## Use cases
+
+Agent Whiteboard is domain-agnostic; these are the workflows it is built for. Each links the tools involved.
+
+| Context                   | Workflow                                              | Tools                                                 |
+|---------------------------|-------------------------------------------------------|-------------------------------------------------------|
+| **Teaching & training**   | Concept explainer (one visual, then pause)            | `render` → `wait_done`                                |
+|                           | Progressive build-up of a diagram                     | step-frames + `wait_done` per frame                   |
+|                           | Worked example (math / algorithm), one step per frame | `katex` / `mermaid` step-frames, `step` / `seek`      |
+|                           | Learner-driven branching on a topic map               | `wait_click` with `node_actions`                      |
+| **Assessment**            | Inline self-check quiz (scored in the browser)        | `render` quiz with a key → `wait_quiz`                |
+|                           | Deferred quiz graded by the agent                     | `render` quiz without a key → `wait_quiz`             |
+|                           | Teach → quiz → remediate; spaced review               | quizzes + `list_snapshots`                            |
+| **Analysis & data**       | Iterative data exploration, version history           | `vega-lite` + `wait_done`, History panel              |
+|                           | Findings walkthrough / report                         | step-frames (`html` + `vega-lite`) + `export_html`    |
+|                           | Statistics / math derivation with an illustration     | `katex` + `vega-lite`                                 |
+| **Design & architecture** | Iterative system design, click to drill down          | `mermaid` + `wait_click`                              |
+|                           | Option comparison and decision                        | step-frames + `html` table                            |
+|                           | Explaining a codebase or protocol; onboarding pack    | sequence diagrams, step-frames, quiz, `export_html`   |
+| **Sharing**               | Export a lesson or analysis; share a workspace        | `export_html`; zip export/import in the History panel |
+
+## Example agent flow
+
+```
+render(type="mermaid", payload="graph TD; A --> B", options={ workspace: "my-lesson", title: "System overview" })
+→ wait_done()   # agent pauses; user clicks Done when ready
+→ render(type="katex", payload="E = mc^2", options={ workspace: "my-lesson" })
+→ wait_done()
+```
+
+Paced, user-acknowledged reveal — interleave `wait_done()` between `append_frame()` calls so each frame waits for the user before the next one appears (useful for large or complex step-frames sequences the agent is building on the fly):
+
+```
+init_step_frames(frame_type="mermaid", workspace="my-lesson", title="TCP handshake")
+→ append_frame(id, payload="graph LR; Client -- SYN --> Server", label="1. SYN")
+→ wait_done()   # user reviews frame 1, clicks Done
+→ append_frame(id, payload="graph LR; Client -- SYN --> Server; Server -- SYN-ACK --> Client", label="2. SYN-ACK")
+→ wait_done()   # user reviews frame 2, clicks Done
+→ append_frame(id, payload="...", label="3. ACK")
+→ commit_step_frames(id)
+```
+
+`wait_done()` isn't coupled to step-frames — it just blocks on the Done button — so this pattern works with any number of frames and needs no dedicated tool support.
+
+Knowledge check — render a quiz and wait for the user to submit it (see [Quizzes](#quizzes)):
+
+```
+render(type="quiz", payload='{"questions":[{"id":"q1","text":"What does SYN start?","kind":"single","options":[{"id":"a","text":"A handshake"},{"id":"b","text":"A teardown"}]}]}', options={ workspace: "my-lesson" })
+→ wait_quiz()   # no answer key in the payload → deferred: the answers come back to the agent
+→ evaluate result.answers, explain the right answers, and score them
+```
 
 ## MCP tools
 
@@ -296,36 +313,33 @@ There is no one-shot way to render a multi-frame sequence — `render()` is sing
 }
 ```
 
-## Example agent flow
+## History & snapshots
 
-```
-render(type="mermaid", payload="graph TD; A --> B", options={ workspace: "my-lesson", title: "System overview" })
-→ wait_done()   # agent pauses; user clicks Done when ready
-→ render(type="katex", payload="E = mc^2", options={ workspace: "my-lesson" })
-→ wait_done()
-```
+Every `render()` / `commit_step_frames()` call writes a JSON snapshot to `~/.agent-whiteboard/<workspace>/` (override with the `WHITEBOARD_SNAPSHOTS_DIR` environment variable). The browser's right-side controls panel has a history toggle that opens a panel for browsing and loading past snapshots grouped by workspace, plus a delete button that opens a 2-step modal (`client/src/DeleteExportModal.svelte`) for deleting an entire workspace or a chosen subset of snapshots. Destructive actions require a second confirming click.
 
-Paced, user-acknowledged reveal — interleave `wait_done()` between `append_frame()` calls so each frame waits for the user before the next one appears (useful for large or complex step-frames sequences the agent is building on the fly):
+A single **Import / export** button (opposing-arrows icon) opens a small keyboard-accessible menu with two entries: **Export…** opens the same modal for exporting a workspace or subset of snapshots as self-contained HTML (the `export_html()` tool / `POST /export-html` endpoint described above) or as a portable `.zip` (`POST /export-zip`), and **Import…** opens a dialog for loading such a `.zip` into this or another whiteboard instance (`POST /import`, merging or creating a new workspace). Dropping a `.zip` anywhere on the page also starts an import.
 
-```
-init_step_frames(frame_type="mermaid", workspace="my-lesson", title="TCP handshake")
-→ append_frame(id, payload="graph LR; Client -- SYN --> Server", label="1. SYN")
-→ wait_done()   # user reviews frame 1, clicks Done
-→ append_frame(id, payload="graph LR; Client -- SYN --> Server; Server -- SYN-ACK --> Client", label="2. SYN-ACK")
-→ wait_done()   # user reviews frame 2, clicks Done
-→ append_frame(id, payload="...", label="3. ACK")
-→ commit_step_frames(id)
-```
+| Step 1 — choose a workspace                                                                                                                  | Step 2 — delete requires a second confirming click                                                                                    |
+|----------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| <img src="docs/screenshots/delete-workspace-picker.png" width="380" alt="Delete/Export modal step 1: workspace picker with snapshot counts"> | <img src="docs/screenshots/delete-confirmation.png" width="380" alt="Delete confirmation: button relabels to Click again to confirm"> |
 
-`wait_done()` isn't coupled to step-frames — it just blocks on the Done button — so this pattern works with any number of frames and needs no dedicated tool support.
+| Step 2 — export a subset of snapshots                                                                          | The resulting self-contained HTML, opened directly in a browser |
+|----------------------------------------------------------------------------------------------------------------|---|
+| <img src="docs/screenshots/export-select-item.png" width="380" alt="Selecting individual snapshots to export"> | <img src="docs/screenshots/export-outputhtml.png" width="480" alt="Exported HTML file opened offline, showing the table of contents and rendered diagrams"> |
 
-Knowledge check — render a quiz and wait for the user to submit it (see [Quizzes](#quizzes)):
+## Environment variables
 
-```
-render(type="quiz", payload='{"questions":[{"id":"q1","text":"What does SYN start?","kind":"single","options":[{"id":"a","text":"A handshake"},{"id":"b","text":"A teardown"}]}]}', options={ workspace: "my-lesson" })
-→ wait_quiz()   # no answer key in the payload → deferred: the answers come back to the agent
-→ evaluate result.answers, explain the right answers, and score them
-```
+| Variable                    | Default                | Description                                                                                                                                                                                     |
+|-----------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `PORT`                      | `3000`                 | Server port — serves the REST/MCP/WebSocket API, and (via `npx agent-whiteboard`) the built client too.                                                                                         |
+| `HOST`                      | `localhost`            | Bind address. Must resolve to a loopback address (`localhost`, `127.0.0.1`, `::1`) — the server refuses to start otherwise unless `ALLOW_NON_LOOPBACK` is set. See [Trust model](#trust-model). |
+| `ALLOW_NON_LOOPBACK`        | unset                  | Set to `1` to allow binding a non-loopback `HOST`. Not recommended — there is no authentication on any endpoint.                                                                                |
+| `WHITEBOARD_SNAPSHOTS_DIR`  | `~/.agent-whiteboard`  | Snapshot storage location.                                                                                                                                                                      |
+| `CHANNEL_PORT`              | `3001`                 | Port for the stdio-channel HTTP relay used by Claude Code's channel forwarding (only relevant if Claude Code was started with channels enabled).                                                |
+
+**Port conflicts:** if `:3000` (or `:3001`/`:5173`, see below) is already in use on your machine, set `PORT` (and `CHANNEL_PORT` if needed) to a free port before starting.
+
+> Dev-only (`npm run dev`, not `npx agent-whiteboard`): the Vite client dev server always runs on `:5173`, hardcoded in `client/vite.config.ts` — not currently configurable via an environment variable.
 
 ## REST fallback
 
@@ -360,19 +374,24 @@ All tools have HTTP equivalents for scripting or testing without an MCP client:
 
 All endpoints return the same JSON shapes as the MCP tools, except `POST /export-html`, which streams the HTML file directly (`Content-Disposition: attachment`). `mode: "cdn"` (default) links Mermaid/Bootstrap/KaTeX from a CDN; `mode: "offline"` embeds them for offline reading, at the cost of a much larger file (the Mermaid bundle alone is ~3.3MB).
 
-## History & snapshots
+## Development
 
-Every `render()` / `commit_step_frames()` call writes a JSON snapshot to `~/.agent-whiteboard/<workspace>/` (override with the `WHITEBOARD_SNAPSHOTS_DIR` environment variable). The browser's right-side controls panel has a history toggle that opens a panel for browsing and loading past snapshots grouped by workspace, plus a delete button that opens a 2-step modal (`client/src/DeleteExportModal.svelte`) for deleting an entire workspace or a chosen subset of snapshots. Destructive actions require a second confirming click.
+Running from source (contributing, or testing an unreleased change) instead of `npx agent-whiteboard`:
 
-A single **Import / export** button (opposing-arrows icon) opens a small keyboard-accessible menu with two entries: **Export…** opens the same modal for exporting a workspace or subset of snapshots as self-contained HTML (the `export_html()` tool / `POST /export-html` endpoint described above) or as a portable `.zip` (`POST /export-zip`), and **Import…** opens a dialog for loading such a `.zip` into this or another whiteboard instance (`POST /import`, merging or creating a new workspace). Dropping a `.zip` anywhere on the page also starts an import.
+```bash
+npm install
+npm run dev
+```
 
-| Step 1 — choose a workspace                                                                                                                  | Step 2 — delete requires a second confirming click                                                                                    |
-|----------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| <img src="docs/screenshots/delete-workspace-picker.png" width="380" alt="Delete/Export modal step 1: workspace picker with snapshot counts"> | <img src="docs/screenshots/delete-confirmation.png" width="380" alt="Delete confirmation: button relabels to Click again to confirm"> |
+This starts the Node server (`:3000`), the Vite dev server (`:5173`), and opens the browser tab automatically.
 
-| Step 2 — export a subset of snapshots                                                                          | The resulting self-contained HTML, opened directly in a browser |
-|----------------------------------------------------------------------------------------------------------------|---|
-| <img src="docs/screenshots/export-select-item.png" width="380" alt="Selecting individual snapshots to export"> | <img src="docs/screenshots/export-outputhtml.png" width="480" alt="Exported HTML file opened offline, showing the table of contents and rendered diagrams"> |
+## Tests
+
+```bash
+npm run check    # everything CI runs: typecheck → lint → unit tests → build
+npm test          # Vitest unit/integration tests (server + client)
+npm run test:e2e  # Playwright end-to-end tests (requires npm run dev:test first)
+```
 
 ## Manual showcase
 
@@ -402,30 +421,6 @@ Section flags (combinable):
 --no-intro            Skip the intro card shown before each use case (quick smoke run)
 --intro-delay <ms>    How long each intro card stays up (default: 4000)
 ```
-
-## Tests
-
-```bash
-npm test          # Vitest unit/integration tests (server)
-npm run test:e2e  # Playwright end-to-end tests (requires npm run dev:test first)
-```
-
-## MCP registration
-
-`.mcp.json` is committed to the repo root and picked up automatically by Claude Code:
-
-```json
-{
-  "mcpServers": {
-    "agent-whiteboard": {
-      "type": "sse",
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
-```
-
-The server must be running before Claude Code connects. If you override `PORT`, update the URL above to match. See [Environment variables](#environment-variables) for the full list of overridable settings.
 
 ## License
 
