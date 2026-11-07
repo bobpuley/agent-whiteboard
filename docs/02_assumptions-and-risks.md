@@ -77,6 +77,15 @@
 - **Risk — discoverability of the drag-and-drop import path.** Removing the standalone Import button leaves the button-less drop target as the only "direct" import path. Mitigation: the popover's "Import…" entry remains one click away and the drop target is unchanged.
 - **Risk — a single generic icon is ambiguous** (users may not guess it covers both directions). Mitigation: resolved by the showcase (F44) — tooltip text and icon are chosen together, and menu entries carry explicit labels.
 
+## v1.9 — Agent Skills & `install-skills` CLI
+
+> New feature (FR34 in `01`, 2026-11-07).
+
+> ⚠️ ASSUMPTION: Skills are written for Claude Code's `SKILL.md` format (`name` + `description` frontmatter, markdown body). Other agents (Cursor, Copilot, …) use similar conventions but are not tested; `install-skills --dir` lets users target any folder.
+- **Risk — skills drift from the tool contracts** (tool names, params, limits are restated in prose). Mitigation: skills ship in the same npm package as the server, so versions move together; a unit test checks every bundled skill has valid frontmatter. Contract changes must update `skills/` in the same milestone.
+- **Risk — skills are not verified against a live agent by automated tests.** Their quality depends on how a real agent behaves with them. Mitigation: manual test plan (`test_skills.md`) before each release that changes skills.
+- **Risk — `cli.js` gains a subcommand path.** A bug there could break `npx agent-whiteboard` start-up. Mitigation: the subcommand is dispatched before the server modules are loaded (dynamic imports), has its own module, and server start-up is manually checked.
+
 ## v1.8 — Quiz Support
 
 > New feature (FR33 in `01`, 2026-11-06). Decisions resolved via a Q&A interview.

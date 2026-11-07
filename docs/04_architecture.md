@@ -110,3 +110,11 @@ No architecture impact. F29 is a localized change to `resetState()` in `client/s
 - **Submit/wait handoff:** `POST /quiz/submit` stores the latest submission in server memory and resolves any pending `POST /wait-quiz` long-poll; modeled on the existing `wait_done`/`user-done` state, but carrying a payload. New MCP tool `wait_quiz` wraps `/wait-quiz`. 10-minute timeout; a submission with no waiter is retained until consumed or the canvas is replaced. `server/channel.ts` is unchanged.
 - **Persistence/export:** snapshot writer stores the questions payload as-is; answers are never persisted. `export-html.ts` filters out `quiz` snapshots with a note; zip export/import are format-agnostic and need no change.
 - **No change** to WebSocket protocol beyond the new render type, or to the Done button / `doneStore` (the in-quiz Submit reuses its visual sent/error pattern only).
+
+## 11. Agent Skills & `install-skills` CLI (F51–F54, NF58 in `03`)
+
+- **No change to the server, REST/MCP surface, WebSocket protocol or snapshot format.**
+- **Skills:** `skills/<name>/SKILL.md`, shipped through the `files` allowlist. Deliberately not under `.claude/skills/`, which holds this repository's own development skills and is not published.
+- **CLI:** `bin/cli.js` checks `process.argv[2] === "install-skills"` before anything else and delegates to `bin/install-skills.js` (plain ESM JS, no dependencies, exports `installSkills`/`parseArgs`/`runInstallSkills` for tests). The server (`dist/server/index.js`) and `open` are now loaded with dynamic `import()` after that check, so the subcommand has no server side effects and works from the npx cache. Skills are located relative to the module (`../skills`), never `process.cwd()`.
+- **Copy semantics:** each skill folder is copied recursively; an existing target folder is skipped unless `--force`; destination defaults to `~/.claude/skills`.
+- **Dev tooling (same release):** `npm run check` (typecheck → lint → test → build) mirrors the CI workflow locally; `video/**` is added to the ESLint ignores because that folder is gitignored and CI never sees it.

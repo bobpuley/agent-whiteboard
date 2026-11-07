@@ -75,17 +75,62 @@ Select `agent-whiteboard` and enable it. The tools will be available immediately
 
 ## Environment variables
 
-| Variable                  | Default              | Description |
-|----------------------------|-----------------------|-------------|
-| `PORT`                     | `3000`                | Server port — serves the REST/MCP/WebSocket API, and (via `npx agent-whiteboard`) the built client too. |
-| `HOST`                     | `localhost`           | Bind address. Must resolve to a loopback address (`localhost`, `127.0.0.1`, `::1`) — the server refuses to start otherwise unless `ALLOW_NON_LOOPBACK` is set. See [Trust model](#trust-model). |
-| `ALLOW_NON_LOOPBACK`       | unset                 | Set to `1` to allow binding a non-loopback `HOST`. Not recommended — there is no authentication on any endpoint. |
-| `WHITEBOARD_SNAPSHOTS_DIR` | `~/.agent-whiteboard` | Snapshot storage location. |
-| `CHANNEL_PORT`             | `3001`                | Port for the stdio-channel HTTP relay used by Claude Code's channel forwarding (only relevant if Claude Code was started with channels enabled). |
+| Variable                    | Default                | Description                                                                                                                                                                                     |
+|-----------------------------|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `PORT`                      | `3000`                 | Server port — serves the REST/MCP/WebSocket API, and (via `npx agent-whiteboard`) the built client too.                                                                                         |
+| `HOST`                      | `localhost`            | Bind address. Must resolve to a loopback address (`localhost`, `127.0.0.1`, `::1`) — the server refuses to start otherwise unless `ALLOW_NON_LOOPBACK` is set. See [Trust model](#trust-model). |
+| `ALLOW_NON_LOOPBACK`        | unset                  | Set to `1` to allow binding a non-loopback `HOST`. Not recommended — there is no authentication on any endpoint.                                                                                |
+| `WHITEBOARD_SNAPSHOTS_DIR`  | `~/.agent-whiteboard`  | Snapshot storage location.                                                                                                                                                                      |
+| `CHANNEL_PORT`              | `3001`                 | Port for the stdio-channel HTTP relay used by Claude Code's channel forwarding (only relevant if Claude Code was started with channels enabled).                                                |
 
 **Port conflicts:** if `:3000` (or `:3001`/`:5173`, see below) is already in use on your machine, set `PORT` (and `CHANNEL_PORT` if needed) to a free port before starting.
 
 > Dev-only (`npm run dev`, not `npx agent-whiteboard`): the Vite client dev server always runs on `:5173`, hardcoded in `client/vite.config.ts` — not currently configurable via an environment variable.
+
+## Use cases
+
+Agent Whiteboard is domain-agnostic; these are the workflows it is built for. Each links the tools involved.
+
+| Context                   | Workflow                                              | Tools                                                 |
+|---------------------------|-------------------------------------------------------|-------------------------------------------------------|
+| **Teaching & training**   | Concept explainer (one visual, then pause)            | `render` → `wait_done`                                |
+|                           | Progressive build-up of a diagram                     | step-frames + `wait_done` per frame                   |
+|                           | Worked example (math / algorithm), one step per frame | `katex` / `mermaid` step-frames, `step` / `seek`      |
+|                           | Learner-driven branching on a topic map               | `wait_click` with `node_actions`                      |
+| **Assessment**            | Inline self-check quiz (scored in the browser)        | `render` quiz with a key → `wait_quiz`                |
+|                           | Deferred quiz graded by the agent                     | `render` quiz without a key → `wait_quiz`             |
+|                           | Teach → quiz → remediate; spaced review               | quizzes + `list_snapshots`                            |
+| **Analysis & data**       | Iterative data exploration, version history           | `vega-lite` + `wait_done`, History panel              |
+|                           | Findings walkthrough / report                         | step-frames (`html` + `vega-lite`) + `export_html`    |
+|                           | Statistics / math derivation with an illustration     | `katex` + `vega-lite`                                 |
+| **Design & architecture** | Iterative system design, click to drill down          | `mermaid` + `wait_click`                              |
+|                           | Option comparison and decision                        | step-frames + `html` table                            |
+|                           | Explaining a codebase or protocol; onboarding pack    | sequence diagrams, step-frames, quiz, `export_html`   |
+| **Sharing**               | Export a lesson or analysis; share a workspace        | `export_html`; zip export/import in the History panel |
+
+## Agent skills
+
+The `skills/` folder ships ready-made [agent skills](https://docs.claude.com/en/docs/claude-code/skills) that teach an agent *when and how* to use the tools above. Start with `agent-whiteboard`; the others build on it.
+
+| Skill                   | Covers                                                            |
+|-------------------------|-------------------------------------------------------------------|
+| `agent-whiteboard`      | Core rules: workspaces, render types, pacing, step-frames, export |
+| `whiteboard-teaching`   | Explainers, build-ups, worked examples, guided lessons, branching |
+| `whiteboard-assessment` | Inline and deferred quizzes, remediation, spaced review           |
+| `whiteboard-analysis`   | Charts, exploration loops, findings walkthroughs, derivations     |
+| `whiteboard-design`     | Architecture sessions, option comparison, codebase explanation    |
+
+Install them with one command (no server is started):
+
+```bash
+npx agent-whiteboard install-skills             # all skills → ~/.claude/skills (every project)
+npx agent-whiteboard install-skills --project   # → ./.claude/skills (this project only)
+npx agent-whiteboard install-skills --only agent-whiteboard,whiteboard-teaching
+npx agent-whiteboard install-skills --force     # overwrite skills that already exist
+npx agent-whiteboard install-skills --list      # show the bundled skills
+```
+
+Existing skill folders are left untouched unless you pass `--force`. `--dir <path>` installs into any other folder (for agents that keep skills elsewhere). Prefer to do it by hand? Copy the folders from [`skills/`](skills/) yourself. Restart your agent session afterwards so it picks the skills up.
 
 ## MCP tools
 
@@ -93,14 +138,14 @@ Select `agent-whiteboard` and enable it. The tools will be available immediately
 
 Push content to the whiteboard canvas. Replaces whatever is currently on screen.
 
-| `type` | `payload` |
-|---|---|
-| `"mermaid"` | Mermaid diagram source. Must begin with a valid keyword (`graph`, `flowchart`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `gantt`, `pie`, `mindmap`). |
-| `"svg"` | Inline SVG markup. |
-| `"html"` | HTML/CSS fragment. Sanitized via DOMPurify — inline styles only; `<script>` and `<style>` tags are stripped. |
-| `"katex"` | LaTeX string, rendered in display mode. |
-| `"vega-lite"` | Vega-Lite JSON spec (must be valid JSON string). |
-| `"quiz"` | JSON quiz — see [Quizzes](#quizzes). Valid in `render()` only (not in `slideshow()` or step-frames). |
+| `type`        | `payload`                                                                                                                                                  |
+|---------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `"mermaid"`   | Mermaid diagram source. Must begin with a valid keyword (`graph`, `flowchart`, `sequenceDiagram`, `classDiagram`, `erDiagram`, `gantt`, `pie`, `mindmap`). |
+| `"svg"`       | Inline SVG markup.                                                                                                                                         |
+| `"html"`      | HTML/CSS fragment. Sanitized via DOMPurify — inline styles only; `<script>` and `<style>` tags are stripped.                                               |
+| `"katex"`     | LaTeX string, rendered in display mode.                                                                                                                    |
+| `"vega-lite"` | Vega-Lite JSON spec (must be valid JSON string).                                                                                                           |
+| `"quiz"`      | JSON quiz — see [Quizzes](#quizzes). Valid in `render()` only (not in `slideshow()` or step-frames).                                                       |
 
 `render()` is single-frame only. For a step-through sequence (multiple frames navigable via `step()`/`seek()`), use [`init_step_frames`/`append_frame`/`commit_step_frames`](#init_step_framesframe_type-workspace-title) instead — see [Step-frames sequences](#step-frames-sequences).
 

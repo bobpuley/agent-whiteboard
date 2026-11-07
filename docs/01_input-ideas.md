@@ -42,6 +42,12 @@
 
 - Feature request (as received): "add support to form page. the goal is to support quiz to review the user knowledge. It should support questions with multiple predefined answers and inline or deferred evaluation. Inline evaluation: the user provides answers and the client already contains the logic to evaluate them and assign a score. Deferred evaluation: the user provides the answers and clicks done at the end, the agent receives the questions/answers and provides evaluation and score."
 
+**FR34 — Agent skills + `install-skills` CLI (2026-11-07)**
+
+- Trigger: an inbound marketplace email (Agensi.io) suggested packaging the MCP server with a skill. User decision: write skills for the whiteboard first, independent of any marketplace; list the main workflows per context (teaching, assessment, analysis, design, sharing) and create skills for all of them.
+- Decisions: skills live in a root `skills/<name>/SKILL.md` folder shipped in the npm package (not `.claude/skills/`, which holds this repo's own dev tooling); the README documents the use cases regardless of skills; a small `npx agent-whiteboard install-skills` subcommand copies them into `~/.claude/skills` (or `./.claude/skills`) because `npx` users have no practical way to find files in the npx cache.
+- Milestone: **v1.9**.
+
 ## Design Debt Log
 
 > MEDIUM-severity findings from the Node.js/TS (`docs/06_nodejs_review.md`) and Svelte/TS frontend (`docs/06_frontend_review.md`) review passes (2026-07-18), deliberately deferred out of v1.0 scope per user decision. These don't block the 1.0/npx release — logged here as candidates for a future milestone (see pointer in `05_dev-plan.md`). No propagation to `02`–`05` is forced by this log; promote an item explicitly if/when it's scheduled.

@@ -1,3 +1,13 @@
+## 1.3.0 — 2026-11-07
+
+**Milestone v1.9 — Agent Skills & `install-skills` CLI (Sprint 92) complete.** Adds ready-made agent skills and a one-command installer (FR34 in `01`, F51–F54/NF58 in `03`).
+
+- **Agent skills (F51):** five skills in `skills/` teach an agent when and how to use the tools — `agent-whiteboard` (core rules), `whiteboard-teaching`, `whiteboard-assessment`, `whiteboard-analysis`, `whiteboard-design`. Shipped in the npm package (`files` now includes `skills`, F54).
+- **`install-skills` subcommand (F52):** `npx agent-whiteboard install-skills` copies them into `~/.claude/skills` (`--project` → `./.claude/skills`, `--dir <path>`, `--only a,b`, `--force`, `--list`). Existing skills are never overwritten without `--force`. `bin/cli.js` dispatches it before loading the server, so plain `npx agent-whiteboard` is unchanged.
+- **README (F53):** new Use cases (workflows per context) and Agent skills sections.
+- **Dev tooling:** `npm run check` (typecheck → lint → test → build) mirrors CI locally; ESLint ignores the gitignored `video/` folder. `test_skills.md` documents the manual skills test plan.
+- Tests: `installSkills.test.ts` (10 tests); 755 unit tests passing; `tsc`/`svelte-check`/`eslint`/`npm run build` clean.
+
 ## 1.2.2 — 2026-11-07
 
 Patch: test-only fix, no behavioural change.

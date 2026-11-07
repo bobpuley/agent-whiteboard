@@ -10,8 +10,17 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import open from "open";
-import { startServer } from "../dist/server/index.js";
+
+// Subcommand: `agent-whiteboard install-skills ...` — copies the bundled agent
+// skills and exits, without loading the server. Dispatched before the server
+// imports below (loaded dynamically) so it stays fast and side-effect free.
+if (process.argv[2] === "install-skills") {
+  const { runInstallSkills } = await import("./install-skills.js");
+  process.exit(runInstallSkills(process.argv.slice(3)));
+}
+
+const { default: open } = await import("open");
+const { startServer } = await import("../dist/server/index.js");
 
 const here = dirname(fileURLToPath(import.meta.url));
 const staticRoot = join(here, "..", "dist", "client");

@@ -1,6 +1,6 @@
 {
   "name": "agent-whiteboard",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "A domain-agnostic interactive whiteboard for AI teacher agents — render diagrams, math, charts, and HTML to a local browser tab via MCP tools.",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
   "files": [
     "bin",
     "dist",
+    "skills",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -49,6 +50,7 @@
     "test:e2e": "playwright test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

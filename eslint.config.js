@@ -12,6 +12,7 @@ export default tseslint.config(
       "docs/**",
       "mockup/**",
       "media/**",
+      "video/**", // gitignored local recording tooling; CI never sees it
       ".idea/**",
       ".claude/**",
       "coverage/**",

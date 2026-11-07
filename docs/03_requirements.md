@@ -188,3 +188,18 @@
 - Inline quiz: Submit reveals per-question results and a total score; the agent is not involved.
 - Deferred quiz: Submit sends answers; `wait_quiz` returns questions and answers to the agent, which evaluates them.
 - Invalid payloads (mixed answer keys, bad weights, duplicate ids) are rejected clearly.
+
+## 11. Agent Skills & `install-skills` CLI (FR34 in `01`)
+
+| ID   | Requirement | Milestone |
+|------|-------------|-----------|
+| F51  | The package ships agent skills in a root `skills/<name>/SKILL.md` folder (`name` + `description` frontmatter): `agent-whiteboard` (core rules: required `workspace`, render types, pacing, step-frames, export), `whiteboard-teaching`, `whiteboard-assessment`, `whiteboard-analysis`, `whiteboard-design`. Skills describe *when and how* to use the existing MCP tools; they add no server behaviour. | v1.9 |
+| F52  | `npx agent-whiteboard install-skills` copies the bundled skills into `~/.claude/skills` (default), `./.claude/skills` (`--project`) or any folder (`--dir <path>`). Options: `--only a,b`, `--force` (otherwise existing skill folders are skipped, never overwritten), `--list`, `--help`. Exit codes: 0 ok, 1 runtime error (e.g. unknown skill), 2 bad arguments. It never starts the server. | v1.9 |
+| F53  | The README documents the main workflows per context (teaching & training, assessment, analysis & data, design & architecture, sharing) in a Use cases section, and the skills and `install-skills` command in an Agent skills section. | v1.9 |
+| F54  | `package.json` `files` includes `skills`, so the folder is part of the published package. | v1.9 |
+| NF58 | Unit tests cover `install-skills` (copy, `--only`, unknown names, skip vs `--force`, argument parsing, exit codes) and that every bundled skill has valid frontmatter. | v1.9 |
+
+**Acceptance criteria:**
+- `npx agent-whiteboard install-skills` installs the five skills; a second run skips them; `--force` overwrites.
+- `npx agent-whiteboard` (no args) still starts the server exactly as before.
+- A real agent with the skills installed picks the right tools for a lesson, a quiz, a chart and a design session (manual plan in `test_skills.md`).
