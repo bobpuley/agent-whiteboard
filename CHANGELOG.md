@@ -1,3 +1,9 @@
+## 1.2.1 — 2026-11-07
+
+Patch: lint fix, no behavioural change.
+
+- **Fix CI lint crash:** `Quiz.svelte` used a reactive arrow function (`$: resultFor = ...`) that made `svelte/no-reactive-functions` crash in its autofix under ESLint 10, failing `npm run lint` in CI. Replaced with a reactive `resultById` map.
+
 ## 1.2.0 — 2026-11-06
 
 **Milestone v1.8 — Quiz Support (Sprints 89–91) complete.** Adds interactive quizzes for reviewing the user's knowledge (FR33 in `01`, F44–F50/NF57 in `03`).
