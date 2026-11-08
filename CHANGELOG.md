@@ -1,3 +1,9 @@
+## 1.3.2 — 2026-11-08
+
+Patch: documentation only.
+
+- **README npm badge:** added an npm version badge linking to the package page, so the npmjs.com page and the repo point at each other.
+
 ## 1.3.1 — 2026-11-07
 
 Patch: documentation only.

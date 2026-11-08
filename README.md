@@ -1,5 +1,7 @@
 # Agent Whiteboard
 
+[![npm](https://img.shields.io/npm/v/agent-whiteboard)](https://www.npmjs.com/package/agent-whiteboard)
+
 A domain-agnostic interactive whiteboard for AI teacher agents. An AI agent renders diagrams, math, charts, and HTML to a local browser tab via MCP tools — and can pause to wait for the user to signal they're ready to continue.
 
 Agent Whiteboard started as a tool for AI tutoring agents.
