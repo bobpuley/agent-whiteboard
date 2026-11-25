@@ -141,7 +141,7 @@ the end of the file and add a fresh `**$nextVersion planning**` line after it.
 
 # Step 6 — Commit
 
-Run `.claude/scripts/archive-commit.sh $version`. If it exits non-zero, halt — print the
+Master is protected by a ruleset (no direct pushes): run this step on a dedicated branch (e.g. `docs/archive-$version`), not on master. Run `.claude/scripts/archive-commit.sh $version`. If it exits non-zero, halt — print the
 script's stderr output as the failure reason.
 
 # What this command does NOT do
@@ -149,5 +149,5 @@ script's stderr output as the failure reason.
 - Does not create the next version's milestone file (`/doc-creator-driver:intake` does that
   when planning starts, filling in the `TBD` row added in Step 3).
 - Does not touch source code, tests, or CHANGELOG.md.
-- Does not create a git tag or push to remote — that's the sprint-close protocol in
+- Does not create a git tag or push to remote — landing via PR and tagging is the sprint-close protocol in
   `CLAUDE.md`, which runs before this command, not as part of it.

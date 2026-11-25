@@ -50,4 +50,4 @@ git commit -m "chore: archive $VERSION docs — all milestones released"
 
 echo ""
 echo "Committed archive for $VERSION."
-echo "Next: push to remote when ready (git push)."
+echo "Next: master is protected — push this branch and open a PR (git push -u origin <branch> && gh pr create --base master); do not push to master directly."

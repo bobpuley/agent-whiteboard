@@ -41,17 +41,28 @@ Do not change requirements or architecture.
       * AskUserQuestion: "Please run your manual / human-driven tests and report the results. All green?"
         - If issues found → stay on branch, fix them, go back to step 5 for the affected tasks
         - If all green → continue
-      * Merge git branch into master (same commit message format as existing merges)
       * Run: `git tag --list --sort=v:refname` to inspect existing tags
         - No tags exist → propose `0.1.0`
         - Tags exist → increment the patch segment of the highest tag (e.g. `0.1.3` → `0.1.4`) → increment the minor segment of the highest tag-minor (e.g. `0.1.3` → `0.2.0`)
       * AskUserQuestion: "Proposed tags are <tag>, <tag-minor>. Confirm or provide an override."
-      * Update/create CHANGELOG.md:
+      * Update/create CHANGELOG.md **on the sprint branch** (master is protected — never commit or push directly to it):
         - Prepend a new section header `## <tag> — <YYYY-MM-DD>` followed by bullet points summarising the sprint changes (derive from branch commits via `git log`)
         - `git add CHANGELOG.md && git commit -m "chore: update changelog for <tag>"`
-      * Create annotated tag: `git tag -a <tag> -m "<tag>"`
-      * Push commit and tag: `git push && git push --tags`
+      * Land the branch via pull request (see "Landing a branch" below)
+      * Create annotated tag on the merge commit: `git checkout master && git pull && git tag -a <tag> -m "<tag>"`
+      * Push the tag only: `git push origin <tag>` (never `git push --tags`)
    7. Go to "1. Analyze the documents"
 
 # Required skills
 typescript-expert/SKILL.md
+
+# Landing a branch (master is protected by a ruleset)
+
+Direct pushes to master are rejected. Every branch — per-sprint merges and the release/CHANGELOG commit alike — lands through a PR:
+1. `git push -u origin <branch>`
+2. `gh pr create --base master` (title/body summarising the sprint)
+3. Wait for the required check `ci-gate`: `gh pr checks <pr> --watch --required`. `e2e` is informational for now, not required.
+4. The ruleset enforces "branch up to date": if the PR is behind master, run `gh pr update-branch <pr>` (or merge master into the branch and push), then wait for CI again.
+5. Merge with a merge commit: `gh pr merge <pr> --merge`. Merging is outward-facing — only when the user has authorised it (the sprint gate answer counts for the final PR; for per-sprint PRs inside a batched milestone, the earlier user instruction to continue without asking counts).
+6. `git checkout master && git pull`, delete the local branch.
+If `ci-gate` fails, stay on the branch, fix, push, wait again — never bypass the ruleset.
