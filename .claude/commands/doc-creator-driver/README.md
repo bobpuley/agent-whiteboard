@@ -85,7 +85,7 @@ Only runs once every milestone for a version is `released` in the Milestone Regi
 `06_review.md` if present) into `docs/vX.Y/`, resets docs 01–04 as stubs seeding the next
 version, updates the Milestone Registry row and adds a `planned` row for the next version,
 logs the shipped version in `.claude/memory/project-progress.md`, and commits. Runs after
-the tag/CHANGELOG sprint-close protocol in the root `CLAUDE.md`, not instead of it.
+the tag/CHANGELOG sprint-close protocol in the root `CLAUDE.md`, not instead of it. Master is protected: run it on a branch and land it via PR.
 
 ---
 

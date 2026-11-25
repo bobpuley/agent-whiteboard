@@ -13,7 +13,8 @@ Phase: discovery and requirements definition. No code yet.
 4. These are living documents — update earlier docs when later ones reveal conflicts
 5. Mark uncertain content with `> ⚠️ ASSUMPTION:` blockquotes
 6. When a document is updated, state explicitly what changed and why
-7. Sprint-close protocol: after all sprint tasks pass automated tests, collect human-driven test feedback before merging. If green: merge → inspect existing tags → propose next semver tag → update CHANGELOG.md + commit → create annotated tag → push commit and tag.
+7. Sprint-close protocol: after all sprint tasks pass automated tests, collect human-driven test feedback before merging. If green: inspect existing tags → propose next semver tag → update CHANGELOG.md + commit **on the working branch** → push branch and open a PR → wait for `ci-gate` green and branch up to date with master → merge the PR → pull master → create annotated tag on the merge commit → push the tag only. **Never push commits directly to master** (see Git flow).
+8. Git flow: master is protected by the repository ruleset "Main Protection" — no direct pushes, changes land only via PR. The required status check is `ci-gate` (aggregates typecheck, lint, test, build; `e2e` runs but is not gated yet) and `strict_required_status_checks_policy=true`, so the PR branch must be up to date with master before merging (`gh pr update-branch` or merge master into the branch, then wait for CI again). Tags are not covered by the ruleset and are pushed directly (`git push origin <tag>`). Never use `git push --tags`.
 
 ## Document map
 | File                             | Purpose                                        | Status  |
